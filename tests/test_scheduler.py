@@ -46,3 +46,4 @@ def test_run_emits_result(monkeypatch, tmp_path):
     job.func()
     assert emitted["task"] == "DummyTask"
     assert emitted["result"] == 1
+

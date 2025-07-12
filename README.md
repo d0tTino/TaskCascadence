@@ -8,3 +8,18 @@ Cascadence aims to provide a flexible framework for orchestrating complex, multi
 - Built-in instrumentation and monitoring.
 
 This repository lays the groundwork for the Python package implementation.
+
+## Command Line Usage
+
+After installing the package in an environment with ``typer`` available, the
+``task`` command becomes available.  It exposes several sub-commands:
+
+```bash
+$ task list       # show all registered tasks
+$ task run NAME   # execute a task
+$ task disable NAME  # disable a task
+```
+
+The repository ships with a single ``example`` task to demonstrate the
+mechanics.
+
