@@ -22,3 +22,4 @@ $ task disable NAME  # disable a task
 
 The repository ships with a single ``example`` task to demonstrate the
 mechanics.
+

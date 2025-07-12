@@ -7,6 +7,7 @@ complex projects could load plugins dynamically using entry points.
 
 from typing import Dict
 
+
 from ..scheduler import default_scheduler
 
 
@@ -29,6 +30,7 @@ class CronTask(BaseTask):
 class WebhookTask(BaseTask):
     """Base class for tasks triggered via webhooks."""
     pass
+
 
 
 class ManualTrigger(BaseTask):
@@ -58,3 +60,4 @@ registered_tasks: Dict[str, BaseTask] = {
 # them immediately.
 for _name, _task in registered_tasks.items():
     default_scheduler.register_task(_name, _task)
+
