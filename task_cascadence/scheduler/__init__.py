@@ -127,3 +127,10 @@ class CronScheduler(BaseScheduler):
     def list_jobs(self):
         return self.scheduler.get_jobs()
 
+
+# ---------------------------------------------------------------------------
+# A default scheduler instance used by the CLI and plugin registration. Tests
+# expect this object to exist at module scope.
+default_scheduler = BaseScheduler()
+
+
