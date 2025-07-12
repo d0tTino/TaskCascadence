@@ -40,3 +40,18 @@ main([])  # run without command-line arguments
 ``main`` accepts an optional ``args`` list which defaults to ``[]`` and is
 passed to the underlying Typer application.
 
+## Schedule Persistence
+
+``CronScheduler`` stores cron expressions in ``schedules.yml`` by default.  The
+file is created next to the running application unless ``storage_path`` is
+overridden.  It contains a simple YAML mapping of task class names to their
+crontab schedules:
+
+```yaml
+ExampleTask: "0 12 * * *"
+```
+
+When a new ``CronScheduler`` instance starts it reads this file and re-creates
+any jobs for which task objects are supplied via the ``tasks`` argument.  This
+allows scheduled tasks to survive process restarts.
+
