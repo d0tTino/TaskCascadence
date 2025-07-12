@@ -65,10 +65,12 @@ class BaseScheduler:
 class CronScheduler(BaseScheduler):
     """APScheduler-based scheduler using cron triggers.
 
-    Provides timezone-aware scheduling of tasks.
+    Provides timezone-aware scheduling of tasks and persists the cron
+    expressions to disk so they survive process restarts.
     """
 
-    def __init__(self, timezone="UTC", storage_path="schedules.yml"):
+    def __init__(self, timezone="UTC", storage_path="schedules.yml", tasks=None):
+        super().__init__()
         self._CronTrigger = CronTrigger
         self._yaml = yaml
         tz = pytz.timezone(timezone) if isinstance(timezone, str) else timezone
@@ -76,6 +78,7 @@ class CronScheduler(BaseScheduler):
         self.storage_path = Path(storage_path)
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         self.schedules = self._load_schedules()
+        self._restore_jobs(tasks or {})
 
     def _load_schedules(self):
         if self.storage_path.exists():
@@ -84,6 +87,19 @@ class CronScheduler(BaseScheduler):
                 if isinstance(data, dict):
                     return data
         return {}
+
+    def _restore_jobs(self, tasks):
+        for job_id, expr in self.schedules.items():
+            task = tasks.get(job_id)
+            if not task:
+                continue
+            super().register_task(job_id, task)
+            trigger = self._CronTrigger.from_crontab(
+                expr, timezone=self.scheduler.timezone
+            )
+            self.scheduler.add_job(
+                self._wrap_task(task), trigger=trigger, id=job_id
+            )
 
     def _save_schedules(self):
         with open(self.storage_path, "w") as fh:
@@ -108,6 +124,7 @@ class CronScheduler(BaseScheduler):
 
     def register_task(self, task, cron_expression):
         job_id = task.__class__.__name__
+        super().register_task(job_id, task)
         self.schedules[job_id] = cron_expression
         self._save_schedules()
 
