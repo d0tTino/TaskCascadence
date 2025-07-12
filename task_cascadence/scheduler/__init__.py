@@ -14,14 +14,24 @@ import pytz
 import yaml
 
 
-from typing import Any, Dict, Iterable, Tuple
+from typing import Any, Dict, Iterable, Tuple, Optional
+
+from ..temporal import TemporalBackend
 
 
 class BaseScheduler:
-    """Very small task scheduler used by the CLI."""
+    """Very small task scheduler used by the CLI.
 
-    def __init__(self) -> None:
+    Parameters
+    ----------
+    temporal:
+        Optional :class:`~task_cascadence.temporal.TemporalBackend` used to
+        execute tasks via Temporal.
+    """
+
+    def __init__(self, temporal: Optional[TemporalBackend] = None) -> None:
         self._tasks: Dict[str, Dict[str, Any]] = {}
+        self._temporal = temporal
 
     def register_task(self, name: str, task: Any) -> None:
         """Register a task object under ``name``."""
@@ -36,7 +46,9 @@ class BaseScheduler:
         for name, info in self._tasks.items():
             yield name, info["disabled"]
 
-    def run_task(self, name: str) -> Any:
+    def run_task(
+        self, name: str, *, use_temporal: bool | None = None
+    ) -> Any:
         """Run a task by name if it exists and is enabled."""
 
         info = self._tasks.get(name)
@@ -45,9 +57,23 @@ class BaseScheduler:
         if info["disabled"]:
             raise ValueError(f"Task '{name}' is disabled")
         task = info["task"]
+
+        if (use_temporal or (use_temporal is None and self._temporal)):
+            if not self._temporal:
+                raise RuntimeError("Temporal backend not configured")
+            workflow = getattr(task, "workflow", task.__class__.__name__)
+            return self._temporal.run_workflow_sync(workflow)
+
         if hasattr(task, "run"):
             return task.run()
         raise AttributeError(f"Task '{name}' has no run() method")
+
+    def replay_history(self, history_path: str) -> None:
+        """Replay a workflow history using the configured Temporal backend."""
+
+        if not self._temporal:
+            raise RuntimeError("Temporal backend not configured")
+        self._temporal.replay(history_path)
 
     def disable_task(self, name: str) -> None:
         """Disable a registered task."""
@@ -68,7 +94,13 @@ class CronScheduler(BaseScheduler):
     Provides timezone-aware scheduling of tasks.
     """
 
-    def __init__(self, timezone="UTC", storage_path="schedules.yml"):
+    def __init__(
+        self,
+        timezone: str | pytz.tzinfo.BaseTzInfo = "UTC",
+        storage_path: str = "schedules.yml",
+        temporal: Optional[TemporalBackend] = None,
+    ):
+        super().__init__(temporal=temporal)
         self._CronTrigger = CronTrigger
         self._yaml = yaml
         tz = pytz.timezone(timezone) if isinstance(timezone, str) else timezone

@@ -9,6 +9,12 @@ Cascadence aims to provide a flexible framework for orchestrating complex, multi
 
 This repository lays the groundwork for the Python package implementation.
 
+## Temporal Integration
+
+The :mod:`task_cascadence.temporal` module wraps the ``temporalio`` client.
+Schedulers can use this backend to execute workflows remotely and replay
+workflow histories for debugging purposes.
+
 ## Command Line Usage
 
 After installing the package in an environment with ``typer`` available, the
