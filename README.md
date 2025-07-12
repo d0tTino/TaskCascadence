@@ -9,24 +9,14 @@ Cascadence aims to provide a flexible framework for orchestrating complex, multi
 
 This repository lays the groundwork for the Python package implementation.
 
-## Webhook Server Example
+## External Wrappers
 
-Cascadence includes a lightweight FastAPI server for handling GitHub and
-Cal.com webhook events. Subclass `WebhookTask` to react to incoming events and
-start the server using `start_server`:
+Wrappers written in other languages (for example Rust or Go) can integrate with
+Cascadence by exposing HTTP endpoints that follow the CronyxServer API. At
+minimum the wrapper should implement:
 
-```python
-from task_cascadence.plugins import WebhookTask
-from task_cascadence.webhook import start_server
+* `GET /tasks` - returns a JSON array of available tasks.
+* `GET /tasks/<id>` - returns a JSON description of a task.
 
-
-class PrintTask(WebhookTask):
-    def handle_event(self, source, event_type, payload):
-        print(f"{source} event {event_type}: {payload}")
-
-
-if __name__ == "__main__":
-    start_server()
-```
-
-Send GitHub events to `/webhook/github` and Cal.com events to `/webhook/calcom`.
+The :class:`CronyxServerLoader` plugin can then load these definitions at
+runtime.
