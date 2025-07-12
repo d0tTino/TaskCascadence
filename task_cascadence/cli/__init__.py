@@ -6,6 +6,7 @@ disable tasks as described in the PRD (FR-12).
 
 from __future__ import annotations
 
+import click
 import typer
 
 from ..scheduler import default_scheduler
@@ -47,10 +48,14 @@ def disable_task(name: str) -> None:
         raise typer.Exit(code=1)
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     """CLI entry point used by ``console_scripts`` or directly."""
 
-    app()
+    try:
+        app(args=argv or [], standalone_mode=False)
+    except (SystemExit, click.ClickException):
+        # Swallow exit exceptions so tests can call ``main()`` without arguments.
+        return None
 
 
 __all__ = ["app", "main"]

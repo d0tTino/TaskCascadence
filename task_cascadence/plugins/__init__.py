@@ -34,6 +34,16 @@ class WebhookTask(BaseTask):
     pass
 
 
+webhook_task_registry: list[type[WebhookTask]] = []
+
+
+def register_webhook_task(cls: type[WebhookTask]) -> type[WebhookTask]:
+    """Register a ``WebhookTask`` subclass for event delivery."""
+
+    webhook_task_registry.append(cls)
+    return cls
+
+
 
 class ManualTrigger(BaseTask):
     """Base class for tasks triggered manually."""
