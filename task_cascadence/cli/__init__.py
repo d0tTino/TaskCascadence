@@ -6,7 +6,7 @@ disable tasks as described in the PRD (FR-12).
 
 from __future__ import annotations
 
-import click  # noqa: F401
+import click  # noqa: F401 - re-exported for CLI extensions
 
 import typer
 
