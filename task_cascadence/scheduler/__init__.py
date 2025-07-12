@@ -128,18 +128,7 @@ class CronScheduler(BaseScheduler):
         return self.scheduler.get_jobs()
 
 
-# ---------------------------------------------------------------------------
-# Default scheduler instance
-
-# ``default_scheduler`` provides a ready-to-use scheduler for the CLI and
-# plugins.  It keeps the import lightweight by using :class:`BaseScheduler` so
-# tests and simple invocations do not require APScheduler to be fully
-# configured.
+# Default scheduler instance used by the CLI and plugin system.
 default_scheduler = BaseScheduler()
 
-__all__ = [
-    "BaseScheduler",
-    "CronScheduler",
-    "default_scheduler",
-]
 
