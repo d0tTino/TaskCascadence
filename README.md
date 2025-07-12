@@ -23,3 +23,14 @@ $ task disable NAME  # disable a task
 The repository ships with a single ``example`` task to demonstrate the
 mechanics.
 
+The CLI's ``main`` function can also be called programmatically:
+
+```python
+from task_cascadence.cli import main
+
+main([])  # run without command-line arguments
+```
+
+``main`` accepts an optional ``args`` list which defaults to ``[]`` and is
+passed to the underlying Typer application.
+

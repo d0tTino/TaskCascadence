@@ -128,7 +128,10 @@ class CronScheduler(BaseScheduler):
         return self.scheduler.get_jobs()
 
 
-# Default scheduler instance used by the CLI and plugin system.
+# ---------------------------------------------------------------------------
+# A default scheduler instance used by the CLI and plugin registration. Tests
+# expect this object to exist at module scope.
+
 default_scheduler = BaseScheduler()
 
 

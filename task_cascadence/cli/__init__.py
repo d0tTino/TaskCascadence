@@ -48,14 +48,18 @@ def disable_task(name: str) -> None:
         raise typer.Exit(code=1)
 
 
-def main(argv: list[str] | None = None) -> None:
-    """CLI entry point used by ``console_scripts`` or directly."""
+def main(args: list[str] | None = None) -> None:
+    """CLI entry point used by ``console_scripts`` or directly.
 
-    try:
-        app(args=argv or [], standalone_mode=False)
-    except (SystemExit, click.ClickException):
-        # Swallow exit exceptions so tests can call ``main()`` without arguments.
-        return None
+    Parameters
+    ----------
+    args:
+        Optional list of CLI arguments. If ``None`` (default), an empty list is
+        passed so that pytest arguments are ignored during tests.
+    """
+
+    app(args or [], standalone_mode=False)
+
 
 
 __all__ = ["app", "main"]
