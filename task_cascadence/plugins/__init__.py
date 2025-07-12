@@ -6,7 +6,9 @@ See PRD section 'Plugin Architecture' for details.
 
 class CronTask:
     """Base class for tasks triggered by cron schedules."""
-    pass
+    def run(self):
+        """Execute the task. Subclasses must override this method."""
+        raise NotImplementedError
 
 
 class WebhookTask:
