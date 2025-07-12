@@ -6,7 +6,7 @@ disable tasks as described in the PRD (FR-12).
 
 from __future__ import annotations
 
-import click
+import click  # noqa: F401
 import typer
 
 from ..scheduler import default_scheduler
