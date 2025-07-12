@@ -8,5 +8,6 @@ from . import plugins  # noqa: F401
 from . import ume  # noqa: F401
 from . import cli  # noqa: F401
 from . import metrics  # noqa: F401
+from . import transport  # noqa: F401
 
-__all__ = ["scheduler", "plugins", "ume", "cli", "metrics"]
+__all__ = ["scheduler", "plugins", "ume", "cli", "metrics", "transport"]
