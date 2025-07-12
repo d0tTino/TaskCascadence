@@ -9,14 +9,17 @@ Cascadence aims to provide a flexible framework for orchestrating complex, multi
 
 This repository lays the groundwork for the Python package implementation.
 
-## External Wrappers
+## Command Line Usage
 
-Wrappers written in other languages (for example Rust or Go) can integrate with
-Cascadence by exposing HTTP endpoints that follow the CronyxServer API. At
-minimum the wrapper should implement:
+After installing the package in an environment with ``typer`` available, the
+``task`` command becomes available.  It exposes several sub-commands:
 
-* `GET /tasks` - returns a JSON array of available tasks.
-* `GET /tasks/<id>` - returns a JSON description of a task.
+```bash
+$ task list       # show all registered tasks
+$ task run NAME   # execute a task
+$ task disable NAME  # disable a task
+```
 
-The :class:`CronyxServerLoader` plugin can then load these definitions at
-runtime.
+The repository ships with a single ``example`` task to demonstrate the
+mechanics.
+
