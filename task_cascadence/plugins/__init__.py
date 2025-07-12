@@ -24,7 +24,9 @@ class BaseTask:
 
 class CronTask(BaseTask):
     """Base class for tasks triggered by cron schedules."""
-    pass
+    def run(self):
+        """Execute the task. Subclasses must override this method."""
+        raise NotImplementedError
 
 
 class WebhookTask(BaseTask):
