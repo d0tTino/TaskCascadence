@@ -11,3 +11,4 @@ def test_cli_main_returns_none():
     assert result.exit_code == 0
     with pytest.raises(UsageError):
         main([])
+

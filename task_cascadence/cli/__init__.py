@@ -6,6 +6,7 @@ disable tasks as described in the PRD (FR-12).
 
 from __future__ import annotations
 
+import click
 import typer
 
 from ..scheduler import default_scheduler
@@ -58,6 +59,7 @@ def main(args: list[str] | None = None) -> None:
     """
 
     app(args or [], standalone_mode=False)
+
 
 
 __all__ = ["app", "main"]
