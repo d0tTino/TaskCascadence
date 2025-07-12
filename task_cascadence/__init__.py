@@ -8,6 +8,7 @@ from . import plugins  # noqa: F401
 from . import ume  # noqa: F401
 from . import cli  # noqa: F401
 from . import metrics  # noqa: F401
+from . import transport  # noqa: F401
 
 
 def _load_remote_tasks() -> None:

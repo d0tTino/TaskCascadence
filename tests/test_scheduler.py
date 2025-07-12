@@ -47,3 +47,23 @@ def test_run_emits_result(monkeypatch, tmp_path):
     assert emitted["task"] == "DummyTask"
     assert emitted["result"] == 1
 
+
+def test_restore_schedules_on_init(tmp_path, monkeypatch):
+    storage = tmp_path / "sched.yml"
+    task = DummyTask()
+    sched = CronScheduler(timezone="UTC", storage_path=storage)
+    sched.register_task(task, "*/5 * * * *")
+
+    from task_cascadence import ume
+
+    monkeypatch.setattr(ume, "emit_task_run", lambda data: None)
+
+    new_task = DummyTask()
+    sched2 = CronScheduler(
+        timezone="UTC", storage_path=storage, tasks={"DummyTask": new_task}
+    )
+    job = sched2.scheduler.get_job("DummyTask")
+    assert job is not None
+    job.func()
+    assert new_task.count == 1
+
