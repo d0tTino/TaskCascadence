@@ -6,7 +6,18 @@ import threading
 import time
 from typing import Any
 
+from ..transport import BaseTransport, get_client
 from .models import TaskRun, TaskSpec
+
+
+_default_client: BaseTransport | None = None
+
+
+def configure_transport(transport: str, **kwargs: Any) -> None:
+    """Configure the default transport client."""
+
+    global _default_client
+    _default_client = get_client(transport, **kwargs)
 
 
 def _queue_within_deadline(obj: Any, client: Any, max_delay: float = 0.2) -> threading.Thread:
@@ -27,13 +38,19 @@ def _queue_within_deadline(obj: Any, client: Any, max_delay: float = 0.2) -> thr
     return thread
 
 
-def emit_task_spec(spec: TaskSpec, client: Any) -> None:
-    """Emit ``TaskSpec`` information to ``client``."""
+def emit_task_spec(spec: TaskSpec, client: Any | None = None) -> None:
+    """Emit ``TaskSpec`` information to ``client`` or the configured default."""
 
-    _queue_within_deadline(spec, client)
+    target = client or _default_client
+    if target is None:
+        raise ValueError("No transport client configured")
+    _queue_within_deadline(spec, target)
 
 
-def emit_task_run(run: TaskRun, client: Any) -> None:
-    """Emit ``TaskRun`` information to ``client``."""
+def emit_task_run(run: TaskRun, client: Any | None = None) -> None:
+    """Emit ``TaskRun`` information to ``client`` or the configured default."""
 
-    _queue_within_deadline(run, client)
+    target = client or _default_client
+    if target is None:
+        raise ValueError("No transport client configured")
+    _queue_within_deadline(run, target)
