@@ -12,6 +12,7 @@ import typer
 
 from ..scheduler import default_scheduler
 from .. import plugins  # noqa: F401  # ensure tasks are registered
+from ..n8n import export_workflow
 
 
 app = typer.Typer(help="Interact with Cascadence tasks")
@@ -49,6 +50,18 @@ def disable_task(name: str) -> None:
         raise typer.Exit(code=1)
 
 
+@app.command("export-n8n")
+def export_n8n(path: str) -> None:
+    """Export registered tasks as an n8n workflow to ``PATH``."""
+
+    try:
+        export_workflow(default_scheduler, path)
+        typer.echo(f"workflow written to {path}")
+    except Exception as exc:  # pragma: no cover - simple error propagation
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1)
+
+
 def main(args: list[str] | None = None) -> None:
     """CLI entry point used by ``console_scripts`` or directly.
 
@@ -63,4 +76,4 @@ def main(args: list[str] | None = None) -> None:
 
 
 
-__all__ = ["app", "main"]
+__all__ = ["app", "main", "export_n8n"]
