@@ -8,7 +8,6 @@ complex projects could load plugins dynamically using entry points.
 from typing import Dict
 import importlib
 import os
-import sys
 
 
 from ..scheduler import default_scheduler
@@ -80,21 +79,22 @@ registered_tasks: Dict[str, BaseTask] = {
 for _name, _task in registered_tasks.items():
     default_scheduler.register_task(_name, _task)
 
-# Optionally load tasks from CronyxServer if configured via environment.
-_cronyx_url = os.getenv("CRONYX_BASE_URL")
-if _cronyx_url:
-    try:
-        from .cronyx_server import CronyxServerLoader
 
-        _loader = CronyxServerLoader(_cronyx_url)
-        for _info in _loader.list_tasks():
-            _task_def = _loader.load_task(_info["id"])
-            module_path, class_name = _task_def["path"].split(":")
-            mod = importlib.import_module(module_path)
-            cls = getattr(mod, class_name)
-            obj = cls()
-            registered_tasks[obj.name] = obj
-            default_scheduler.register_task(obj.name, obj)
-    except Exception:  # pragma: no cover - network failures ignored
-        pass
+def load_cronyx_tasks() -> None:
+    """Load tasks from a Cronyx server if ``CRONYX_BASE_URL`` is set."""
+
+    _cronyx_url = os.getenv("CRONYX_BASE_URL")
+    if not _cronyx_url:
+        return
+    from .cronyx_server import CronyxServerLoader
+    loader = CronyxServerLoader(_cronyx_url)
+    for info in loader.list_tasks():
+        task_data = loader.load_task(info["id"])
+        module_name, cls_name = task_data["path"].split(":")
+        module = importlib.import_module(module_name)
+        cls = getattr(module, cls_name)
+        instance = cls()
+        registered_tasks[instance.name] = instance
+        default_scheduler.register_task(instance.name, instance)
+
 
