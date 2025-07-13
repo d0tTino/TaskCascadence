@@ -55,3 +55,16 @@ When a new ``CronScheduler`` instance starts it reads this file and re-creates
 any jobs for which task objects are supplied via the ``tasks`` argument.  This
 allows scheduled tasks to survive process restarts.
 
+## n8n Export
+
+Tasks registered with Cascadence can be exported as an n8n workflow using the
+``export-n8n`` command:
+
+```bash
+$ task export-n8n workflow.json
+```
+
+The resulting ``workflow.json`` can be imported into your n8n instance by
+selecting **Import from File** in the workflow menu and choosing the generated
+file.
+

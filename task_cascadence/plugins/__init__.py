@@ -6,8 +6,8 @@ complex projects could load plugins dynamically using entry points.
 """
 
 from typing import Dict
-import importlib
 import os
+import importlib
 
 
 from ..scheduler import default_scheduler
@@ -81,20 +81,22 @@ for _name, _task in registered_tasks.items():
 
 
 def load_cronyx_tasks() -> None:
-    """Load tasks from a Cronyx server if ``CRONYX_BASE_URL`` is set."""
-
-    _cronyx_url = os.getenv("CRONYX_BASE_URL")
-    if not _cronyx_url:
+    """Load tasks from a configured Cronyx server."""
+    url = os.getenv("CRONYX_BASE_URL")
+    if not url:
         return
-    from .cronyx_server import CronyxServerLoader
-    loader = CronyxServerLoader(_cronyx_url)
-    for info in loader.list_tasks():
-        task_data = loader.load_task(info["id"])
-        module_name, cls_name = task_data["path"].split(":")
-        module = importlib.import_module(module_name)
-        cls = getattr(module, cls_name)
-        instance = cls()
-        registered_tasks[instance.name] = instance
-        default_scheduler.register_task(instance.name, instance)
+    try:
+        from .cronyx_server import CronyxServerLoader
+        loader = CronyxServerLoader(url)
+        for info in loader.list_tasks():
+            meta = loader.load_task(info["id"])
+            module, cls_name = meta["path"].split(":")
+            mod = importlib.import_module(module)
+            cls = getattr(mod, cls_name)
+            obj = cls()
+            registered_tasks[obj.name] = obj
+            default_scheduler.register_task(obj.name, obj)
+    except Exception:  # pragma: no cover - best effort loading
+        pass
 
-
+load_cronyx_tasks()

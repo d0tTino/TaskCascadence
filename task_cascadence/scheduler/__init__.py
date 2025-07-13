@@ -104,7 +104,8 @@ class CronScheduler(BaseScheduler):
         storage_path: str = "schedules.yml",
         tasks: Optional[Dict[str, Any]] = None,
         temporal: Optional[TemporalBackend] = None,
-        tasks: Optional[Dict[str, "BaseTask"]] = None,
+        tasks: Optional[Dict[str, Any]] = None,
+
     ):
         super().__init__(temporal=temporal)
 
