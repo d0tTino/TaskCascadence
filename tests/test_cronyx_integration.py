@@ -40,6 +40,7 @@ def test_tasks_loaded_from_cronyx(monkeypatch, tmp_path):
     import task_cascadence
 
     importlib.reload(task_cascadence)
+    task_cascadence.initialize()
 
     tasks = [name for name, _ in task_cascadence.scheduler.default_scheduler.list_tasks()]
     assert "remote" in tasks
