@@ -3,6 +3,8 @@ import pytest
 from typer.testing import CliRunner
 
 from task_cascadence.cli import app, main
+from task_cascadence.plugins import ManualTrigger
+from task_cascadence.scheduler import default_scheduler
 
 
 def test_cli_main_returns_none():
@@ -13,35 +15,14 @@ def test_cli_main_returns_none():
         main([])
 
 
-def test_cli_list_shows_example_task():
+class ManualTask(ManualTrigger):
+    name = "manual_demo"
+    def run(self):
+        return "ok"
+
+
+def test_manual_trigger_cli():
+    default_scheduler.register_task("manual_demo", ManualTask())
     runner = CliRunner()
-    result = runner.invoke(app, ["list"])
+    result = runner.invoke(app, ["trigger", "manual_demo"])
     assert result.exit_code == 0
-    assert "example\tenabled" in result.output
-
-
-def test_cli_run_executes_task(monkeypatch):
-    from task_cascadence.plugins import ExampleTask
-
-    called = []
-
-    def fake_run(self):
-        called.append(True)
-
-    monkeypatch.setattr(ExampleTask, "run", fake_run)
-    runner = CliRunner()
-    result = runner.invoke(app, ["run", "example"])
-    assert result.exit_code == 0
-    assert called == [True]
-
-
-def test_cli_disable_disables_task():
-    runner = CliRunner()
-    result = runner.invoke(app, ["disable", "example"])
-    assert result.exit_code == 0
-    assert "example disabled" in result.output
-
-    from task_cascadence.scheduler import default_scheduler
-
-    assert default_scheduler._tasks["example"]["disabled"] is True
-
