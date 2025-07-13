@@ -27,6 +27,8 @@ dependencies = [
     "pytz",
     "pyyaml",
     "requests",
+    "temporalio",
+    "httpx",
 ]
 
 [project.scripts]
