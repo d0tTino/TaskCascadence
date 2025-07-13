@@ -161,7 +161,26 @@ class CronScheduler(BaseScheduler):
 
         return runner
 
-    def register_task(self, task, cron_expression):
+    def register_task(self, arg1, arg2):
+        """Register a task with optional scheduling.
+
+        This method supports two calling styles for backwards
+        compatibility with :class:`BaseScheduler`:
+
+        ``register_task(name, task)``
+            Register ``task`` under ``name`` without scheduling.
+
+        ``register_task(task, cron_expression)``
+            Register ``task`` and schedule it using ``cron_expression``.
+        """
+
+        if isinstance(arg1, str):
+            # Called with ``name`` and ``task``
+            name, task = arg1, arg2
+            super().register_task(name, task)
+            return
+
+        task, cron_expression = arg1, arg2
         job_id = task.__class__.__name__
         super().register_task(job_id, task)
         self.schedules[job_id] = cron_expression
@@ -188,6 +207,6 @@ class CronScheduler(BaseScheduler):
 # A default scheduler instance used by the CLI and plugin registration. Tests
 # expect this object to exist at module scope.
 
-default_scheduler = BaseScheduler()
+default_scheduler = CronScheduler()
 
 
