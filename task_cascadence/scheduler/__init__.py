@@ -101,10 +101,11 @@ class CronScheduler(BaseScheduler):
 
     def __init__(
         self,
-        timezone="UTC",
-        storage_path="schedules.yml",
-        tasks=None,
-        temporal=None,
+        timezone: str | pytz.tzinfo.BaseTzInfo = "UTC",
+        storage_path: str = "schedules.yml",
+        tasks: Optional[Dict[str, Any]] = None,
+        temporal: Optional[TemporalBackend] = None,
+
 
     ):
         super().__init__(temporal=temporal)

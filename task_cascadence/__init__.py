@@ -10,8 +10,16 @@ from . import cli  # noqa: F401
 from . import metrics  # noqa: F401
 from . import temporal  # noqa: F401
 
-plugins.initialize()
-plugins.load_cronyx_tasks()
+
+def _init_plugins() -> None:
+    """Initialise and load plugins."""
+
+    plugins.initialize()
+    plugins.load_cronyx_tasks()
+
+
+_init_plugins()
+
 
 
 

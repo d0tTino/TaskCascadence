@@ -140,4 +140,3 @@ def load_cronyx_tasks() -> None:
     except Exception:  # pragma: no cover - best effort loading
         pass
 
-load_cronyx_tasks()
