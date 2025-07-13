@@ -6,6 +6,9 @@ complex projects could load plugins dynamically using entry points.
 """
 
 from typing import Dict
+import importlib
+import os
+import sys
 
 
 from ..scheduler import default_scheduler
@@ -34,7 +37,11 @@ class WebhookTask(BaseTask):
     pass
 
 
-webhook_task_registry: list[type[WebhookTask]] = []
+_old_module = sys.modules.get(__name__)
+if _old_module and hasattr(_old_module, "webhook_task_registry"):
+    webhook_task_registry = _old_module.webhook_task_registry
+else:
+    webhook_task_registry: list[type[WebhookTask]] = []
 
 
 def register_webhook_task(cls: type[WebhookTask]) -> type[WebhookTask]:
@@ -72,4 +79,22 @@ registered_tasks: Dict[str, BaseTask] = {
 # them immediately.
 for _name, _task in registered_tasks.items():
     default_scheduler.register_task(_name, _task)
+
+# Optionally load tasks from CronyxServer if configured via environment.
+_cronyx_url = os.getenv("CRONYX_BASE_URL")
+if _cronyx_url:
+    try:
+        from .cronyx_server import CronyxServerLoader
+
+        _loader = CronyxServerLoader(_cronyx_url)
+        for _info in _loader.list_tasks():
+            _task_def = _loader.load_task(_info["id"])
+            module_path, class_name = _task_def["path"].split(":")
+            mod = importlib.import_module(module_path)
+            cls = getattr(mod, class_name)
+            obj = cls()
+            registered_tasks[obj.name] = obj
+            default_scheduler.register_task(obj.name, obj)
+    except Exception:  # pragma: no cover - network failures ignored
+        pass
 
