@@ -5,6 +5,9 @@ purposes we provide a tiny plugin system and a single example task.  More
 complex projects could load plugins dynamically using entry points.
 """
 
+import importlib
+import os
+from importlib import metadata
 from typing import Dict
 
 
@@ -68,8 +71,47 @@ registered_tasks: Dict[str, BaseTask] = {
     ExampleTask.name: ExampleTask(),
 }
 
-# Register all tasks with the default scheduler on import so the CLI can access
-# them immediately.
-for _name, _task in registered_tasks.items():
-    default_scheduler.register_task(_name, _task)
+def load_plugin(path: str) -> BaseTask:
+    """Load ``path`` of the form ``module:Class`` and return an instance."""
+
+    module_path, class_name = path.split(":")
+    module = importlib.import_module(module_path)
+    cls = getattr(module, class_name)
+    return cls()
+
+
+def load_entrypoint_plugins() -> None:
+    """Load tasks exposed via ``task_cascadence.plugins`` entry points."""
+
+    for ep in metadata.entry_points().select(group="task_cascadence.plugins"):
+        task = load_plugin(ep.value)
+        registered_tasks[task.name] = task
+        default_scheduler.register_task(task.name, task)
+
+
+def load_cronyx_plugins(base_url: str) -> None:
+    """Load tasks from a CronyxServer instance."""
+
+    from .cronyx_server import CronyxServerLoader
+
+    loader = CronyxServerLoader(base_url)
+    for info in loader.list_tasks():
+        data = loader.load_task(info["id"])
+        task = load_plugin(data["path"])
+        registered_tasks[task.name] = task
+        default_scheduler.register_task(task.name, task)
+
+
+def initialize() -> None:
+    """Register built-in tasks and load any external plugins."""
+
+    for _name, _task in registered_tasks.items():
+        default_scheduler.register_task(_name, _task)
+
+    load_entrypoint_plugins()
+
+    if "CRONYX_BASE_URL" in os.environ:
+        load_cronyx_plugins(os.environ["CRONYX_BASE_URL"])
+
+
 

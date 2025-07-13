@@ -37,6 +37,17 @@ def run_task(name: str) -> None:
         raise typer.Exit(code=1)
 
 
+@app.command("trigger")
+def manual_trigger(name: str) -> None:
+    """Run ``NAME`` if it is a ManualTrigger task."""
+
+    task_info = dict(default_scheduler._tasks).get(name)
+    if not task_info or not isinstance(task_info["task"], plugins.ManualTrigger):
+        typer.echo(f"error: '{name}' is not a manual task", err=True)
+        raise typer.Exit(code=1)
+    run_task(name)
+
+
 @app.command("disable")
 def disable_task(name: str) -> None:
     """Disable ``NAME`` so it can no longer be executed."""

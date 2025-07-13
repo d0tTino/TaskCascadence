@@ -1,0 +1,6 @@
+[project]
+name = "pyplugin"
+version = "0.1.0"
+
+[project.entry-points."task_cascadence.plugins"]
+python_demo = "pyplugin:DemoTask"

@@ -55,3 +55,23 @@ When a new ``CronScheduler`` instance starts it reads this file and re-creates
 any jobs for which task objects are supplied via the ``tasks`` argument.  This
 allows scheduled tasks to survive process restarts.
 
+## Plugin Discovery
+
+Additional tasks can be provided by external packages using the
+``task_cascadence.plugins`` entry point group. Each entry should resolve to a
+class deriving from :class:`~task_cascadence.plugins.BaseTask`. When the package
+is imported these entry points are loaded automatically and registered with the
+default scheduler.
+
+An example ``pyproject.toml`` exposing a plugin looks like:
+
+```toml
+[project.entry-points."task_cascadence.plugins"]
+demo = "myplugin:DemoTask"
+```
+
+Plugins implemented in Rust or Go can be built and served via a CronyxServer
+instance. Set the ``CRONYX_BASE_URL`` environment variable to the server's URL
+and Cascadence will fetch and register any advertised tasks on startup. Example
+plugin source for Python, Rust and Go lives in the ``examples/`` directory.
+
