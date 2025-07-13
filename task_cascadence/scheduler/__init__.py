@@ -19,6 +19,7 @@ from typing import Any, Dict, Iterable, Tuple, Optional, TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover - used for type hints only
     from ..plugins import BaseTask  # noqa: F401
 
+
 from ..temporal import TemporalBackend
 
 
@@ -103,7 +104,6 @@ class CronScheduler(BaseScheduler):
         timezone: str | pytz.tzinfo.BaseTzInfo = "UTC",
         storage_path: str = "schedules.yml",
         temporal: Optional[TemporalBackend] = None,
-        tasks: Optional[Dict[str, Any]] = None,
 
     ):
         super().__init__(temporal=temporal)
