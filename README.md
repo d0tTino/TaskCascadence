@@ -55,3 +55,15 @@ When a new ``CronScheduler`` instance starts it reads this file and re-creates
 any jobs for which task objects are supplied via the ``tasks`` argument.  This
 allows scheduled tasks to survive process restarts.
 
+
+## Metrics
+
+Use ``start_metrics_server`` to expose Prometheus metrics for tasks. Run it at application startup specifying a port:
+
+```python
+from task_cascadence.metrics import start_metrics_server
+
+start_metrics_server(port=9000)
+```
+
+Metrics like ``task_latency_seconds`` and ``task_success_total`` will then be available from ``http://localhost:9000/metrics``.

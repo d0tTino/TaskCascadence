@@ -10,5 +10,7 @@ from . import cli  # noqa: F401
 from . import metrics  # noqa: F401
 from . import temporal  # noqa: F401
 
+plugins.maybe_load_cronyx_tasks()
+
 
 __all__ = ["scheduler", "plugins", "ume", "cli", "metrics", "temporal"]

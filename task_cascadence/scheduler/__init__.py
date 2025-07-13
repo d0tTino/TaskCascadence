@@ -6,6 +6,8 @@ can interact with tasks without pulling in heavy dependencies like
 APScheduler.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -14,7 +16,10 @@ import pytz
 import yaml
 
 
-from typing import Any, Dict, Iterable, Tuple, Optional
+from typing import Any, Dict, Iterable, Tuple, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:  # pragma: no cover - type checking only
+    from ..plugins import BaseTask
 
 from ..temporal import TemporalBackend
 
@@ -100,7 +105,9 @@ class CronScheduler(BaseScheduler):
         timezone: str | pytz.tzinfo.BaseTzInfo = "UTC",
         storage_path: str = "schedules.yml",
         temporal: Optional[TemporalBackend] = None,
-    ):
+        *,
+        tasks: Optional[Dict[str, "BaseTask"]] = None,
+    ) -> None:
         super().__init__(temporal=temporal)
 
         self._CronTrigger = CronTrigger

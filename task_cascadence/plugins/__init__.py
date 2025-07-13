@@ -6,6 +6,8 @@ complex projects could load plugins dynamically using entry points.
 """
 
 from typing import Dict
+import os
+import importlib
 
 
 from ..scheduler import default_scheduler
@@ -72,4 +74,32 @@ registered_tasks: Dict[str, BaseTask] = {
 # them immediately.
 for _name, _task in registered_tasks.items():
     default_scheduler.register_task(_name, _task)
+
+
+_loaded_cronyx = False
+
+
+def maybe_load_cronyx_tasks() -> None:
+    """Load tasks from a Cronyx server if ``CRONYX_BASE_URL`` is set."""
+
+    global _loaded_cronyx
+    if _loaded_cronyx:
+        return
+    base_url = os.getenv("CRONYX_BASE_URL")
+    if not base_url:
+        return
+    try:  # pragma: no cover - optional integration
+        from . import cronyx_server
+        loader = cronyx_server.CronyxServerLoader(base_url)
+        for info in loader.list_tasks():
+            spec = loader.load_task(info["id"])
+            module_path, cls_name = spec["path"].split(":")
+            module = importlib.import_module(module_path)
+            cls = getattr(module, cls_name)
+            task = cls()
+            registered_tasks[task.name] = task
+            default_scheduler.register_task(task.name, task)
+        _loaded_cronyx = True
+    except Exception:
+        pass
 

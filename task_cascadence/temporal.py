@@ -5,8 +5,12 @@ from __future__ import annotations
 from typing import Any, Optional
 import asyncio
 
-from temporalio.client import Client
-from temporalio.worker import Replayer
+try:  # pragma: no cover - optional dependency
+    from temporalio.client import Client
+    from temporalio.worker import Replayer
+except Exception:  # pragma: no cover - library not installed
+    Client = None  # type: ignore
+    Replayer = None  # type: ignore
 
 
 class TemporalBackend:
@@ -17,6 +21,8 @@ class TemporalBackend:
         self._client: Optional[Client] = None
 
     async def connect(self) -> Client:
+        if Client is None:
+            raise RuntimeError("temporalio is not installed")
         if not self._client:
             self._client = await Client.connect(self.server)
         return self._client
@@ -31,4 +37,6 @@ class TemporalBackend:
 
     def replay(self, history_path: str) -> None:
         """Replay a workflow history from ``history_path`` for debugging."""
+        if Replayer is None:
+            raise RuntimeError("temporalio is not installed")
         Replayer().replay(history_path)
