@@ -17,7 +17,7 @@ import yaml
 from typing import Any, Dict, Iterable, Tuple, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - used for type hints only
-    from ..plugins import BaseTask
+    from ..plugins import BaseTask  # noqa: F401
 
 from ..temporal import TemporalBackend
 
@@ -104,7 +104,6 @@ class CronScheduler(BaseScheduler):
         storage_path: str = "schedules.yml",
         tasks: Optional[Dict[str, Any]] = None,
         temporal: Optional[TemporalBackend] = None,
-        tasks: Optional[Dict[str, Any]] = None,
 
     ):
         super().__init__(temporal=temporal)
