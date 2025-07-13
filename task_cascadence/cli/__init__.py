@@ -11,7 +11,8 @@ import click  # noqa: F401 - re-exported for CLI extensions
 import typer
 
 from ..scheduler import default_scheduler
-from .. import plugins  # noqa: F401  # ensure tasks are registered
+from .. import plugins  # noqa: F401
+import task_cascadence as tc
 from ..n8n import export_workflow
 
 
@@ -83,6 +84,7 @@ def main(args: list[str] | None = None) -> None:
         passed so that pytest arguments are ignored during tests.
     """
 
+    tc.initialize()
     app(args or [], standalone_mode=False)
 
 

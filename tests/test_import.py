@@ -1,4 +1,6 @@
-from task_cascadence.scheduler import CronScheduler, default_scheduler
+from task_cascadence.scheduler import BaseScheduler, default_scheduler
+from task_cascadence import initialize
+
 
 
 def test_sanity():
@@ -10,7 +12,7 @@ def test_default_scheduler_available():
 
 
 def test_example_task_registered():
-    from task_cascadence import plugins  # noqa: F401 - trigger side effects
+    initialize()
 
     tasks = [name for name, _ in default_scheduler.list_tasks()]
     assert "example" in tasks
