@@ -9,6 +9,8 @@ import importlib
 import os
 from importlib import metadata
 from typing import Dict
+import os
+import importlib
 
 
 from ..scheduler import default_scheduler
@@ -37,7 +39,11 @@ class WebhookTask(BaseTask):
     pass
 
 
-webhook_task_registry: list[type[WebhookTask]] = []
+_old_module = sys.modules.get(__name__)
+if _old_module and hasattr(_old_module, "webhook_task_registry"):
+    webhook_task_registry = _old_module.webhook_task_registry
+else:
+    webhook_task_registry: list[type[WebhookTask]] = []
 
 
 def register_webhook_task(cls: type[WebhookTask]) -> type[WebhookTask]:
@@ -115,3 +121,24 @@ def initialize() -> None:
 
 
 
+
+def load_cronyx_tasks() -> None:
+    """Load tasks from a configured Cronyx server."""
+    url = os.getenv("CRONYX_BASE_URL")
+    if not url:
+        return
+    try:
+        from .cronyx_server import CronyxServerLoader
+        loader = CronyxServerLoader(url)
+        for info in loader.list_tasks():
+            meta = loader.load_task(info["id"])
+            module, cls_name = meta["path"].split(":")
+            mod = importlib.import_module(module)
+            cls = getattr(mod, cls_name)
+            obj = cls()
+            registered_tasks[obj.name] = obj
+            default_scheduler.register_task(obj.name, obj)
+    except Exception:  # pragma: no cover - best effort loading
+        pass
+
+load_cronyx_tasks()

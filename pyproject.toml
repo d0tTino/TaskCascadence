@@ -6,3 +6,28 @@ select = ["E", "F"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "task-cascadence"
+version = "0.1.0"
+authors = [{ name = "ACME", email = "info@example.com" }]
+description = "Cascadence task orchestration framework"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "typer",
+    "apscheduler",
+    "fastapi",
+    "uvicorn",
+    "prometheus_client",
+    "pytz",
+    "pyyaml",
+    "requests",
+]
+
+[project.scripts]
+task = "task_cascadence.cli:main"
