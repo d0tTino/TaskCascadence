@@ -9,6 +9,7 @@ from typing import Dict
 import os
 import importlib
 
+
 from ..scheduler import default_scheduler
 
 
@@ -35,7 +36,11 @@ class WebhookTask(BaseTask):
     pass
 
 
-webhook_task_registry: list[type[WebhookTask]] = []
+_old_module = sys.modules.get(__name__)
+if _old_module and hasattr(_old_module, "webhook_task_registry"):
+    webhook_task_registry = _old_module.webhook_task_registry
+else:
+    webhook_task_registry: list[type[WebhookTask]] = []
 
 
 def register_webhook_task(cls: type[WebhookTask]) -> type[WebhookTask]:
