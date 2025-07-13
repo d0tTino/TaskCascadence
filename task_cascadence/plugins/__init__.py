@@ -7,10 +7,9 @@ complex projects could load plugins dynamically using entry points.
 
 import importlib
 import os
+import sys
 from importlib import metadata
 from typing import Dict
-import os
-import importlib
 
 
 from ..scheduler import default_scheduler
