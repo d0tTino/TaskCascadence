@@ -26,3 +26,19 @@ def test_manual_trigger_cli():
     runner = CliRunner()
     result = runner.invoke(app, ["trigger", "manual_demo"])
     assert result.exit_code == 0
+
+
+def test_webhook_command_runs_uvicorn(monkeypatch):
+    called = {}
+
+    def fake_run(app, host="0.0.0.0", port=8000):
+        called["host"] = host
+        called["port"] = port
+
+    monkeypatch.setattr("task_cascadence.webhook.uvicorn.run", fake_run)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["webhook", "--host", "127.0.0.1", "--port", "9000"])
+
+    assert result.exit_code == 0
+    assert called == {"host": "127.0.0.1", "port": 9000}

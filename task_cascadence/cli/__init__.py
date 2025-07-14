@@ -74,6 +74,18 @@ def export_n8n(path: str) -> None:
         raise typer.Exit(code=1)
 
 
+@app.command("webhook")
+def webhook(
+    host: str = typer.Option("0.0.0.0", "--host"),
+    port: int = typer.Option(8000, "--port"),
+) -> None:
+    """Start the webhook server."""
+
+    from .. import webhook as wh
+
+    wh.start_server(host=host, port=port)
+
+
 def main(args: list[str] | None = None) -> None:
     """CLI entry point used by ``console_scripts`` or directly.
 
@@ -89,4 +101,4 @@ def main(args: list[str] | None = None) -> None:
 
 
 
-__all__ = ["app", "main", "export_n8n"]
+__all__ = ["app", "main", "export_n8n", "webhook"]
