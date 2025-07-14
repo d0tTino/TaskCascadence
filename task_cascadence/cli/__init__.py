@@ -76,12 +76,17 @@ def export_n8n(path: str) -> None:
         raise typer.Exit(code=1)
 
 
-@app.command("metrics")
-def metrics(port: int = 8000) -> None:
-    """Start the Prometheus metrics server."""
+@app.command("webhook")
+def webhook(
+    host: str = typer.Option("0.0.0.0", "--host"),
+    port: int = typer.Option(8000, "--port"),
+) -> None:
+    """Start the webhook server."""
 
-    start_metrics_server(port)
-    typer.echo(f"metrics available on :{port}")
+    from .. import webhook as wh
+
+    wh.start_server(host=host, port=port)
+
 
 
 def main(args: list[str] | None = None) -> None:
@@ -99,4 +104,5 @@ def main(args: list[str] | None = None) -> None:
 
 
 
-__all__ = ["app", "main", "export_n8n", "metrics"]
+__all__ = ["app", "main", "export_n8n", "webhook"]
+

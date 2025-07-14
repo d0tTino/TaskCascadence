@@ -1,8 +1,4 @@
-from task_cascadence.scheduler import (
-    CronScheduler,
-    BaseScheduler,
-    default_scheduler,
-)
+from task_cascadence.scheduler import CronScheduler, default_scheduler
 
 from task_cascadence import initialize
 

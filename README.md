@@ -24,11 +24,12 @@ After installing the package in an environment with ``typer`` available, the
 $ task list       # show all registered tasks
 $ task run NAME   # execute a task
 $ task disable NAME  # disable a task
-$ task metrics [--port PORT]  # start the metrics server
+$ task webhook [--host HOST] [--port PORT]  # start webhook server
 ```
 
-Running ``task metrics`` starts a small Prometheus server exposing
-runtime metrics on the specified port (default ``8000``).
+``task webhook`` launches a FastAPI application that dispatches incoming
+events to any registered :class:`WebhookTask` implementations.
+
 
 The repository ships with a single ``example`` task to demonstrate the
 mechanics.
