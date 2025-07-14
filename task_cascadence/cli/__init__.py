@@ -10,6 +10,8 @@ import click  # noqa: F401 - re-exported for CLI extensions
 
 import typer
 
+from ..metrics import start_metrics_server
+
 from ..scheduler import default_scheduler
 from .. import plugins  # noqa: F401
 import task_cascadence as tc
@@ -74,6 +76,14 @@ def export_n8n(path: str) -> None:
         raise typer.Exit(code=1)
 
 
+@app.command("metrics")
+def metrics(port: int = 8000) -> None:
+    """Start the Prometheus metrics server."""
+
+    start_metrics_server(port)
+    typer.echo(f"metrics available on :{port}")
+
+
 def main(args: list[str] | None = None) -> None:
     """CLI entry point used by ``console_scripts`` or directly.
 
@@ -89,4 +99,4 @@ def main(args: list[str] | None = None) -> None:
 
 
 
-__all__ = ["app", "main", "export_n8n"]
+__all__ = ["app", "main", "export_n8n", "metrics"]
