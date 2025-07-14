@@ -42,3 +42,4 @@ def test_webhook_command_runs_uvicorn(monkeypatch):
 
     assert result.exit_code == 0
     assert called == {"host": "127.0.0.1", "port": 9000}
+

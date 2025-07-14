@@ -30,6 +30,7 @@ $ task webhook [--host HOST] [--port PORT]  # start webhook server
 ``task webhook`` launches a FastAPI application that dispatches incoming
 events to any registered :class:`WebhookTask` implementations.
 
+
 The repository ships with a single ``example`` task to demonstrate the
 mechanics.
 
@@ -91,4 +92,20 @@ $ task export-n8n workflow.json
 The resulting ``workflow.json`` can be imported into your n8n instance by
 selecting **Import from File** in the workflow menu and choosing the generated
 file.
+
+## Development Setup
+
+Install Cascadence with its optional development dependencies in editable mode:
+
+```bash
+$ pip install -e .[dev]
+```
+
+This will install tools like ``ruff`` and ``pytest``. Run them from the project
+root to lint and test the codebase:
+
+```bash
+$ ruff .
+$ pytest
+```
 
