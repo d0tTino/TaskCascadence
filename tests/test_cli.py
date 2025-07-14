@@ -26,3 +26,18 @@ def test_manual_trigger_cli():
     runner = CliRunner()
     result = runner.invoke(app, ["trigger", "manual_demo"])
     assert result.exit_code == 0
+
+
+def test_metrics_command(monkeypatch):
+    called = {}
+
+    def fake_start(port=8000):
+        called["port"] = port
+
+    import task_cascadence.cli as cli
+
+    monkeypatch.setattr(cli, "start_metrics_server", fake_start)
+    runner = CliRunner()
+    result = runner.invoke(app, ["metrics", "--port", "9000"])
+    assert result.exit_code == 0
+    assert called["port"] == 9000
