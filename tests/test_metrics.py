@@ -1,4 +1,5 @@
 import pytest
+import httpx
 
 from task_cascadence import metrics
 
@@ -49,3 +50,27 @@ def test_track_task_failure():
     assert success._value.get() == before_success
     assert failure._value.get() == before_failure + 1
     assert _hist_count(metrics.TASK_LATENCY, 'boom') == before_count + 1
+
+
+def test_start_metrics_server_exposes_metrics(monkeypatch):
+    servers = {}
+
+    def fake_start_http_server(port):
+        import prometheus_client
+
+        server, thread = prometheus_client.start_http_server(0)
+        servers["server"] = server
+        return server, thread
+
+    monkeypatch.setattr(metrics, "start_http_server", fake_start_http_server)
+
+    metrics.start_metrics_server()
+
+    port = servers["server"].server_address[1]
+    response = httpx.get(f"http://127.0.0.1:{port}/metrics")
+
+    try:
+        assert response.status_code == 200
+        assert b"task_success_total" in response.content
+    finally:
+        servers["server"].shutdown()
