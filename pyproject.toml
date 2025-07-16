@@ -28,7 +28,7 @@ dependencies = [
     "pyyaml",
     "requests",
     "temporalio",
-    "httpx",
+    "httpx<0.28",
 ]
 
 [project.scripts]

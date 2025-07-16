@@ -10,8 +10,6 @@ import click  # noqa: F401 - re-exported for CLI extensions
 
 import typer
 
-from ..metrics import start_metrics_server
-
 from ..scheduler import default_scheduler
 from .. import plugins  # noqa: F401
 import task_cascadence as tc
