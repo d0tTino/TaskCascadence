@@ -1,6 +1,9 @@
 import time
 
+from datetime import datetime
+
 from task_cascadence import ume
+from task_cascadence.ume.models import TaskRun, TaskSpec
 
 
 def test_ume_emission_order(monkeypatch):
@@ -15,9 +18,17 @@ def test_ume_emission_order(monkeypatch):
     monkeypatch.setattr(ume, "emit_task_spec", record_spec)
     monkeypatch.setattr(ume, "emit_task_run", record_run)
 
-    ume.emit_task_spec({"name": "test"})
+    spec = TaskSpec(id="1", name="test")
+    ume.emit_task_spec(spec)
     time.sleep(0.01)
-    ume.emit_task_run({"id": 1})
+    run = TaskRun(
+        spec=spec,
+        run_id="run1",
+        status="success",
+        started_at=datetime.now(),
+        finished_at=datetime.now(),
+    )
+    ume.emit_task_run(run)
 
     types = [c[0] for c in calls]
     assert types == ["spec", "run"]
