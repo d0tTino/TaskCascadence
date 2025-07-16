@@ -29,6 +29,7 @@ dependencies = [
     "requests",
     "temporalio",
     "httpx",
+    "tzdata",
 ]
 
 [project.scripts]
