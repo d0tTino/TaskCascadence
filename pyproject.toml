@@ -29,6 +29,7 @@ dependencies = [
     "requests",
     "temporalio",
     "httpx<0.28",
+
 ]
 
 [project.scripts]
