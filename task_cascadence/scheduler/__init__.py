@@ -10,7 +10,7 @@ from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-import pytz
+from zoneinfo import ZoneInfo
 import yaml
 
 
@@ -105,7 +105,7 @@ class CronScheduler(BaseScheduler):
 
     def __init__(
         self,
-        timezone: str | pytz.tzinfo.BaseTzInfo = "UTC",
+        timezone: str | ZoneInfo = "UTC",
         storage_path: str = "schedules.yml",
         tasks: Optional[Dict[str, Any]] = None,
         temporal: Optional[TemporalBackend] = None,
@@ -116,7 +116,7 @@ class CronScheduler(BaseScheduler):
 
         self._CronTrigger = CronTrigger
         self._yaml = yaml
-        tz = pytz.timezone(timezone) if isinstance(timezone, str) else timezone
+        tz = ZoneInfo(timezone) if isinstance(timezone, str) else timezone
         self.scheduler = BackgroundScheduler(timezone=tz)
         self.storage_path = Path(storage_path)
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
