@@ -31,10 +31,11 @@ def test_schedule_persistence(tmp_path):
 
 
 def test_run_emits_result(monkeypatch, tmp_path):
-    emitted = {}
+    emitted_run = None
 
-    def fake_emit(data):
-        emitted.update(data)
+    def fake_emit(run):
+        nonlocal emitted_run
+        emitted_run = run
 
     from task_cascadence import ume
 
@@ -44,8 +45,10 @@ def test_run_emits_result(monkeypatch, tmp_path):
     sched.register_task(task, "*/1 * * * *")
     job = sched.scheduler.get_job("DummyTask")
     job.func()
-    assert emitted["task"] == "DummyTask"
-    assert emitted["result"] == 1
+    assert emitted_run is not None
+    assert emitted_run.spec.id == "DummyTask"
+    assert emitted_run.status == "success"
+    assert task.count == 1
 
 
 def test_restore_schedules_on_init(tmp_path, monkeypatch):
@@ -56,7 +59,7 @@ def test_restore_schedules_on_init(tmp_path, monkeypatch):
 
     from task_cascadence import ume
 
-    monkeypatch.setattr(ume, "emit_task_run", lambda data: None)
+    monkeypatch.setattr(ume, "emit_task_run", lambda run: None)
 
     new_task = DummyTask()
     sched2 = CronScheduler(

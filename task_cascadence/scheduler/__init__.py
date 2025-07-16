@@ -150,18 +150,33 @@ class CronScheduler(BaseScheduler):
 
     def _wrap_task(self, task):
         def runner():
-            from ..ume import emit_task_run
+            from datetime import datetime
+            from uuid import uuid4
 
+            from ..ume import emit_task_run
+            from ..ume.models import TaskRun, TaskSpec
+
+            spec = TaskSpec(
+                id=task.__class__.__name__, name=task.__class__.__name__
+            )
+            run_id = str(uuid4())
+            started = datetime.now()
+            status = "success"
             try:
-                result = task.run()
-                emit_task_run(
-                    {"task": task.__class__.__name__, "result": result}
-                )
-            except Exception as exc:  # pragma: no cover - passthrough
-                emit_task_run(
-                    {"task": task.__class__.__name__, "error": str(exc)}
-                )
+                task.run()
+            except Exception:  # pragma: no cover - passthrough
+                status = "error"
                 raise
+            finally:
+                finished = datetime.now()
+                run = TaskRun(
+                    spec=spec,
+                    run_id=run_id,
+                    status=status,
+                    started_at=started,
+                    finished_at=finished,
+                )
+                emit_task_run(run)
 
         return runner
 
