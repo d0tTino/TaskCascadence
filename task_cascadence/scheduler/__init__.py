@@ -88,8 +88,12 @@ class BaseScheduler:
 
 
     def schedule_task(self, *args, **kwargs):
-        """Stub method for scheduling tasks."""
-        pass
+        """Schedule ``task`` using ``cron_expression``.
+
+        Subclasses should override this method to provide concrete
+        scheduling behaviour.
+        """
+        raise NotImplementedError("Scheduling not implemented")
 
 
 class CronScheduler(BaseScheduler):
@@ -192,6 +196,10 @@ class CronScheduler(BaseScheduler):
         self.scheduler.add_job(
             self._wrap_task(task), trigger=trigger, id=job_id
         )
+
+    def schedule_task(self, task: Any, cron_expression: str) -> None:
+        """Convenience wrapper for :meth:`register_task`."""
+        self.register_task(task, cron_expression)
 
     def start(self):
         self.scheduler.start()

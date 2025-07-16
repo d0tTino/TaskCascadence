@@ -104,5 +104,5 @@ def main(args: list[str] | None = None) -> None:
 
 
 
-__all__ = ["app", "main", "export_n8n", "webhook"]
+__all__ = ["app", "main", "export_n8n", "webhook", "start_metrics_server"]
 

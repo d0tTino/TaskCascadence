@@ -67,3 +67,14 @@ def test_restore_schedules_on_init(tmp_path, monkeypatch):
     job.func()
     assert new_task.count == 1
 
+
+def test_schedule_task(tmp_path):
+    storage = tmp_path / "sched.yml"
+    sched = CronScheduler(timezone="UTC", storage_path=storage)
+    task = DummyTask()
+    sched.schedule_task(task, "*/2 * * * *")
+    job = sched.scheduler.get_job("DummyTask")
+    assert job is not None
+    data = yaml.safe_load(storage.read_text())
+    assert data["DummyTask"] == "*/2 * * * *"
+
