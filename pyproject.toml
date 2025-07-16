@@ -28,8 +28,8 @@ dependencies = [
     "pyyaml",
     "requests",
     "temporalio",
-    "httpx",
-    "tzdata",
+    "httpx<0.28",
+
 ]
 
 [project.scripts]
