@@ -69,7 +69,32 @@ class BaseScheduler:
             return self._temporal.run_workflow_sync(workflow)
 
         if hasattr(task, "run"):
-            return task.run()
+            from datetime import datetime
+            from uuid import uuid4
+
+            from ..ume import emit_task_run
+            from ..ume.models import TaskRun, TaskSpec
+
+            spec = TaskSpec(id=task.__class__.__name__, name=task.__class__.__name__)
+            run_id = str(uuid4())
+            started = datetime.now()
+            status = "success"
+            try:
+                result = task.run()
+            except Exception:
+                status = "error"
+                raise
+            finally:
+                finished = datetime.now()
+                run = TaskRun(
+                    spec=spec,
+                    run_id=run_id,
+                    status=status,
+                    started_at=started,
+                    finished_at=finished,
+                )
+                emit_task_run(run)
+            return result
         raise AttributeError(f"Task '{name}' has no run() method")
 
     def replay_history(self, history_path: str) -> None:

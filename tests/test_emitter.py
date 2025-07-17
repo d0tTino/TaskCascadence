@@ -28,7 +28,10 @@ def test_emit_task_run_within_deadline():
     start = time.monotonic()
     emit_task_run(run, client)
     assert client.events
-    delay = client.events[0][1] - start
+    queued, ts = client.events[0]
+    assert isinstance(queued, TaskRun)
+    assert queued == run
+    delay = ts - start
     assert delay < 0.2
 
 
@@ -38,5 +41,8 @@ def test_emit_task_spec_within_deadline():
     start = time.monotonic()
     emit_task_spec(spec, client)
     assert client.events
-    delay = client.events[0][1] - start
+    queued, ts = client.events[0]
+    assert isinstance(queued, TaskSpec)
+    assert queued == spec
+    delay = ts - start
     assert delay < 0.2
