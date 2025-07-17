@@ -1,5 +1,5 @@
 import yaml
-from task_cascadence.scheduler import CronScheduler
+from task_cascadence.scheduler import CronScheduler, BaseScheduler
 from task_cascadence.plugins import CronTask
 
 
@@ -80,4 +80,9 @@ def test_schedule_task(tmp_path):
     assert job is not None
     data = yaml.safe_load(storage.read_text())
     assert data["DummyTask"] == "*/2 * * * *"
+
+
+def test_base_scheduler_has_no_schedule_task():
+    bs = BaseScheduler()
+    assert not hasattr(bs, "schedule_task")
 
