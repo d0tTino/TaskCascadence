@@ -12,7 +12,7 @@ class DummyResponse:
         return {}
 
 
-def fake_get(url, timeout):
+def fake_request(method, url, timeout=0, **kwargs):
     return DummyResponse()
 
 
@@ -24,15 +24,15 @@ class SuccessResponse:
         return {"ok": True}
 
 
-def fake_success(url, timeout):
+def fake_success_request(method, url, timeout=0, **kwargs):
     return SuccessResponse()
 
 
-class FailingGet:
+class FailingRequest:
     def __init__(self):
         self.calls = 0
 
-    def __call__(self, url, timeout):
+    def __call__(self, method, url, timeout=0, **kwargs):
         self.calls += 1
         raise requests.ConnectionError("fail")
 
@@ -40,7 +40,7 @@ class FailingGet:
 @pytest.mark.parametrize("method,args", [("list_tasks", ()), ("load_task", ("42",))])
 def test_loader_http_error(monkeypatch, method, args):
     loader = CronyxServerLoader("http://server")
-    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr(requests, "request", fake_request)
     with pytest.raises(requests.HTTPError):
         getattr(loader, method)(*args)
 
@@ -48,15 +48,32 @@ def test_loader_http_error(monkeypatch, method, args):
 @pytest.mark.parametrize("method,args", [("list_tasks", ()), ("load_task", ("42",))])
 def test_loader_success(monkeypatch, method, args):
     loader = CronyxServerLoader("http://server")
-    monkeypatch.setattr(requests, "get", fake_success)
+    monkeypatch.setattr(requests, "request", fake_success_request)
     assert getattr(loader, method)(*args) == {"ok": True}
 
 
 def test_loader_retries(monkeypatch):
-    failing = FailingGet()
+    failing = FailingRequest()
     loader = CronyxServerLoader("http://server", retries=3, backoff_factor=0)
-    monkeypatch.setattr(requests, "get", failing)
+    monkeypatch.setattr(requests, "request", failing)
     monkeypatch.setattr("time.sleep", lambda s: None)
     with pytest.raises(requests.ConnectionError):
         loader.list_tasks()
     assert failing.calls == 3
+
+
+def test_loader_timeout_from_env(monkeypatch):
+    class Recorder:
+        def __init__(self):
+            self.timeout = None
+
+        def __call__(self, method, url, timeout=0, **kwargs):
+            self.timeout = timeout
+            return SuccessResponse()
+
+    recorder = Recorder()
+    monkeypatch.setenv("CRONYX_TIMEOUT", "7.5")
+    monkeypatch.setattr(requests, "request", recorder)
+    loader = CronyxServerLoader("http://server")
+    assert loader.list_tasks() == {"ok": True}
+    assert recorder.timeout == 7.5

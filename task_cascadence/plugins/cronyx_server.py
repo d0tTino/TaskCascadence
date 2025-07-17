@@ -1,7 +1,7 @@
-import time
+import os
 from typing import Any
 
-import requests
+from ..http_utils import request_with_retry
 
 
 class CronyxServerLoader:
@@ -11,26 +11,27 @@ class CronyxServerLoader:
         self,
         base_url: str,
         *,
-        timeout: float = 5.0,
+        timeout: float | None = None,
         retries: int = 3,
         backoff_factor: float = 0.5,
     ) -> None:
         self.base_url = base_url.rstrip("/")
+        if timeout is None:
+            timeout = float(os.getenv("CRONYX_TIMEOUT", "5.0"))
         self.timeout = timeout
         self.retries = retries
         self.backoff_factor = backoff_factor
 
     def _get(self, path: str) -> Any:
         url = f"{self.base_url}{path}"
-        for attempt in range(1, self.retries + 1):
-            try:
-                response = requests.get(url, timeout=self.timeout)
-                response.raise_for_status()
-                return response.json()
-            except requests.RequestException:
-                if attempt == self.retries:
-                    raise
-                time.sleep(self.backoff_factor * 2 ** (attempt - 1))
+        response = request_with_retry(
+            "GET",
+            url,
+            timeout=self.timeout,
+            retries=self.retries,
+            backoff_factor=self.backoff_factor,
+        )
+        return response.json()
 
     def list_tasks(self):
         """Return a list of available tasks."""
