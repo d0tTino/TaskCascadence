@@ -87,13 +87,6 @@ class BaseScheduler:
         self._tasks[name]["disabled"] = True
 
 
-    def schedule_task(self, *args, **kwargs):
-        """Schedule ``task`` using ``cron_expression``.
-
-        Subclasses should override this method to provide concrete
-        scheduling behaviour.
-        """
-        raise NotImplementedError("Scheduling not implemented")
 
 
 class CronScheduler(BaseScheduler):
