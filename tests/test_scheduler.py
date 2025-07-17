@@ -18,7 +18,10 @@ def test_timezone_awareness(tmp_path):
     task = DummyTask()
     sched.register_task(task, "0 12 * * *")
     job = sched.scheduler.get_job("DummyTask")
+    from zoneinfo import ZoneInfo
+
     assert str(job.trigger.timezone) == "US/Pacific"
+    assert isinstance(job.trigger.timezone, ZoneInfo)
 
 
 def test_schedule_persistence(tmp_path):
