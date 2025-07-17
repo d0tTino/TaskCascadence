@@ -56,9 +56,9 @@ crontab schedules:
 ExampleTask: "0 12 * * *"
 ```
 
-Timezone-aware scheduling requires access to the IANA timezone database.
-Install the `tzdata` package to ensure these definitions are available
-when creating schedulers with non-UTC timezones.
+Timezone-aware scheduling requires access to the IANA timezone database
+provided by the `tzdata` package. Ensure this package is installed when
+creating schedulers with non-UTC timezones.
 
 When a new ``CronScheduler`` instance starts it reads this file and re-creates
 any jobs for which task objects are supplied via the ``tasks`` argument.  This

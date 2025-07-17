@@ -26,6 +26,7 @@ dependencies = [
     "prometheus_client",
     "pytz",
     "pyyaml",
+    "tzdata",
     "requests",
     "temporalio",
     "httpx<0.28",
