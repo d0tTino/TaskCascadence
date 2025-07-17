@@ -17,12 +17,18 @@ def test_cli_main_returns_none():
 
 class ManualTask(ManualTrigger):
     name = "manual_demo"
+
     def run(self):
         return "ok"
 
 
-def test_manual_trigger_cli():
+def test_manual_trigger_cli(monkeypatch):
     default_scheduler.register_task("manual_demo", ManualTask())
+
+    from task_cascadence import ume
+
+    monkeypatch.setattr(ume, "emit_task_run", lambda run: None)
+
     runner = CliRunner()
     result = runner.invoke(app, ["trigger", "manual_demo"])
     assert result.exit_code == 0
