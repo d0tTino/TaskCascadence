@@ -6,11 +6,12 @@ can interact with tasks without pulling in heavy dependencies like
 APScheduler.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
-from zoneinfo import ZoneInfo
 import yaml
 
 
@@ -18,6 +19,7 @@ from typing import Any, Dict, Iterable, Tuple, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - used for type hints only
     from ..plugins import BaseTask  # noqa: F401
+    from zoneinfo import ZoneInfo
 
 
 from ..temporal import TemporalBackend
@@ -106,6 +108,8 @@ class CronScheduler(BaseScheduler):
 
     ):
         super().__init__(temporal=temporal)
+
+        from zoneinfo import ZoneInfo
 
         self._CronTrigger = CronTrigger
         self._yaml = yaml
