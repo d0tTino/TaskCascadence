@@ -140,3 +140,20 @@ def load_cronyx_tasks() -> None:
     except Exception:  # pragma: no cover - best effort loading
         pass
 
+
+def reload_plugins() -> None:
+    """Reload plugin modules and reset the default scheduler."""
+
+    from importlib import reload, invalidate_caches
+    from .. import scheduler as _scheduler
+
+    for task in registered_tasks.values():
+        mod = task.__class__.__module__
+        if mod != __name__ and mod in sys.modules:
+            del sys.modules[mod]
+
+    invalidate_caches()
+    _scheduler._default_scheduler = None  # reset singleton
+    reload(sys.modules[__name__])
+    sys.modules[__name__].initialize()
+

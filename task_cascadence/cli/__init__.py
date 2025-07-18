@@ -126,6 +126,18 @@ def webhook(
     wh.start_server(host=host, port=port)
 
 
+@app.command("reload-plugins")
+def reload_plugins_cmd() -> None:
+    """Reload installed plugins and refresh the scheduler."""
+
+    from .. import plugins as pl
+    pl.reload_plugins()
+
+    global default_scheduler
+    default_scheduler = get_default_scheduler()
+    typer.echo("plugins reloaded")
+
+
 
 def main(args: list[str] | None = None) -> None:
     """CLI entry point used by ``console_scripts`` or directly.
@@ -142,5 +154,12 @@ def main(args: list[str] | None = None) -> None:
 
 
 
-__all__ = ["app", "main", "export_n8n", "webhook", "start_metrics_server"]
+__all__ = [
+    "app",
+    "main",
+    "export_n8n",
+    "webhook",
+    "start_metrics_server",
+    "reload_plugins_cmd",
+]
 
