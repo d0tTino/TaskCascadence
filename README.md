@@ -72,6 +72,19 @@ When a new ``CronScheduler`` instance starts it reads this file and re-creates
 any jobs for which task objects are supplied via the ``tasks`` argument.  This
 allows scheduled tasks to survive process restarts.
 
+## User Identification
+
+``emit_task_spec`` and ``emit_task_run`` accept an optional ``user_id``
+parameter. The value is hashed with SHA-256 and stored in the ``user_hash``
+field of the emitted dataclass. Raw identifiers are never sent over the wire,
+allowing user-aware analytics without exposing sensitive information.
+
+```python
+from task_cascadence import ume
+
+ume.emit_task_spec(spec, user_id="alice")
+```
+
 ## Plugin Discovery
 
 Additional tasks can be provided by external packages using the
