@@ -72,6 +72,17 @@ When a new ``CronScheduler`` instance starts it reads this file and re-creates
 any jobs for which task objects are supplied via the ``tasks`` argument.  This
 allows scheduled tasks to survive process restarts.
 
+## Scheduler Backend
+
+``task_cascadence.initialize`` reads configuration to decide which scheduler
+backend to instantiate. By default the cron-based scheduler is used. Set the
+``CASCADENCE_SCHEDULER`` environment variable to ``base`` or provide a YAML file
+via ``CASCADENCE_CONFIG`` containing::
+
+    scheduler: base
+
+This will select the simple in-memory scheduler instead.
+
 ## Plugin Discovery
 
 Additional tasks can be provided by external packages using the
