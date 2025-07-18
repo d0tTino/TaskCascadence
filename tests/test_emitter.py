@@ -1,5 +1,8 @@
 from datetime import datetime
+import threading
 import time
+
+import pytest
 
 
 from task_cascadence.ume import emit_task_run, emit_task_spec
@@ -46,3 +49,28 @@ def test_emit_task_spec_within_deadline():
     assert queued == spec
     delay = ts - start
     assert delay < 0.2
+
+
+class SlowClient:
+    def enqueue(self, obj):
+        time.sleep(0.3)
+
+
+def test_emit_timeout_no_lingering_threads():
+    client = SlowClient()
+    spec = TaskSpec(id="3", name="timeout")
+    run = TaskRun(
+        spec=spec,
+        run_id="run3",
+        status="success",
+        started_at=datetime.now(),
+        finished_at=datetime.now(),
+    )
+
+    before = threading.active_count()
+    with pytest.raises(RuntimeError):
+        emit_task_run(run, client)
+    # allow the daemon thread to finish
+    time.sleep(0.35)
+    after = threading.active_count()
+    assert after == before
