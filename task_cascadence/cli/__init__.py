@@ -10,6 +10,10 @@ import click  # noqa: F401 - re-exported for CLI extensions
 
 import typer
 
+import importlib
+
+from .. import ume
+
 from ..scheduler import get_default_scheduler
 from .. import plugins  # noqa: F401
 from ..metrics import start_metrics_server  # noqa: F401
@@ -26,12 +30,56 @@ def _global_options(
         None,
         "--metrics-port",
         help="Expose Prometheus metrics on PORT before executing the command",
-    )
+    ),
+    transport: str | None = typer.Option(
+        None,
+        "--transport",
+        help="Configure UME transport [grpc|nats]",
+    ),
+    grpc_stub: str | None = typer.Option(
+        None,
+        "--grpc-stub",
+        help="Dotted path to a gRPC stub instance",
+    ),
+    grpc_method: str = typer.Option(
+        "Send",
+        "--grpc-method",
+        help="Method name for gRPC emission",
+    ),
+    nats_conn: str | None = typer.Option(
+        None,
+        "--nats-conn",
+        help="Dotted path to a NATS connection object",
+    ),
+    nats_subject: str = typer.Option(
+        "events",
+        "--nats-subject",
+        help="Subject for NATS messages",
+    ),
 ) -> None:
     """Handle global options for the CLI."""
 
     if metrics_port is not None:
         start_metrics_server(metrics_port)
+
+    if transport:
+        def _load(path: str):
+            module, attr = path.split(":")
+            mod = importlib.import_module(module)
+            return getattr(mod, attr)
+
+        if transport == "grpc":
+            if grpc_stub is None:
+                raise typer.BadParameter("--grpc-stub is required for grpc transport")
+            stub = _load(grpc_stub)
+            ume.configure_transport("grpc", stub=stub, method=grpc_method)
+        elif transport == "nats":
+            if nats_conn is None:
+                raise typer.BadParameter("--nats-conn is required for nats transport")
+            conn = _load(nats_conn)
+            ume.configure_transport("nats", connection=conn, subject=nats_subject)
+        else:  # pragma: no cover - validation by typer
+            raise typer.BadParameter(f"Unknown transport: {transport}")
 
 
 @app.command("list")
