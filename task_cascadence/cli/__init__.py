@@ -12,11 +12,26 @@ import typer
 
 from ..scheduler import default_scheduler
 from .. import plugins  # noqa: F401
+from ..metrics import start_metrics_server  # noqa: F401
 import task_cascadence as tc
 from ..n8n import export_workflow
 
 
 app = typer.Typer(help="Interact with Cascadence tasks")
+
+
+@app.callback()
+def _global_options(
+    metrics_port: int | None = typer.Option(
+        None,
+        "--metrics-port",
+        help="Expose Prometheus metrics on PORT before executing the command",
+    )
+) -> None:
+    """Handle global options for the CLI."""
+
+    if metrics_port is not None:
+        start_metrics_server(metrics_port)
 
 
 @app.command("list")
@@ -29,14 +44,17 @@ def list_tasks() -> None:
 
 
 @app.command("run")
-def run_task(name: str) -> None:
+def run_task(
+    name: str,
+    temporal: bool = typer.Option(False, "--temporal", help="Execute via Temporal"),
+) -> None:
     """Run ``NAME`` if it exists and is enabled."""
 
     try:
-        default_scheduler.run_task(name)
+        default_scheduler.run_task(name, use_temporal=temporal)
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("trigger")
@@ -47,7 +65,8 @@ def manual_trigger(name: str) -> None:
     if not task_info or not isinstance(task_info["task"], plugins.ManualTrigger):
         typer.echo(f"error: '{name}' is not a manual task", err=True)
         raise typer.Exit(code=1)
-    run_task(name)
+    default_scheduler.run_task(name)
+
 
 
 @app.command("disable")
@@ -59,7 +78,7 @@ def disable_task(name: str) -> None:
         typer.echo(f"{name} disabled")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("schedule")
@@ -89,7 +108,7 @@ def export_n8n(path: str) -> None:
         typer.echo(f"workflow written to {path}")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("webhook")
