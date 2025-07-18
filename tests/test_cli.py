@@ -1,6 +1,8 @@
 from click.exceptions import UsageError
 import pytest
 from typer.testing import CliRunner
+import types
+import sys
 
 from task_cascadence.cli import app, main
 from task_cascadence.plugins import ManualTrigger, CronTask
@@ -106,5 +108,51 @@ def test_cli_schedule_unknown_task(monkeypatch):
     result = runner.invoke(app, ["schedule", "missing", "* * * * *"])
 
     assert result.exit_code == 1
+
+
+def test_global_transport_grpc(monkeypatch):
+    captured = {}
+
+    def fake_config(transport, **kwargs):
+        captured["transport"] = transport
+        captured.update(kwargs)
+
+    monkeypatch.setattr("task_cascadence.cli.ume.configure_transport", fake_config)
+
+    mod = types.ModuleType("stubmod")
+    mod.stub = object()
+    sys.modules["stubmod"] = mod
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["--transport", "grpc", "--grpc-stub", "stubmod:stub", "list"],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {"transport": "grpc", "stub": mod.stub, "method": "Send"}
+
+
+def test_global_transport_nats(monkeypatch):
+    captured = {}
+
+    def fake_config(transport, **kwargs):
+        captured["transport"] = transport
+        captured.update(kwargs)
+
+    monkeypatch.setattr("task_cascadence.cli.ume.configure_transport", fake_config)
+
+    mod = types.ModuleType("connmod")
+    mod.conn = object()
+    sys.modules["connmod"] = mod
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["--transport", "nats", "--nats-conn", "connmod:conn", "list"],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {"transport": "nats", "connection": mod.conn, "subject": "events"}
 
 
