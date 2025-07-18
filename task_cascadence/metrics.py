@@ -4,6 +4,14 @@ from prometheus_client import Counter, Histogram, start_http_server
 import functools
 import time
 
+# Public exports
+__all__ = [
+    "TASK_LATENCY",
+    "TASK_SUCCESS",
+    "TASK_FAILURE",
+    "start_metrics_server",
+    "track_task",
+]
 # Histogram tracking how long each task takes to run.
 TASK_LATENCY = Histogram(
     "task_latency_seconds",
