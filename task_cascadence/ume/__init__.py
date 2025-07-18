@@ -21,7 +21,12 @@ def configure_transport(transport: str, **kwargs: Any) -> None:
 
 
 def _queue_within_deadline(obj: Any, client: Any, max_delay: float = 0.2) -> threading.Thread:
-    """Queue *obj* to *client* in a background thread within ``max_delay`` seconds."""
+    """Queue *obj* to *client* in a background thread within ``max_delay`` seconds.
+
+    If the deadline is exceeded the thread is left running as a daemon and a
+    :class:`RuntimeError` is raised. In that situation the event may be dropped
+    before reaching the client.
+    """
 
     def _send() -> None:
         client.enqueue(obj)
@@ -31,6 +36,12 @@ def _queue_within_deadline(obj: Any, client: Any, max_delay: float = 0.2) -> thr
     thread.start()
     thread.join(timeout=max_delay)
     elapsed = time.monotonic() - start
+    if thread.is_alive():
+        # the background thread continues to run but is detached via ``daemon``
+        # so that it won't block interpreter shutdown
+        raise RuntimeError(
+            f"Emission to client exceeded {max_delay}s deadline (thread still running)"
+        )
     if elapsed > max_delay:
         raise RuntimeError(
             f"Emission to client exceeded {max_delay}s deadline (took {elapsed:.3f}s)"
