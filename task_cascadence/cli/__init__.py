@@ -12,11 +12,26 @@ import typer
 
 from ..scheduler import default_scheduler
 from .. import plugins  # noqa: F401
+from ..metrics import start_metrics_server  # noqa: F401
 import task_cascadence as tc
 from ..n8n import export_workflow
 
 
 app = typer.Typer(help="Interact with Cascadence tasks")
+
+
+@app.callback()
+def _global_options(
+    metrics_port: int | None = typer.Option(
+        None,
+        "--metrics-port",
+        help="Expose Prometheus metrics on PORT before executing the command",
+    )
+) -> None:
+    """Handle global options for the CLI."""
+
+    if metrics_port is not None:
+        start_metrics_server(metrics_port)
 
 
 @app.command("list")
