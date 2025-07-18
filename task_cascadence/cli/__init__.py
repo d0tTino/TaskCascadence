@@ -29,11 +29,14 @@ def list_tasks() -> None:
 
 
 @app.command("run")
-def run_task(name: str) -> None:
+def run_task(
+    name: str,
+    temporal: bool = typer.Option(False, "--temporal", help="Execute via Temporal"),
+) -> None:
     """Run ``NAME`` if it exists and is enabled."""
 
     try:
-        default_scheduler.run_task(name)
+        default_scheduler.run_task(name, use_temporal=temporal)
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1)
@@ -47,7 +50,7 @@ def manual_trigger(name: str) -> None:
     if not task_info or not isinstance(task_info["task"], plugins.ManualTrigger):
         typer.echo(f"error: '{name}' is not a manual task", err=True)
         raise typer.Exit(code=1)
-    run_task(name)
+    default_scheduler.run_task(name)
 
 
 @app.command("disable")
