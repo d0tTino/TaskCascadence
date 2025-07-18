@@ -74,3 +74,16 @@ def test_emit_timeout_no_lingering_threads():
     time.sleep(0.35)
     after = threading.active_count()
     assert after == before
+
+
+def test_emit_timeout_elapsed(monkeypatch):
+    client = MockClient()
+    spec = TaskSpec(id="4", name="elapsed")
+    times = [0.0, 0.25]
+
+    def fake_monotonic():
+        return times.pop(0) if times else 0.25
+
+    monkeypatch.setattr(time, "monotonic", fake_monotonic)
+    with pytest.raises(RuntimeError, match="took"):
+        emit_task_spec(spec, client)
