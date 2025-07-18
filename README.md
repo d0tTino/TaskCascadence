@@ -107,7 +107,9 @@ file.
 
 ## Development Setup
 
-Install Cascadence with its optional development dependencies in editable mode:
+Install Cascadence with its optional development dependencies in editable mode.
+The package pins ``httpx`` to ``<0.28`` for compatibility, so make sure this
+version constraint is respected:
 
 ```bash
 $ pip install -e .[dev]
