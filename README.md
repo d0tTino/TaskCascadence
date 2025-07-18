@@ -27,6 +27,14 @@ $ task disable NAME  # disable a task
 $ task webhook [--host HOST] [--port PORT]  # start webhook server
 ```
 
+Use ``--metrics-port PORT`` with any command to expose Prometheus metrics:
+
+```bash
+$ task --metrics-port 9000 run example
+```
+
+Metrics will then be available on ``http://localhost:9000/metrics``.
+
 ``task webhook`` launches a FastAPI application that dispatches incoming
 events to any registered :class:`WebhookTask` implementations.
 

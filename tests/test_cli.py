@@ -73,3 +73,19 @@ def test_webhook_command_runs_uvicorn(monkeypatch):
     assert result.exit_code == 0
     assert called == {"host": "127.0.0.1", "port": 9000}
 
+
+def test_metrics_option_starts_server(monkeypatch):
+    called = {}
+
+    def fake_start(port: int):
+        called["port"] = port
+
+    import task_cascadence.cli as cli
+    monkeypatch.setattr(cli, "start_metrics_server", fake_start)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["--metrics-port", "9100", "list"])
+
+    assert result.exit_code == 0
+    assert called["port"] == 9100
+
