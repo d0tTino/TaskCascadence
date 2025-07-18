@@ -39,7 +39,7 @@ def run_task(
         default_scheduler.run_task(name, use_temporal=temporal)
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("trigger")
@@ -53,6 +53,7 @@ def manual_trigger(name: str) -> None:
     default_scheduler.run_task(name)
 
 
+
 @app.command("disable")
 def disable_task(name: str) -> None:
     """Disable ``NAME`` so it can no longer be executed."""
@@ -62,7 +63,7 @@ def disable_task(name: str) -> None:
         typer.echo(f"{name} disabled")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("export-n8n")
@@ -74,7 +75,7 @@ def export_n8n(path: str) -> None:
         typer.echo(f"workflow written to {path}")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("webhook")

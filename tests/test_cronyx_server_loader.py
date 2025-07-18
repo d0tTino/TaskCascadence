@@ -77,3 +77,57 @@ def test_loader_timeout_from_env(monkeypatch):
     loader = CronyxServerLoader("http://server")
     assert loader.list_tasks() == {"ok": True}
     assert recorder.timeout == 7.5
+
+
+def test_list_tasks_parsed(monkeypatch):
+    class Resp:
+        def __init__(self, data):
+            self._data = data
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self._data
+
+    expected = [{"id": "1"}]
+
+    def fake_get(url, timeout=0, **kwargs):
+        return Resp(expected)
+
+    def fake_request(method, url, timeout=0, **kwargs):
+        assert method == "GET"
+        return fake_get(url, timeout=timeout, **kwargs)
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr(requests, "request", fake_request)
+
+    loader = CronyxServerLoader("http://server")
+    assert loader.list_tasks() == expected
+
+
+def test_load_task_parsed(monkeypatch):
+    class Resp:
+        def __init__(self, data):
+            self._data = data
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return self._data
+
+    expected = {"id": "1", "path": "module:Cls"}
+
+    def fake_get(url, timeout=0, **kwargs):
+        return Resp(expected)
+
+    def fake_request(method, url, timeout=0, **kwargs):
+        assert method == "GET"
+        return fake_get(url, timeout=timeout, **kwargs)
+
+    monkeypatch.setattr(requests, "get", fake_get)
+    monkeypatch.setattr(requests, "request", fake_request)
+
+    loader = CronyxServerLoader("http://server")
+    assert loader.load_task("1") == expected

@@ -43,3 +43,25 @@ def test_registered_task_receives_event():
 
     assert response.json() == {"status": "received"}
     assert CollectorTask.events == [("github", "issues", payload)]
+
+
+def test_calcom_task_receives_event():
+    """Webhook tasks should receive Cal.com events."""
+
+    webhook_task_registry.clear()
+
+    @register_webhook_task
+    class CollectorTask(WebhookTask):
+        events = []
+
+        def handle_event(self, source, event_type, payload):
+            self.__class__.events.append((source, event_type, payload))
+
+    client = TestClient(app)
+    payload = {"event": "created"}
+    headers = {"Cal-Event-Type": "booking"}
+
+    response = client.post("/webhook/calcom", json=payload, headers=headers)
+
+    assert response.json() == {"status": "received"}
+    assert CollectorTask.events == [("calcom", "booking", payload)]
