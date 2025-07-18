@@ -2,14 +2,14 @@ import json
 from typer.testing import CliRunner
 
 from task_cascadence.cli import app
-from task_cascadence.scheduler import default_scheduler
+from task_cascadence.scheduler import get_default_scheduler
 from task_cascadence.n8n import to_workflow
 from task_cascadence import initialize
 
 
 def test_to_workflow_produces_nodes():
     initialize()
-    wf = to_workflow(default_scheduler)
+    wf = to_workflow(get_default_scheduler())
     assert "nodes" in wf
     assert any(n["name"] == "example" for n in wf["nodes"])
 
