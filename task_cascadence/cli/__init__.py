@@ -36,7 +36,7 @@ def run_task(name: str) -> None:
         default_scheduler.run_task(name)
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("trigger")
@@ -46,7 +46,7 @@ def manual_trigger(name: str) -> None:
     task_info = dict(default_scheduler._tasks).get(name)
     if not task_info or not isinstance(task_info["task"], plugins.ManualTrigger):
         typer.echo(f"error: '{name}' is not a manual task", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
     run_task(name)
 
 
@@ -59,7 +59,7 @@ def disable_task(name: str) -> None:
         typer.echo(f"{name} disabled")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("export-n8n")
@@ -71,7 +71,7 @@ def export_n8n(path: str) -> None:
         typer.echo(f"workflow written to {path}")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("webhook")
