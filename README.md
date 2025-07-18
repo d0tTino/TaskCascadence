@@ -83,6 +83,7 @@ via ``CASCADENCE_CONFIG`` containing::
 
 This will select the simple in-memory scheduler instead.
 
+
 ## Plugin Discovery
 
 Additional tasks can be provided by external packages using the

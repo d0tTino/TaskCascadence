@@ -5,12 +5,17 @@ from __future__ import annotations
 import threading
 import time
 from typing import Any
+import hashlib
 
 from ..transport import BaseTransport, get_client
 from .models import TaskRun, TaskSpec
 
 
 _default_client: BaseTransport | None = None
+
+
+def _hash_user_id(user_id: str) -> str:
+    return hashlib.sha256(user_id.encode()).hexdigest()
 
 
 def configure_transport(transport: str, **kwargs: Any) -> None:
@@ -49,19 +54,27 @@ def _queue_within_deadline(obj: Any, client: Any, max_delay: float = 0.2) -> thr
     return thread
 
 
-def emit_task_spec(spec: TaskSpec, client: Any | None = None) -> None:
+def emit_task_spec(
+    spec: TaskSpec, client: Any | None = None, user_id: str | None = None
+) -> None:
     """Emit ``TaskSpec`` information to ``client`` or the configured default."""
 
     target = client or _default_client
     if target is None:
         raise ValueError("No transport client configured")
+    if user_id is not None:
+        spec.user_hash = _hash_user_id(user_id)
     _queue_within_deadline(spec, target)
 
 
-def emit_task_run(run: TaskRun, client: Any | None = None) -> None:
+def emit_task_run(
+    run: TaskRun, client: Any | None = None, user_id: str | None = None
+) -> None:
     """Emit ``TaskRun`` information to ``client`` or the configured default."""
 
     target = client or _default_client
     if target is None:
         raise ValueError("No transport client configured")
+    if user_id is not None:
+        run.user_hash = _hash_user_id(user_id)
     _queue_within_deadline(run, target)
