@@ -29,7 +29,7 @@ dependencies = [
     "tzdata",
     "requests",
     "temporalio",
-    "httpx<0.28"
+    "httpx<0.28",  # pinned for compatibility with temporalio
 ]
 
 [project.scripts]
