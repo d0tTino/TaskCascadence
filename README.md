@@ -103,6 +103,8 @@ Plugins implemented in Rust or Go can be built and served via a CronyxServer
 instance. Set the ``CRONYX_BASE_URL`` environment variable to the server's URL
 and Cascadence will fetch and register any advertised tasks on startup. Example
 plugin source for Python, Rust and Go lives in the ``examples/`` directory.
+See the [Go plugin README](examples/go_plugin/README.md) and
+[Rust plugin README](examples/rust_plugin/README.md) for build instructions.
 
 ## n8n Export
 

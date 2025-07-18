@@ -1,6 +1,8 @@
 from click.exceptions import UsageError
 import pytest
 from typer.testing import CliRunner
+import types
+import sys
 
 from task_cascadence.cli import app, main
 from task_cascadence.plugins import ManualTrigger, CronTask
@@ -126,5 +128,6 @@ def test_cli_replay_history(monkeypatch):
 
     assert result.exit_code == 0
     assert called["path"] == "history.json"
+
 
 

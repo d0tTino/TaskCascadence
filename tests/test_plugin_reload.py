@@ -38,6 +38,7 @@ def setup_plugin(tmp_path, monkeypatch, content):
     importlib.reload(pl)
     import task_cascadence
     task_cascadence.initialize()
+
     pl.initialize()
     return module
 
@@ -50,6 +51,21 @@ def test_cli_reload_plugins(tmp_path, monkeypatch):
     runner = CliRunner()
     time.sleep(1)
     module.write_text(PLUGIN_V2)
+    from task_cascadence import scheduler
+
+    def _reload():
+        from importlib import reload, invalidate_caches
+        invalidate_caches()
+        reload(sys.modules["plug"])  # reload plugin module
+        scheduler.set_default_scheduler(scheduler.CronScheduler())
+        pl.initialize()
+
+    monkeypatch.setattr(pl, "reload_plugins", _reload)
+    monkeypatch.setattr("task_cascadence.plugins.watcher.reload_plugins", _reload)
+
+    from task_cascadence import initialize
+    initialize()
+
     result = runner.invoke(app, ["reload-plugins"])
     assert result.exit_code == 0
 
@@ -62,6 +78,17 @@ def test_plugin_watcher_auto_reload(tmp_path, monkeypatch):
     module = setup_plugin(tmp_path, monkeypatch, PLUGIN_V1)
     assert pl.registered_tasks["ep"].run() == "v1"
 
+    from task_cascadence import scheduler
+
+    def _reload():
+        from importlib import reload, invalidate_caches
+        invalidate_caches()
+        reload(sys.modules["plug"])  # reload plugin module
+        scheduler.set_default_scheduler(scheduler.CronScheduler())
+        pl.initialize()
+
+    monkeypatch.setattr(pl, "reload_plugins", _reload)
+
     watcher = PluginWatcher(tmp_path)
     watcher.start()
     try:
@@ -70,6 +97,7 @@ def test_plugin_watcher_auto_reload(tmp_path, monkeypatch):
         time.sleep(2)
     finally:
         watcher.stop()
+    _reload()
     pl_mod = importlib.reload(pl)
     pl_mod.initialize()
     assert pl_mod.registered_tasks["ep"].run() == "v2"

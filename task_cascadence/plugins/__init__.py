@@ -155,6 +155,7 @@ def reload_plugins() -> None:
 
     invalidate_caches()
     _scheduler._default_scheduler = None  # reset singleton
+    _scheduler.set_default_scheduler(_scheduler.CronScheduler())
     reload(sys.modules[__name__])
     task_cascadence.initialize()
 
