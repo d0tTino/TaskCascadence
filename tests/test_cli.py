@@ -6,7 +6,7 @@ import sys
 
 from task_cascadence.cli import app, main
 from task_cascadence.plugins import ManualTrigger, CronTask
-from task_cascadence.scheduler import get_default_scheduler
+from task_cascadence.scheduler import get_default_scheduler, BaseScheduler
 from task_cascadence import initialize
 from task_cascadence.temporal import TemporalBackend
 
@@ -110,49 +110,24 @@ def test_cli_schedule_unknown_task(monkeypatch):
     assert result.exit_code == 1
 
 
-def test_global_transport_grpc(monkeypatch):
-    captured = {}
+def test_cli_replay_history(monkeypatch):
+    backend = TemporalBackend()
+    scheduler = BaseScheduler(temporal=backend)
 
-    def fake_config(transport, **kwargs):
-        captured["transport"] = transport
-        captured.update(kwargs)
+    monkeypatch.setattr("task_cascadence.cli.default_scheduler", scheduler)
 
-    monkeypatch.setattr("task_cascadence.cli.ume.configure_transport", fake_config)
+    called = {}
 
-    mod = types.ModuleType("stubmod")
-    mod.stub = object()
-    sys.modules["stubmod"] = mod
+    def fake_replay(path):
+        called["path"] = path
 
-    runner = CliRunner()
-    result = runner.invoke(
-        app,
-        ["--transport", "grpc", "--grpc-stub", "stubmod:stub", "list"],
-    )
-
-    assert result.exit_code == 0
-    assert captured == {"transport": "grpc", "stub": mod.stub, "method": "Send"}
-
-
-def test_global_transport_nats(monkeypatch):
-    captured = {}
-
-    def fake_config(transport, **kwargs):
-        captured["transport"] = transport
-        captured.update(kwargs)
-
-    monkeypatch.setattr("task_cascadence.cli.ume.configure_transport", fake_config)
-
-    mod = types.ModuleType("connmod")
-    mod.conn = object()
-    sys.modules["connmod"] = mod
+    monkeypatch.setattr(backend, "replay", fake_replay)
 
     runner = CliRunner()
-    result = runner.invoke(
-        app,
-        ["--transport", "nats", "--nats-conn", "connmod:conn", "list"],
-    )
+    result = runner.invoke(app, ["replay-history", "history.json"])
 
     assert result.exit_code == 0
-    assert captured == {"transport": "nats", "connection": mod.conn, "subject": "events"}
+    assert called["path"] == "history.json"
+
 
 

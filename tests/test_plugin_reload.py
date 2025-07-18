@@ -36,8 +36,9 @@ def setup_plugin(tmp_path, monkeypatch, content):
     if "plug" in sys.modules:
         del sys.modules["plug"]
     importlib.reload(pl)
-    from task_cascadence import initialize
-    initialize()
+    import task_cascadence
+    task_cascadence.initialize()
+
     pl.initialize()
     return module
 
@@ -93,7 +94,7 @@ def test_plugin_watcher_auto_reload(tmp_path, monkeypatch):
     try:
         time.sleep(1)
         module.write_text(PLUGIN_V2)
-        time.sleep(1)
+        time.sleep(2)
     finally:
         watcher.stop()
     _reload()
