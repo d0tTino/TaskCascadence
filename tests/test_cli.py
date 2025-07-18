@@ -4,7 +4,7 @@ from typer.testing import CliRunner
 
 from task_cascadence.cli import app, main
 from task_cascadence.plugins import ManualTrigger, CronTask
-from task_cascadence.scheduler import get_default_scheduler
+from task_cascadence.scheduler import get_default_scheduler, BaseScheduler
 from task_cascadence import initialize
 from task_cascadence.temporal import TemporalBackend
 
@@ -106,5 +106,25 @@ def test_cli_schedule_unknown_task(monkeypatch):
     result = runner.invoke(app, ["schedule", "missing", "* * * * *"])
 
     assert result.exit_code == 1
+
+
+def test_cli_replay_history(monkeypatch):
+    backend = TemporalBackend()
+    scheduler = BaseScheduler(temporal=backend)
+
+    monkeypatch.setattr("task_cascadence.cli.default_scheduler", scheduler)
+
+    called = {}
+
+    def fake_replay(path):
+        called["path"] = path
+
+    monkeypatch.setattr(backend, "replay", fake_replay)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["replay-history", "history.json"])
+
+    assert result.exit_code == 0
+    assert called["path"] == "history.json"
 
 

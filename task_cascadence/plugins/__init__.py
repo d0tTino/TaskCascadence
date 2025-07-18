@@ -145,6 +145,7 @@ def reload_plugins() -> None:
     """Reload plugin modules and reset the default scheduler."""
 
     from importlib import reload, invalidate_caches
+    import task_cascadence
     from .. import scheduler as _scheduler
 
     for task in registered_tasks.values():
@@ -155,5 +156,5 @@ def reload_plugins() -> None:
     invalidate_caches()
     _scheduler._default_scheduler = None  # reset singleton
     reload(sys.modules[__name__])
-    sys.modules[__name__].initialize()
+    task_cascadence.initialize()
 

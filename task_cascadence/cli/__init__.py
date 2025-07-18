@@ -10,7 +10,7 @@ import click  # noqa: F401 - re-exported for CLI extensions
 
 import typer
 
-from ..scheduler import get_default_scheduler
+from ..scheduler import get_default_scheduler, default_scheduler
 from .. import plugins  # noqa: F401
 from ..metrics import start_metrics_server  # noqa: F401
 import task_cascadence as tc
@@ -97,6 +97,17 @@ def schedule_task(name: str, expression: str) -> None:
         task = task_info["task"]
         sched.register_task(task, expression)
         typer.echo(f"{name} scheduled: {expression}")
+    except Exception as exc:  # pragma: no cover - simple error propagation
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
+@app.command("replay-history")
+def replay_history(path: str) -> None:
+    """Replay a workflow history from ``PATH``."""
+
+    try:
+        default_scheduler.replay_history(path)
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
