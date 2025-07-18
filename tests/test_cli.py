@@ -74,18 +74,32 @@ def test_webhook_command_runs_uvicorn(monkeypatch):
     assert called == {"host": "127.0.0.1", "port": 9000}
 
 
-def test_metrics_option_starts_server(monkeypatch):
-    called = {}
+def test_cli_schedule_creates_entry(monkeypatch, tmp_path):
+    from task_cascadence.scheduler import CronScheduler
+    from task_cascadence.plugins import ExampleTask
+    import yaml
 
-    def fake_start(port: int):
-        called["port"] = port
-
-    import task_cascadence.cli as cli
-    monkeypatch.setattr(cli, "start_metrics_server", fake_start)
+    sched = CronScheduler(storage_path=tmp_path / "sched.yml")
+    monkeypatch.setattr("task_cascadence.cli.default_scheduler", sched)
+    sched.register_task("example", ExampleTask())
 
     runner = CliRunner()
-    result = runner.invoke(app, ["--metrics-port", "9100", "list"])
+    result = runner.invoke(app, ["schedule", "example", "0 12 * * *"])
 
     assert result.exit_code == 0
-    assert called["port"] == 9100
+    data = yaml.safe_load((tmp_path / "sched.yml").read_text())
+    assert data["ExampleTask"] == "0 12 * * *"
+
+
+def test_cli_schedule_unknown_task(monkeypatch):
+    from task_cascadence.scheduler import CronScheduler
+
+    sched = CronScheduler(storage_path="/tmp/dummy.yml")
+    monkeypatch.setattr("task_cascadence.cli.default_scheduler", sched)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["schedule", "missing", "* * * * *"])
+
+    assert result.exit_code == 1
+
 

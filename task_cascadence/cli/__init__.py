@@ -81,6 +81,24 @@ def disable_task(name: str) -> None:
         raise typer.Exit(code=1) from exc
 
 
+@app.command("schedule")
+def schedule_task(name: str, expression: str) -> None:
+    """Schedule ``NAME`` according to ``EXPRESSION``."""
+
+    task_info = dict(default_scheduler._tasks).get(name)
+    if not task_info:
+        typer.echo(f"error: unknown task '{name}'", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        task = task_info["task"]
+        default_scheduler.register_task(task, expression)
+        typer.echo(f"{name} scheduled: {expression}")
+    except Exception as exc:  # pragma: no cover - simple error propagation
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1)
+
+
 @app.command("export-n8n")
 def export_n8n(path: str) -> None:
     """Export registered tasks as an n8n workflow to ``PATH``."""
