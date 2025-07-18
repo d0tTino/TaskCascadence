@@ -249,9 +249,21 @@ class CronScheduler(BaseScheduler):
 
 
 # ---------------------------------------------------------------------------
-# A default scheduler instance used by the CLI and plugin registration. Tests
-# expect this object to exist at module scope.
+# Default scheduler accessor
 
-default_scheduler = CronScheduler()
+_default_scheduler: CronScheduler | None = None
+
+
+def get_default_scheduler() -> CronScheduler:
+    """Return a singleton :class:`CronScheduler` instance."""
+
+    global _default_scheduler
+    if _default_scheduler is None:
+        _default_scheduler = CronScheduler()
+    return _default_scheduler
+
+
+# Backwards compatibility alias
+default_scheduler = get_default_scheduler()
 
 

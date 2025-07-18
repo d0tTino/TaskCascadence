@@ -3,11 +3,14 @@
 This package provides task orchestration utilities described in the PRD.
 """
 
-from . import scheduler  # noqa: F401
+from .scheduler import get_default_scheduler  # noqa: F401
 from . import plugins  # noqa: F401
 from . import ume  # noqa: F401
 from . import metrics  # noqa: F401
 from . import temporal  # noqa: F401
+
+# Ensure the default scheduler is created on import
+get_default_scheduler()
 
 
 def initialize() -> None:

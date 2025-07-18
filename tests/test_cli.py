@@ -4,7 +4,7 @@ from typer.testing import CliRunner
 
 from task_cascadence.cli import app, main
 from task_cascadence.plugins import ManualTrigger, CronTask
-from task_cascadence.scheduler import default_scheduler
+from task_cascadence.scheduler import get_default_scheduler
 from task_cascadence.temporal import TemporalBackend
 
 
@@ -24,7 +24,8 @@ class ManualTask(ManualTrigger):
 
 
 def test_manual_trigger_cli(monkeypatch):
-    default_scheduler.register_task("manual_demo", ManualTask())
+    sched = get_default_scheduler()
+    sched.register_task("manual_demo", ManualTask())
 
     from task_cascadence import ume
 
@@ -41,8 +42,9 @@ class DummyTask(CronTask):
 
 def test_run_command_temporal(monkeypatch):
     backend = TemporalBackend()
-    default_scheduler._temporal = backend
-    default_scheduler.register_task("dummy", DummyTask())
+    sched = get_default_scheduler()
+    sched._temporal = backend
+    sched.register_task("dummy", DummyTask())
 
     called = {}
 

@@ -12,7 +12,9 @@ from importlib import metadata
 from typing import Dict
 
 
-from ..scheduler import default_scheduler
+from ..scheduler import get_default_scheduler
+
+default_scheduler = get_default_scheduler()
 
 
 class BaseTask:

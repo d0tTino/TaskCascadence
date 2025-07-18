@@ -1,4 +1,4 @@
-from task_cascadence.scheduler import CronScheduler, default_scheduler
+from task_cascadence.scheduler import CronScheduler, get_default_scheduler
 
 from task_cascadence import initialize
 
@@ -9,11 +9,11 @@ def test_sanity():
 
 
 def test_default_scheduler_available():
-    assert isinstance(default_scheduler, CronScheduler)
+    assert isinstance(get_default_scheduler(), CronScheduler)
 
 
 def test_example_task_registered():
     initialize()
 
-    tasks = [name for name, _ in default_scheduler.list_tasks()]
+    tasks = [name for name, _ in get_default_scheduler().list_tasks()]
     assert "example" in tasks
