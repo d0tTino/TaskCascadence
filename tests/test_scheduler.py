@@ -89,3 +89,28 @@ def test_base_scheduler_has_no_schedule_task():
     bs = BaseScheduler()
     assert not hasattr(bs, "schedule_task")
 
+
+def test_metrics_increment_for_job(tmp_path, monkeypatch):
+    from task_cascadence import metrics
+
+    storage = tmp_path / "sched.yml"
+    sched = CronScheduler(timezone="UTC", storage_path=storage)
+    task = DummyTask()
+
+    # Prevent actual event emission
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run: None)
+
+    sched.register_task(task, "*/1 * * * *")
+    job = sched.scheduler.get_job("DummyTask")
+
+    success = metrics.TASK_SUCCESS.labels("runner")
+    failure = metrics.TASK_FAILURE.labels("runner")
+
+    before_success = success._value.get()
+    before_failure = failure._value.get()
+
+    job.func()
+
+    assert success._value.get() == before_success + 1
+    assert failure._value.get() == before_failure
+

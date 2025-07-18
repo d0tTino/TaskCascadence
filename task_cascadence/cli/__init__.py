@@ -96,7 +96,7 @@ def schedule_task(name: str, expression: str) -> None:
         typer.echo(f"{name} scheduled: {expression}")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("export-n8n")

@@ -23,6 +23,7 @@ if TYPE_CHECKING:  # pragma: no cover - used for type hints only
 
 
 from ..temporal import TemporalBackend
+from .. import metrics
 
 
 class BaseScheduler:
@@ -171,6 +172,7 @@ class CronScheduler(BaseScheduler):
             self._yaml.safe_dump(self.schedules, fh)
 
     def _wrap_task(self, task):
+        @metrics.track_task
         def runner():
             from datetime import datetime
             from uuid import uuid4
