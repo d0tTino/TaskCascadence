@@ -253,19 +253,25 @@ class CronScheduler(BaseScheduler):
 # ---------------------------------------------------------------------------
 # Default scheduler accessor
 
-_default_scheduler: CronScheduler | None = None
+_default_scheduler: BaseScheduler | None = None
 
 
-def get_default_scheduler() -> CronScheduler:
-    """Return a singleton :class:`CronScheduler` instance."""
+def set_default_scheduler(scheduler: BaseScheduler) -> None:
+    """Set the global default scheduler instance."""
 
     global _default_scheduler
+    _default_scheduler = scheduler
+
+
+def get_default_scheduler() -> BaseScheduler:
+    """Return the configured default scheduler."""
+
     if _default_scheduler is None:
-        _default_scheduler = CronScheduler()
+        raise RuntimeError("Default scheduler has not been initialised")
     return _default_scheduler
 
 
 # Backwards compatibility alias
-default_scheduler = get_default_scheduler()
+default_scheduler = get_default_scheduler
 
 

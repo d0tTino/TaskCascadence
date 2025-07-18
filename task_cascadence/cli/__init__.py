@@ -16,8 +16,6 @@ from ..metrics import start_metrics_server  # noqa: F401
 import task_cascadence as tc
 from ..n8n import export_workflow
 
-default_scheduler = get_default_scheduler()
-
 
 app = typer.Typer(help="Interact with Cascadence tasks")
 
@@ -40,7 +38,8 @@ def _global_options(
 def list_tasks() -> None:
     """List all registered tasks."""
 
-    for name, disabled in default_scheduler.list_tasks():
+    sched = get_default_scheduler()
+    for name, disabled in sched.list_tasks():
         status = "disabled" if disabled else "enabled"
         typer.echo(f"{name}\t{status}")
 
@@ -53,7 +52,7 @@ def run_task(
     """Run ``NAME`` if it exists and is enabled."""
 
     try:
-        default_scheduler.run_task(name, use_temporal=temporal)
+        get_default_scheduler().run_task(name, use_temporal=temporal)
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
@@ -63,11 +62,12 @@ def run_task(
 def manual_trigger(name: str) -> None:
     """Run ``NAME`` if it is a ManualTrigger task."""
 
-    task_info = dict(default_scheduler._tasks).get(name)
+    sched = get_default_scheduler()
+    task_info = dict(sched._tasks).get(name)
     if not task_info or not isinstance(task_info["task"], plugins.ManualTrigger):
         typer.echo(f"error: '{name}' is not a manual task", err=True)
         raise typer.Exit(code=1)
-    default_scheduler.run_task(name)
+    sched.run_task(name)
 
 
 
@@ -76,7 +76,7 @@ def disable_task(name: str) -> None:
     """Disable ``NAME`` so it can no longer be executed."""
 
     try:
-        default_scheduler.disable_task(name)
+        get_default_scheduler().disable_task(name)
         typer.echo(f"{name} disabled")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
@@ -87,14 +87,15 @@ def disable_task(name: str) -> None:
 def schedule_task(name: str, expression: str) -> None:
     """Schedule ``NAME`` according to ``EXPRESSION``."""
 
-    task_info = dict(default_scheduler._tasks).get(name)
+    sched = get_default_scheduler()
+    task_info = dict(sched._tasks).get(name)
     if not task_info:
         typer.echo(f"error: unknown task '{name}'", err=True)
         raise typer.Exit(code=1)
 
     try:
         task = task_info["task"]
-        default_scheduler.register_task(task, expression)
+        sched.register_task(task, expression)
         typer.echo(f"{name} scheduled: {expression}")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
@@ -106,7 +107,7 @@ def export_n8n(path: str) -> None:
     """Export registered tasks as an n8n workflow to ``PATH``."""
 
     try:
-        export_workflow(default_scheduler, path)
+        export_workflow(get_default_scheduler(), path)
         typer.echo(f"workflow written to {path}")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)

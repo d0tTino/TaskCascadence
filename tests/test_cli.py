@@ -5,6 +5,7 @@ from typer.testing import CliRunner
 from task_cascadence.cli import app, main
 from task_cascadence.plugins import ManualTrigger, CronTask
 from task_cascadence.scheduler import get_default_scheduler
+from task_cascadence import initialize
 from task_cascadence.temporal import TemporalBackend
 
 
@@ -24,6 +25,7 @@ class ManualTask(ManualTrigger):
 
 
 def test_manual_trigger_cli(monkeypatch):
+    initialize()
     sched = get_default_scheduler()
     sched.register_task("manual_demo", ManualTask())
 
@@ -42,6 +44,7 @@ class DummyTask(CronTask):
 
 def test_run_command_temporal(monkeypatch):
     backend = TemporalBackend()
+    initialize()
     sched = get_default_scheduler()
     sched._temporal = backend
     sched.register_task("dummy", DummyTask())
@@ -82,7 +85,7 @@ def test_cli_schedule_creates_entry(monkeypatch, tmp_path):
     import yaml
 
     sched = CronScheduler(storage_path=tmp_path / "sched.yml")
-    monkeypatch.setattr("task_cascadence.cli.default_scheduler", sched)
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
     sched.register_task("example", ExampleTask())
 
     runner = CliRunner()
@@ -97,7 +100,7 @@ def test_cli_schedule_unknown_task(monkeypatch):
     from task_cascadence.scheduler import CronScheduler
 
     sched = CronScheduler(storage_path="/tmp/dummy.yml")
-    monkeypatch.setattr("task_cascadence.cli.default_scheduler", sched)
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
 
     runner = CliRunner()
     result = runner.invoke(app, ["schedule", "missing", "* * * * *"])

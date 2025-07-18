@@ -72,18 +72,17 @@ When a new ``CronScheduler`` instance starts it reads this file and re-creates
 any jobs for which task objects are supplied via the ``tasks`` argument.  This
 allows scheduled tasks to survive process restarts.
 
-## User Identification
+## Scheduler Backend
 
-``emit_task_spec`` and ``emit_task_run`` accept an optional ``user_id``
-parameter. The value is hashed with SHA-256 and stored in the ``user_hash``
-field of the emitted dataclass. Raw identifiers are never sent over the wire,
-allowing user-aware analytics without exposing sensitive information.
+``task_cascadence.initialize`` reads configuration to decide which scheduler
+backend to instantiate. By default the cron-based scheduler is used. Set the
+``CASCADENCE_SCHEDULER`` environment variable to ``base`` or provide a YAML file
+via ``CASCADENCE_CONFIG`` containing::
 
-```python
-from task_cascadence import ume
+    scheduler: base
 
-ume.emit_task_spec(spec, user_id="alice")
-```
+This will select the simple in-memory scheduler instead.
+
 
 ## Plugin Discovery
 
