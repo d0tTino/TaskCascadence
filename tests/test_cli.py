@@ -49,3 +49,32 @@ def test_webhook_command_runs_uvicorn(monkeypatch):
     assert result.exit_code == 0
     assert called == {"host": "127.0.0.1", "port": 9000}
 
+
+def test_cli_schedule_creates_entry(monkeypatch, tmp_path):
+    from task_cascadence.scheduler import CronScheduler
+    from task_cascadence.plugins import ExampleTask
+    import yaml
+
+    sched = CronScheduler(storage_path=tmp_path / "sched.yml")
+    monkeypatch.setattr("task_cascadence.cli.default_scheduler", sched)
+    sched.register_task("example", ExampleTask())
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["schedule", "example", "0 12 * * *"])
+
+    assert result.exit_code == 0
+    data = yaml.safe_load((tmp_path / "sched.yml").read_text())
+    assert data["ExampleTask"] == "0 12 * * *"
+
+
+def test_cli_schedule_unknown_task(monkeypatch):
+    from task_cascadence.scheduler import CronScheduler
+
+    sched = CronScheduler(storage_path="/tmp/dummy.yml")
+    monkeypatch.setattr("task_cascadence.cli.default_scheduler", sched)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["schedule", "missing", "* * * * *"])
+
+    assert result.exit_code == 1
+
