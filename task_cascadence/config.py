@@ -24,5 +24,12 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
             cfg = yaml.safe_load(fh) or {}
     scheduler = os.getenv("CASCADENCE_SCHEDULER", cfg.get("scheduler", "cron"))
     cfg["scheduler"] = scheduler
+
+    refresh_env = os.getenv("CASCADENCE_CRONYX_REFRESH")
+    if refresh_env is not None:
+        cfg["cronyx_refresh"] = refresh_env.lower() not in ("0", "false", "no")
+    else:
+        cfg["cronyx_refresh"] = bool(cfg.get("cronyx_refresh", True))
+
     return cfg
 

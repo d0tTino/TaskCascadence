@@ -13,6 +13,7 @@ from . import ume  # noqa: F401
 from . import metrics  # noqa: F401
 from . import temporal  # noqa: F401
 from .config import load_config
+from apscheduler.triggers.cron import CronTrigger
 
 
 
@@ -32,6 +33,17 @@ def initialize() -> None:
 
     plugins.initialize()
     plugins.load_cronyx_tasks()
+
+    if cfg.get("cronyx_refresh", True) and isinstance(sched, CronScheduler):
+        trigger = CronTrigger.from_crontab(
+            "*/10 * * * *", timezone=sched.scheduler.timezone
+        )
+        sched.scheduler.add_job(
+            plugins.load_cronyx_tasks,
+            trigger=trigger,
+            id="cronyx_refresh",
+            replace_existing=True,
+        )
 
 
 from . import cli  # noqa: F401,E402

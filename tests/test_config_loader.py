@@ -32,3 +32,11 @@ def test_env_overrides_yaml(monkeypatch, tmp_path):
     task_cascadence.initialize()
     assert isinstance(get_default_scheduler(), CronScheduler)
 
+
+def test_disable_cronyx_refresh(monkeypatch):
+    monkeypatch.setenv("CASCADENCE_CRONYX_REFRESH", "0")
+    importlib.reload(task_cascadence)
+    task_cascadence.initialize()
+    sched = get_default_scheduler()
+    assert sched.scheduler.get_job("cronyx_refresh") is None
+
