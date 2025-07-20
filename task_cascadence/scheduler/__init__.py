@@ -54,7 +54,11 @@ class BaseScheduler:
             yield name, info["disabled"]
 
     def run_task(
-        self, name: str, *, use_temporal: bool | None = None
+        self,
+        name: str,
+        *,
+        use_temporal: bool | None = None,
+        user_id: str | None = None,
     ) -> Any:
         """Run a task by name if it exists and is enabled."""
 
@@ -96,7 +100,7 @@ class BaseScheduler:
                     started_at=started,
                     finished_at=finished,
                 )
-                emit_task_run(run)
+                emit_task_run(run, user_id=user_id)
             return result
         raise AttributeError(f"Task '{name}' has no run() method")
 
@@ -171,7 +175,7 @@ class CronScheduler(BaseScheduler):
         with open(self.storage_path, "w") as fh:
             self._yaml.safe_dump(self.schedules, fh)
 
-    def _wrap_task(self, task):
+    def _wrap_task(self, task, user_id: str | None = None):
         @metrics.track_task
         def runner():
             from datetime import datetime
@@ -200,7 +204,7 @@ class CronScheduler(BaseScheduler):
                     started_at=started,
                     finished_at=finished,
                 )
-                emit_task_run(run)
+                emit_task_run(run, user_id=user_id)
 
         return runner
 

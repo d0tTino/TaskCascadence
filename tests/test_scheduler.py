@@ -36,8 +36,12 @@ def test_schedule_persistence(tmp_path):
 def test_run_emits_result(monkeypatch, tmp_path):
     emitted_run = None
 
-    def fake_emit(run):
+    from task_cascadence.ume import _hash_user_id
+
+    def fake_emit(run, user_id=None):
         nonlocal emitted_run
+        if user_id is not None:
+            run.user_hash = _hash_user_id(user_id)
         emitted_run = run
 
     from task_cascadence import ume
@@ -62,7 +66,7 @@ def test_restore_schedules_on_init(tmp_path, monkeypatch):
 
     from task_cascadence import ume
 
-    monkeypatch.setattr(ume, "emit_task_run", lambda run: None)
+    monkeypatch.setattr(ume, "emit_task_run", lambda run, user_id=None: None)
 
     new_task = DummyTask()
     sched2 = CronScheduler(
@@ -98,7 +102,7 @@ def test_metrics_increment_for_job(tmp_path, monkeypatch):
     task = DummyTask()
 
     # Prevent actual event emission
-    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run: None)
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run, user_id=None: None)
 
     sched.register_task(task, "*/1 * * * *")
     job = sched.scheduler.get_job("DummyTask")
@@ -113,4 +117,55 @@ def test_metrics_increment_for_job(tmp_path, monkeypatch):
 
     assert success._value.get() == before_success + 1
     assert failure._value.get() == before_failure
+
+
+def test_run_task_user_id(monkeypatch):
+    emitted = None
+
+    from task_cascadence.ume import _hash_user_id
+
+    def fake_emit(run, user_id=None):
+        nonlocal emitted
+        if user_id is not None:
+            run.user_hash = _hash_user_id(user_id)
+        emitted = run
+
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", fake_emit)
+
+    sched = BaseScheduler()
+
+    class SimpleTask(CronTask):
+        def run(self):
+            return "ok"
+
+    task = SimpleTask()
+    sched.register_task("simple", task)
+    sched.run_task("simple", user_id="bob")
+
+    assert emitted is not None
+    assert emitted.user_hash is not None
+    assert emitted.user_hash != "bob"
+
+
+def test_wrap_task_user_id(monkeypatch):
+    emitted = None
+
+    from task_cascadence.ume import _hash_user_id
+
+    def fake_emit(run, user_id=None):
+        nonlocal emitted
+        if user_id is not None:
+            run.user_hash = _hash_user_id(user_id)
+        emitted = run
+
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", fake_emit)
+
+    sched = CronScheduler(timezone="UTC", storage_path="dummy.yml")
+    task = DummyTask()
+    wrapped = sched._wrap_task(task, user_id="alice")
+    wrapped()
+
+    assert emitted is not None
+    assert emitted.user_hash is not None
+    assert emitted.user_hash != "alice"
 
