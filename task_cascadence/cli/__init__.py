@@ -10,9 +10,6 @@ import click  # noqa: F401 - re-exported for CLI extensions
 
 import importlib
 import typer
-import importlib
-
-from .. import ume
 
 from ..scheduler import get_default_scheduler, default_scheduler
 
@@ -97,18 +94,22 @@ def list_tasks() -> None:
 def run_task(
     name: str,
     temporal: bool = typer.Option(False, "--temporal", help="Execute via Temporal"),
+    user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
 ) -> None:
     """Run ``NAME`` if it exists and is enabled."""
 
     try:
-        get_default_scheduler().run_task(name, use_temporal=temporal)
+        get_default_scheduler().run_task(name, use_temporal=temporal, user_id=user_id)
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
 
 @app.command("trigger")
-def manual_trigger(name: str) -> None:
+def manual_trigger(
+    name: str,
+    user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+) -> None:
     """Run ``NAME`` if it is a ManualTrigger task."""
 
     sched = get_default_scheduler()
@@ -116,7 +117,7 @@ def manual_trigger(name: str) -> None:
     if not task_info or not isinstance(task_info["task"], plugins.ManualTrigger):
         typer.echo(f"error: '{name}' is not a manual task", err=True)
         raise typer.Exit(code=1)
-    sched.run_task(name)
+    sched.run_task(name, user_id=user_id)
 
 
 

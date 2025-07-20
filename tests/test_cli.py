@@ -32,7 +32,7 @@ def test_manual_trigger_cli(monkeypatch):
 
     from task_cascadence import ume
 
-    monkeypatch.setattr(ume, "emit_task_run", lambda run: None)
+    monkeypatch.setattr(ume, "emit_task_run", lambda run, user_id=None: None)
 
     runner = CliRunner()
     result = runner.invoke(app, ["trigger", "manual_demo"])
@@ -166,6 +166,31 @@ def test_cli_transport_option(monkeypatch):
         "stub": grpc_stub_for_tests,
         "method": "Send",
     }
+
+
+def test_cli_run_user_id(monkeypatch):
+    initialize()
+    sched = get_default_scheduler()
+    sched.register_task("manual_demo", ManualTask())
+
+    captured = {}
+
+    from task_cascadence.ume import _hash_user_id
+
+    def fake_emit(run, user_id=None):
+        if user_id is not None:
+            run.user_hash = _hash_user_id(user_id)
+        captured["run"] = run
+
+    monkeypatch.setattr(ume, "emit_task_run", fake_emit)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["run", "manual_demo", "--user-id", "alice"])
+
+    assert result.exit_code == 0
+    assert "run" in captured
+    assert captured["run"].user_hash is not None
+    assert captured["run"].user_hash != "alice"
 
 
 
