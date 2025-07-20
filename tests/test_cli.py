@@ -1,14 +1,13 @@
 from click.exceptions import UsageError
 import pytest
 from typer.testing import CliRunner
-import types
-import sys
 
 from task_cascadence.cli import app, main
 from task_cascadence.plugins import ManualTrigger, CronTask
 from task_cascadence.scheduler import get_default_scheduler, BaseScheduler
 from task_cascadence import initialize
 from task_cascadence.temporal import TemporalBackend
+from task_cascadence import ume
 
 
 def test_cli_main_returns_none():
@@ -128,6 +127,45 @@ def test_cli_replay_history(monkeypatch):
 
     assert result.exit_code == 0
     assert called["path"] == "history.json"
+
+
+class DummyStub:
+    def Send(self, msg, timeout=None):
+        pass
+
+
+grpc_stub_for_tests = DummyStub()
+
+
+def test_cli_transport_option(monkeypatch):
+    initialize()
+
+    called = {}
+
+    def fake_configure_transport(name, **kwargs):
+        called["name"] = name
+        called.update(kwargs)
+
+    monkeypatch.setattr(ume, "configure_transport", fake_configure_transport)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "--transport",
+            "grpc",
+            "--grpc-stub",
+            "tests.test_cli:grpc_stub_for_tests",
+            "list",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert called == {
+        "name": "grpc",
+        "stub": grpc_stub_for_tests,
+        "method": "Send",
+    }
 
 
 

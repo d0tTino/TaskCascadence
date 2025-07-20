@@ -9,6 +9,9 @@ from __future__ import annotations
 import click  # noqa: F401 - re-exported for CLI extensions
 
 import typer
+import importlib
+
+from .. import ume
 
 from ..scheduler import get_default_scheduler, default_scheduler
 
