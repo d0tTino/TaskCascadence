@@ -35,3 +35,10 @@ dependencies = [
 
 [project.scripts]
 task = "task_cascadence.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "ruff",
+    "pytest",
+    "pytest-cov",
+]
