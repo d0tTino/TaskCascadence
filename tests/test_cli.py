@@ -251,4 +251,33 @@ def test_cli_run_user_id(monkeypatch):
     assert captured["run"].user_hash != "alice"
 
 
+def test_cli_schedules_lists_entries(monkeypatch, tmp_path):
+    from task_cascadence.scheduler import CronScheduler
+    from task_cascadence.plugins import ExampleTask
+
+    sched = CronScheduler(storage_path=tmp_path / "sched.yml")
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+
+    sched.register_task(ExampleTask(), "0 5 * * *")
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["schedules"])
+
+    assert result.exit_code == 0
+    assert result.output == "ExampleTask\t0 5 * * *\n"
+
+
+def test_cli_schedules_empty(monkeypatch, tmp_path):
+    from task_cascadence.scheduler import CronScheduler
+
+    sched = CronScheduler(storage_path=tmp_path / "sched.yml")
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["schedules"])
+
+    assert result.exit_code == 0
+    assert result.output == ""
+
+
 

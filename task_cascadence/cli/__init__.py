@@ -152,6 +152,16 @@ def schedule_task(name: str, expression: str) -> None:
         raise typer.Exit(code=1) from exc
 
 
+@app.command("schedules")
+def show_schedules() -> None:
+    """List configured cron schedules."""
+
+    sched = get_default_scheduler()
+    schedules = getattr(sched, "schedules", {})
+    for name, expr in schedules.items():
+        typer.echo(f"{name}\t{expr}")
+
+
 @app.command("replay-history")
 def replay_history(path: str) -> None:
     """Replay a workflow history from ``PATH``."""
