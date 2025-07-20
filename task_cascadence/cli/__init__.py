@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import click  # noqa: F401 - re-exported for CLI extensions
 
+import importlib
 import typer
 
 from ..scheduler import get_default_scheduler, default_scheduler
@@ -69,12 +70,12 @@ def _global_options(
             if grpc_stub is None:
                 raise typer.BadParameter("--grpc-stub is required for grpc transport")
             stub = _load(grpc_stub)
-            ume.configure_transport("grpc", stub=stub, method=grpc_method)
+            tc.ume.configure_transport("grpc", stub=stub, method=grpc_method)
         elif transport == "nats":
             if nats_conn is None:
                 raise typer.BadParameter("--nats-conn is required for nats transport")
             conn = _load(nats_conn)
-            ume.configure_transport("nats", connection=conn, subject=nats_subject)
+            tc.ume.configure_transport("nats", connection=conn, subject=nats_subject)
         else:  # pragma: no cover - validation by typer
             raise typer.BadParameter(f"Unknown transport: {transport}")
 
