@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from task_cascadence.ume import emit_task_spec, emit_task_run
+from task_cascadence.ume import emit_task_spec, emit_task_run, _hash_user_id
 from task_cascadence.ume.models import TaskSpec, TaskRun
 
 
@@ -35,4 +35,12 @@ def test_run_user_hash_not_raw():
     )
     emit_task_run(run, client, user_id="alice")
     assert client.events[0].user_hash != "alice"
+
+
+def test_hash_user_id_secret(monkeypatch):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "foo")
+    h1 = _hash_user_id("alice")
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "bar")
+    h2 = _hash_user_id("alice")
+    assert h1 != h2
 
