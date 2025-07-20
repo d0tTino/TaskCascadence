@@ -80,6 +80,22 @@ def test_webhook_command_runs_uvicorn(monkeypatch):
     assert called == {"host": "127.0.0.1", "port": 9000}
 
 
+def test_main_webhook_command(monkeypatch):
+    """Running ``task webhook`` should start the server via Uvicorn."""
+
+    called = {}
+
+    def fake_run(app, host="0.0.0.0", port=8000):
+        called["host"] = host
+        called["port"] = port
+
+    monkeypatch.setattr("task_cascadence.webhook.uvicorn.run", fake_run)
+
+    main(["webhook", "--host", "127.0.0.1", "--port", "9000"])
+
+    assert called == {"host": "127.0.0.1", "port": 9000}
+
+
 def test_cli_schedule_creates_entry(monkeypatch, tmp_path):
     from task_cascadence.scheduler import CronScheduler
     from task_cascadence.plugins import ExampleTask
@@ -137,6 +153,13 @@ class DummyStub:
 grpc_stub_for_tests = DummyStub()
 
 
+class DummyConn:
+    """Simple stand-in for a NATS connection."""
+
+
+dummy_nats_conn = DummyConn()
+
+
 def test_cli_transport_option(monkeypatch):
     initialize()
 
@@ -165,6 +188,41 @@ def test_cli_transport_option(monkeypatch):
         "name": "grpc",
         "stub": grpc_stub_for_tests,
         "method": "Send",
+    }
+
+
+def test_cli_transport_option_nats(monkeypatch):
+    """The CLI should support configuring the NATS transport."""
+
+    initialize()
+
+    called = {}
+
+    def fake_configure_transport(name, **kwargs):
+        called["name"] = name
+        called.update(kwargs)
+
+    monkeypatch.setattr(ume, "configure_transport", fake_configure_transport)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        [
+            "--transport",
+            "nats",
+            "--nats-conn",
+            "tests.test_cli:dummy_nats_conn",
+            "--nats-subject",
+            "demo",
+            "list",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert called == {
+        "name": "nats",
+        "connection": dummy_nats_conn,
+        "subject": "demo",
     }
 
 
