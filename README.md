@@ -27,13 +27,30 @@ $ task disable NAME  # disable a task
 $ task webhook [--host HOST] [--port PORT]  # start webhook server
 ```
 
-Use ``--metrics-port PORT`` with any command to expose Prometheus metrics:
+### Metrics Endpoint
+Start the CLI with ``--metrics-port`` to serve Prometheus metrics:
 
 ```bash
 $ task --metrics-port 9000 run example
 ```
 
-Metrics will then be available on ``http://localhost:9000/metrics``.
+Visiting ``http://localhost:9000/metrics`` returns standard output such as:
+
+```text
+# HELP task_latency_seconds Time spent executing tasks
+# TYPE task_latency_seconds histogram
+task_latency_seconds_bucket{le="0.005",task_name="example"} 1.0
+task_success_total{task_name="example"} 1.0
+```
+
+Configure Prometheus to scrape this endpoint:
+
+```yaml
+scrape_configs:
+  - job_name: cascadence
+    static_configs:
+      - targets: ['localhost:9000']
+```
 
 ``task webhook`` launches a FastAPI application that dispatches incoming
 events to any registered :class:`WebhookTask` implementations.
