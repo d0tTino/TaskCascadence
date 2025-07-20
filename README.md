@@ -123,6 +123,13 @@ plugin source for Python, Rust and Go lives in the ``examples/`` directory.
 See the [Go plugin README](examples/go_plugin/README.md) and
 [Rust plugin README](examples/rust_plugin/README.md) for build instructions.
 
+## Hashing User IDs
+
+User identifiers passed to emission helpers are hashed before transport.
+Provide a secret via the ``CASCADENCE_HASH_SECRET`` environment variable to
+salt these hashes, e.g. ``CASCADENCE_HASH_SECRET=abc123``. Omitting the
+variable hashes the plain ID.
+
 ## n8n Export
 
 Tasks registered with Cascadence can be exported as an n8n workflow using the

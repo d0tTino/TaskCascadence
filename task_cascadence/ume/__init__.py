@@ -6,6 +6,7 @@ import threading
 import time
 from typing import Any
 import hashlib
+import os
 
 from ..transport import BaseTransport, get_client
 from .models import TaskRun, TaskSpec
@@ -15,7 +16,8 @@ _default_client: BaseTransport | None = None
 
 
 def _hash_user_id(user_id: str) -> str:
-    return hashlib.sha256(user_id.encode()).hexdigest()
+    secret = os.getenv("CASCADENCE_HASH_SECRET", "")
+    return hashlib.sha256((secret + user_id).encode()).hexdigest()
 
 
 def configure_transport(transport: str, **kwargs: Any) -> None:
