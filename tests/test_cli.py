@@ -28,7 +28,7 @@ class ManualTask(ManualTrigger):
 def test_manual_trigger_cli(monkeypatch):
     initialize()
     sched = get_default_scheduler()
-    sched.register_task("manual_demo", ManualTask())
+    sched.register_task(name_or_task="manual_demo", task_or_expr=ManualTask())
 
     from task_cascadence import ume
 
@@ -48,7 +48,7 @@ def test_run_command_temporal(monkeypatch):
     initialize()
     sched = get_default_scheduler()
     sched._temporal = backend
-    sched.register_task("dummy", DummyTask())
+    sched.register_task(name_or_task="dummy", task_or_expr=DummyTask())
 
     called = {}
 
@@ -103,7 +103,7 @@ def test_cli_schedule_creates_entry(monkeypatch, tmp_path):
 
     sched = CronScheduler(storage_path=tmp_path / "sched.yml")
     monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
-    sched.register_task("example", ExampleTask())
+    sched.register_task(name_or_task="example", task_or_expr=ExampleTask())
 
     runner = CliRunner()
     result = runner.invoke(app, ["schedule", "example", "0 12 * * *"])
@@ -229,7 +229,7 @@ def test_cli_transport_option_nats(monkeypatch):
 def test_cli_run_user_id(monkeypatch):
     initialize()
     sched = get_default_scheduler()
-    sched.register_task("manual_demo", ManualTask())
+    sched.register_task(name_or_task="manual_demo", task_or_expr=ManualTask())
 
     captured = {}
 
@@ -258,7 +258,7 @@ def test_cli_schedules_lists_entries(monkeypatch, tmp_path):
     sched = CronScheduler(storage_path=tmp_path / "sched.yml")
     monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
 
-    sched.register_task(ExampleTask(), "0 5 * * *")
+    sched.register_task(name_or_task=ExampleTask(), task_or_expr="0 5 * * *")
 
     runner = CliRunner()
     result = runner.invoke(app, ["schedules"])

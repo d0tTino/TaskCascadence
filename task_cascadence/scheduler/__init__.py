@@ -208,11 +208,23 @@ class CronScheduler(BaseScheduler):
 
         return runner
 
-    def register_task(self, arg1, arg2):
+    def register_task(
+        self,
+        name_or_task: str | BaseTask,
+        task_or_expr: BaseTask | str,
+    ) -> None:
         """Register a task with optional scheduling.
 
-        This method supports two calling styles for backwards
-        compatibility with :class:`BaseScheduler`:
+        Parameters
+        ----------
+        name_or_task:
+            Either a task name or the task instance.
+        task_or_expr:
+            Either the task instance (if ``name_or_task`` is a name) or a cron
+            expression used to schedule the task.
+
+        This method supports two calling styles for backwards compatibility
+        with :class:`BaseScheduler`:
 
         ``register_task(name, task)``
             Register ``task`` under ``name`` without scheduling.
@@ -221,13 +233,13 @@ class CronScheduler(BaseScheduler):
             Register ``task`` and schedule it using ``cron_expression``.
         """
 
-        if isinstance(arg1, str):
+        if isinstance(name_or_task, str):
             # Called with ``name`` and ``task``
-            name, task = arg1, arg2
+            name, task = name_or_task, task_or_expr
             super().register_task(name, task)
             return
 
-        task, cron_expression = arg1, arg2
+        task, cron_expression = name_or_task, task_or_expr
         job_id = task.__class__.__name__
         super().register_task(job_id, task)
         self.schedules[job_id] = cron_expression
@@ -242,7 +254,7 @@ class CronScheduler(BaseScheduler):
 
     def schedule_task(self, task: Any, cron_expression: str) -> None:
         """Convenience wrapper for :meth:`register_task`."""
-        self.register_task(task, cron_expression)
+        self.register_task(name_or_task=task, task_or_expr=cron_expression)
 
     def start(self):
         self.scheduler.start()

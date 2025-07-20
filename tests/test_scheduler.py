@@ -16,7 +16,7 @@ def test_timezone_awareness(tmp_path):
     storage = tmp_path / "sched.yml"
     sched = CronScheduler(timezone="US/Pacific", storage_path=storage)
     task = DummyTask()
-    sched.register_task(task, "0 12 * * *")
+    sched.register_task(name_or_task=task, task_or_expr="0 12 * * *")
     job = sched.scheduler.get_job("DummyTask")
     from zoneinfo import ZoneInfo
 
@@ -28,7 +28,7 @@ def test_schedule_persistence(tmp_path):
     storage = tmp_path / "sched.yml"
     sched = CronScheduler(timezone="UTC", storage_path=storage)
     task = DummyTask()
-    sched.register_task(task, "*/5 * * * *")
+    sched.register_task(name_or_task=task, task_or_expr="*/5 * * * *")
     data = yaml.safe_load(storage.read_text())
     assert data["DummyTask"] == "*/5 * * * *"
 
@@ -49,7 +49,7 @@ def test_run_emits_result(monkeypatch, tmp_path):
     monkeypatch.setattr(ume, "emit_task_run", fake_emit)
     sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
     task = DummyTask()
-    sched.register_task(task, "*/1 * * * *")
+    sched.register_task(name_or_task=task, task_or_expr="*/1 * * * *")
     job = sched.scheduler.get_job("DummyTask")
     job.func()
     assert emitted_run is not None
@@ -62,7 +62,7 @@ def test_restore_schedules_on_init(tmp_path, monkeypatch):
     storage = tmp_path / "sched.yml"
     task = DummyTask()
     sched = CronScheduler(timezone="UTC", storage_path=storage)
-    sched.register_task(task, "*/5 * * * *")
+    sched.register_task(name_or_task=task, task_or_expr="*/5 * * * *")
 
     from task_cascadence import ume
 
@@ -104,7 +104,7 @@ def test_metrics_increment_for_job(tmp_path, monkeypatch):
     # Prevent actual event emission
     monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run, user_id=None: None)
 
-    sched.register_task(task, "*/1 * * * *")
+    sched.register_task(name_or_task=task, task_or_expr="*/1 * * * *")
     job = sched.scheduler.get_job("DummyTask")
 
     success = metrics.TASK_SUCCESS.labels("runner")
