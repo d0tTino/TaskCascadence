@@ -1,6 +1,9 @@
 from task_cascadence.scheduler import BaseScheduler
 from task_cascadence.plugins import CronTask
 from task_cascadence.temporal import TemporalBackend
+import task_cascadence.temporal as temporal
+from unittest.mock import AsyncMock, Mock
+import asyncio
 
 
 class DummyTask(CronTask):
@@ -38,3 +41,40 @@ def test_replay_history(monkeypatch):
     monkeypatch.setattr(backend, "replay", fake_replay)
     scheduler.replay_history("file.json")
     assert called["path"] == "file.json"
+
+
+def test_run_workflow_sync_executes_via_asyncio(monkeypatch):
+    backend = TemporalBackend()
+
+    client = Mock()
+    client.execute_workflow = AsyncMock(return_value="ok")
+
+    connect_mock = AsyncMock(return_value=client)
+    monkeypatch.setattr(temporal.Client, "connect", connect_mock)
+
+    run_called = {}
+    orig_run = asyncio.run
+
+    def fake_run(coro, *args, **kwargs):
+        run_called["called"] = True
+        return orig_run(coro, *args, **kwargs)
+
+    monkeypatch.setattr(asyncio, "run", fake_run)
+
+    result = backend.run_workflow_sync("DemoWorkflow", 1, foo="bar")
+
+    assert result == "ok"
+    assert run_called.get("called") is True
+    connect_mock.assert_awaited_once_with("localhost:7233")
+    client.execute_workflow.assert_awaited_once_with("DemoWorkflow", 1, foo="bar")
+
+
+def test_replay_uses_replayer(monkeypatch):
+    backend = TemporalBackend()
+
+    replayer = Mock()
+    monkeypatch.setattr(temporal, "Replayer", lambda: replayer)
+
+    backend.replay("history.json")
+
+    replayer.replay.assert_called_once_with("history.json")
