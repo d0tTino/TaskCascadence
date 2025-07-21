@@ -125,6 +125,21 @@ def test_cli_schedule_unknown_task(monkeypatch):
     assert result.exit_code == 1
 
 
+def test_cli_schedule_requires_cron_scheduler(monkeypatch):
+    from task_cascadence.scheduler import BaseScheduler
+    from task_cascadence.plugins import ExampleTask
+
+    sched = BaseScheduler()
+    sched.register_task("example", ExampleTask())
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["schedule", "example", "0 12 * * *"])
+
+    assert result.exit_code == 1
+    assert "scheduler lacks cron capabilities" in result.output
+
+
 def test_cli_replay_history(monkeypatch):
     backend = TemporalBackend()
     scheduler = BaseScheduler(temporal=backend)
