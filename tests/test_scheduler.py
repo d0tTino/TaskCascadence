@@ -1,4 +1,5 @@
 import yaml
+import pytest
 from task_cascadence.scheduler import CronScheduler, BaseScheduler
 from task_cascadence.plugins import CronTask
 
@@ -168,4 +169,58 @@ def test_wrap_task_user_id(monkeypatch):
     assert emitted is not None
     assert emitted.user_hash is not None
     assert emitted.user_hash != "alice"
+
+
+def test_run_task_metrics_success(monkeypatch):
+    from task_cascadence import metrics
+
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run, user_id=None: None)
+
+    sched = BaseScheduler()
+
+    class SimpleTask(CronTask):
+        def run(self):
+            return "ok"
+
+    task = SimpleTask()
+    sched.register_task("simple", task)
+
+    success = metrics.TASK_SUCCESS.labels("runner")
+    failure = metrics.TASK_FAILURE.labels("runner")
+
+    before_success = success._value.get()
+    before_failure = failure._value.get()
+
+    result = sched.run_task("simple")
+
+    assert result == "ok"
+    assert success._value.get() == before_success + 1
+    assert failure._value.get() == before_failure
+
+
+def test_run_task_metrics_failure(monkeypatch):
+    from task_cascadence import metrics
+
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run, user_id=None: None)
+
+    sched = BaseScheduler()
+
+    class BoomTask(CronTask):
+        def run(self):
+            raise RuntimeError("boom")
+
+    task = BoomTask()
+    sched.register_task("boom", task)
+
+    success = metrics.TASK_SUCCESS.labels("runner")
+    failure = metrics.TASK_FAILURE.labels("runner")
+
+    before_success = success._value.get()
+    before_failure = failure._value.get()
+
+    with pytest.raises(RuntimeError):
+        sched.run_task("boom")
+
+    assert success._value.get() == before_success
+    assert failure._value.get() == before_failure + 1
 
