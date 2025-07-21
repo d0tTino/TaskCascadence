@@ -93,12 +93,13 @@ allows scheduled tasks to survive process restarts.
 
 ``task_cascadence.initialize`` reads configuration to decide which scheduler
 backend to instantiate. By default the cron-based scheduler is used. Set the
-``CASCADENCE_SCHEDULER`` environment variable to ``base`` or provide a YAML file
-via ``CASCADENCE_CONFIG`` containing::
+``CASCADENCE_SCHEDULER`` environment variable to ``base`` or ``temporal`` or
+provide a YAML file via ``CASCADENCE_CONFIG`` containing::
 
-    scheduler: base
+    backend: temporal
 
-This will select the simple in-memory scheduler instead.
+This selects the Temporal-based scheduler. ``backend: base`` chooses the simple
+in-memory scheduler instead.
 
 
 ## Plugin Discovery
