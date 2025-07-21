@@ -25,3 +25,11 @@ class TaskRun:
     started_at: datetime
     finished_at: datetime
     user_hash: Optional[str] = None
+
+
+@dataclass
+class TaskPointer:
+    """Reference to another user's task run."""
+
+    run_id: str
+    user_hash: str

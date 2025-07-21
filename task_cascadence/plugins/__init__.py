@@ -11,6 +11,8 @@ import sys
 from importlib import metadata
 from typing import Dict
 
+from ..ume.models import TaskPointer
+
 
 from ..scheduler import get_default_scheduler
 
@@ -56,6 +58,21 @@ def register_webhook_task(cls: type[WebhookTask]) -> type[WebhookTask]:
 class ManualTrigger(BaseTask):
     """Base class for tasks triggered manually."""
     pass
+
+
+class PointerTask(BaseTask):
+    """Task referencing other users' task runs via pointers."""
+
+    def __init__(self) -> None:
+        self.pointers: list[TaskPointer] = []
+
+    def add_pointer(self, user_id: str, run_id: str) -> None:
+        from ..ume import _hash_user_id
+
+        self.pointers.append(TaskPointer(run_id=run_id, user_hash=_hash_user_id(user_id)))
+
+    def get_pointers(self) -> list[TaskPointer]:
+        return list(self.pointers)
 
 
 # ---------------------------------------------------------------------------
