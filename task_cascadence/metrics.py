@@ -37,23 +37,34 @@ def start_metrics_server(port: int = 8000) -> None:
     start_http_server(port)
 
 
-def track_task(func):
-    """Decorator to record metrics for a task function."""
-    task_name = func.__name__
+def track_task(func=None, *, name: str | None = None):
+    """Decorator to record metrics for a task function.
 
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        start_time = time.monotonic()
-        try:
-            result = func(*args, **kwargs)
-        except Exception:
-            TASK_FAILURE.labels(task_name).inc()
-            raise
-        else:
-            TASK_SUCCESS.labels(task_name).inc()
-            return result
-        finally:
-            duration = time.monotonic() - start_time
-            TASK_LATENCY.labels(task_name).observe(duration)
+    Can be used without parentheses as ``@track_task`` or with a custom task
+    name as ``@track_task(name="CustomTask")``.
+    """
 
-    return wrapper
+    def decorator(func):
+        task_name = name or func.__name__
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            start_time = time.monotonic()
+            try:
+                result = func(*args, **kwargs)
+            except Exception:
+                TASK_FAILURE.labels(task_name).inc()
+                raise
+            else:
+                TASK_SUCCESS.labels(task_name).inc()
+                return result
+            finally:
+                duration = time.monotonic() - start_time
+                TASK_LATENCY.labels(task_name).observe(duration)
+
+        return wrapper
+
+    if func is None:
+        return decorator
+
+    return decorator(func)

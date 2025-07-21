@@ -108,8 +108,8 @@ def test_metrics_increment_for_job(tmp_path, monkeypatch):
     sched.register_task(name_or_task=task, task_or_expr="*/1 * * * *")
     job = sched.scheduler.get_job("DummyTask")
 
-    success = metrics.TASK_SUCCESS.labels("runner")
-    failure = metrics.TASK_FAILURE.labels("runner")
+    success = metrics.TASK_SUCCESS.labels("DummyTask")
+    failure = metrics.TASK_FAILURE.labels("DummyTask")
 
     before_success = success._value.get()
     before_failure = failure._value.get()
