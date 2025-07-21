@@ -11,7 +11,11 @@ import click  # noqa: F401 - re-exported for CLI extensions
 import importlib
 import typer
 
-from ..scheduler import get_default_scheduler, default_scheduler
+from ..scheduler import (
+    get_default_scheduler,
+    default_scheduler,
+    CronScheduler,
+)
 
 from .. import plugins  # noqa: F401
 from ..metrics import start_metrics_server  # noqa: F401
@@ -138,6 +142,9 @@ def schedule_task(name: str, expression: str) -> None:
     """Schedule ``NAME`` according to ``EXPRESSION``."""
 
     sched = get_default_scheduler()
+    if not isinstance(sched, CronScheduler):
+        typer.echo("error: scheduler lacks cron capabilities", err=True)
+        raise typer.Exit(code=1)
     task_info = dict(sched._tasks).get(name)
     if not task_info:
         typer.echo(f"error: unknown task '{name}'", err=True)
