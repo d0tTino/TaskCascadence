@@ -45,6 +45,9 @@ def initialize() -> None:
             replace_existing=True,
         )
 
+    if hasattr(sched, "start"):
+        sched.start()
+
 
 from . import cli  # noqa: F401,E402
 
