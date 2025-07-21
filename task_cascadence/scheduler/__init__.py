@@ -176,7 +176,7 @@ class CronScheduler(BaseScheduler):
             self._yaml.safe_dump(self.schedules, fh)
 
     def _wrap_task(self, task, user_id: str | None = None):
-        @metrics.track_task
+        @metrics.track_task(name=task.__class__.__name__)
         def runner():
             from datetime import datetime
             from uuid import uuid4
