@@ -84,7 +84,7 @@ class BaseScheduler:
 
             spec = TaskSpec(id=task.__class__.__name__, name=task.__class__.__name__)
 
-            @metrics.track_task
+            @metrics.track_task(name=task.__class__.__name__)
             def runner():
                 run_id = str(uuid4())
                 started = datetime.now()

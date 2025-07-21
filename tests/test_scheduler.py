@@ -185,8 +185,8 @@ def test_run_task_metrics_success(monkeypatch):
     task = SimpleTask()
     sched.register_task("simple", task)
 
-    success = metrics.TASK_SUCCESS.labels("runner")
-    failure = metrics.TASK_FAILURE.labels("runner")
+    success = metrics.TASK_SUCCESS.labels("SimpleTask")
+    failure = metrics.TASK_FAILURE.labels("SimpleTask")
 
     before_success = success._value.get()
     before_failure = failure._value.get()
@@ -212,8 +212,8 @@ def test_run_task_metrics_failure(monkeypatch):
     task = BoomTask()
     sched.register_task("boom", task)
 
-    success = metrics.TASK_SUCCESS.labels("runner")
-    failure = metrics.TASK_FAILURE.labels("runner")
+    success = metrics.TASK_SUCCESS.labels("BoomTask")
+    failure = metrics.TASK_FAILURE.labels("BoomTask")
 
     before_success = success._value.get()
     before_failure = failure._value.get()
