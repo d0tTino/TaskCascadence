@@ -139,6 +139,17 @@ def test_cli_schedule_requires_cron_scheduler(monkeypatch):
     assert result.exit_code == 1
     assert "scheduler lacks cron capabilities" in result.output
 
+def test_cli_schedule_env_base(monkeypatch):
+    """task schedule should fail without a cron scheduler"""
+    monkeypatch.setenv("CASCADENCE_SCHEDULER", "base")
+    import importlib
+    import task_cascadence
+    importlib.reload(task_cascadence)
+    task_cascadence.initialize()
+    runner = CliRunner()
+    result = runner.invoke(app, ["schedule", "example", "0 12 * * *"])
+    assert result.exit_code == 1
+    assert "scheduler lacks cron capabilities" in result.output
 
 def test_cli_replay_history(monkeypatch):
     backend = TemporalBackend()
