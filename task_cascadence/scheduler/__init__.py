@@ -124,6 +124,22 @@ class BaseScheduler:
         self._tasks[name]["disabled"] = True
 
 
+class TemporalScheduler(BaseScheduler):
+    """Scheduler executing all tasks via :class:`TemporalBackend`."""
+
+    def __init__(self, backend: TemporalBackend | None = None) -> None:
+        super().__init__(temporal=backend or TemporalBackend())
+
+    def run_task(
+        self,
+        name: str,
+        *,
+        use_temporal: bool | None = None,
+        user_id: str | None = None,
+    ) -> Any:
+        return super().run_task(name, use_temporal=True, user_id=user_id)
+
+
 
 
 class CronScheduler(BaseScheduler):
@@ -294,5 +310,18 @@ def get_default_scheduler() -> BaseScheduler:
 
 # Backwards compatibility alias
 default_scheduler = get_default_scheduler
+
+
+def create_scheduler(backend: str) -> BaseScheduler:
+    """Factory returning a scheduler for ``backend``."""
+
+    if backend == "cron":
+        return CronScheduler()
+    if backend == "base":
+        return BaseScheduler()
+    if backend == "temporal":
+        return TemporalScheduler()
+    raise ValueError(f"Unknown scheduler backend: {backend}")
+
 
 
