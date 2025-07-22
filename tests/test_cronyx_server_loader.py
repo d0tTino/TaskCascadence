@@ -57,9 +57,22 @@ def test_loader_retries(monkeypatch):
     loader = CronyxServerLoader("http://server", retries=3, backoff_factor=0)
     monkeypatch.setattr(requests, "request", failing)
     monkeypatch.setattr("time.sleep", lambda s: None)
-    with pytest.raises(requests.ConnectionError):
-        loader.list_tasks()
+    assert loader.list_tasks() == []
     assert failing.calls == 3
+
+
+def test_loader_connection_error(monkeypatch):
+    def fail(*args, **kwargs):
+        raise requests.ConnectionError("boom")
+
+    loader = CronyxServerLoader("http://server")
+    monkeypatch.setattr(
+        "task_cascadence.plugins.cronyx_server.request_with_retry",
+        fail,
+    )
+
+    assert loader.list_tasks() == []
+    assert loader.load_task("42") == {}
 
 
 def test_loader_timeout_from_env(monkeypatch):
