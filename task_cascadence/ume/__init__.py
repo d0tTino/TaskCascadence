@@ -10,7 +10,7 @@ import hashlib
 from ..config import load_config
 
 from ..transport import BaseTransport, AsyncBaseTransport, get_client
-from .models import TaskRun, TaskSpec
+from .models import TaskRun, TaskSpec, PointerUpdate
 
 
 _default_client: BaseTransport | AsyncBaseTransport | None = None
@@ -122,3 +122,21 @@ def emit_task_run(
             _async_queue_within_deadline(run, target)
         )
     return _queue_within_deadline(run, target)
+
+
+def emit_pointer_update(
+    update: PointerUpdate,
+    client: Any | None = None,
+    *,
+    use_asyncio: bool = False,
+) -> asyncio.Task | threading.Thread | None:
+    """Emit ``PointerUpdate`` using the configured transport."""
+
+    target = client or _default_client
+    if target is None:
+        raise ValueError("No transport client configured")
+    if use_asyncio:
+        return asyncio.get_running_loop().create_task(
+            _async_queue_within_deadline(update, target)
+        )
+    return _queue_within_deadline(update, target)

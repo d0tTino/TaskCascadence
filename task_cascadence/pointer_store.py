@@ -6,7 +6,8 @@ from typing import Any, Dict, List
 
 import yaml
 
-from .ume import _hash_user_id
+from .ume import _hash_user_id, emit_pointer_update
+from .ume.models import PointerUpdate
 
 
 class PointerStore:
@@ -34,8 +35,20 @@ class PointerStore:
             yaml.safe_dump(self._data, fh)
 
     def add_pointer(self, task_name: str, user_id: str, run_id: str) -> None:
-        entry = {"run_id": run_id, "user_hash": _hash_user_id(user_id)}
+        user_hash = _hash_user_id(user_id)
+        entry = {"run_id": run_id, "user_hash": user_hash}
         self._data.setdefault(task_name, []).append(entry)
+        self._save()
+        try:
+            emit_pointer_update(
+                PointerUpdate(task_name=task_name, run_id=run_id, user_hash=user_hash)
+            )
+        except Exception:  # pragma: no cover - best effort transport
+            pass
+
+    def apply_update(self, update: PointerUpdate) -> None:
+        entry = {"run_id": update.run_id, "user_hash": update.user_hash}
+        self._data.setdefault(update.task_name, []).append(entry)
         self._save()
 
     def get_pointers(self, task_name: str) -> List[Dict[str, Any]]:
