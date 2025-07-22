@@ -240,3 +240,22 @@ def test_run_task_metrics_failure(monkeypatch):
     assert success._value.get() == before_success
     assert failure._value.get() == before_failure + 1
 
+
+def test_register_task_twice_running(tmp_path):
+    storage = tmp_path / "sched.yml"
+    sched = CronScheduler(timezone="UTC", storage_path=storage)
+    task = DummyTask()
+    sched.start()
+    try:
+        sched.register_task(name_or_task=task, task_or_expr="* * * * *")
+        sched.register_task(name_or_task=task, task_or_expr="*/2 * * * *")
+        job = sched.scheduler.get_job("DummyTask")
+    finally:
+        sched.shutdown(wait=False)
+
+    assert job is not None
+    assert str(job.trigger) == "cron[month='*', day='*', day_of_week='*', hour='*', minute='*/2']"
+
+    data = yaml.safe_load(storage.read_text())
+    assert data["DummyTask"] == "*/2 * * * *"
+
