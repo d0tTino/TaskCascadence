@@ -113,6 +113,27 @@ def test_cli_schedule_creates_entry(monkeypatch, tmp_path):
     assert data["ExampleTask"] == "0 12 * * *"
 
 
+def test_cli_schedule_user_id(monkeypatch, tmp_path):
+    from task_cascadence.scheduler import CronScheduler
+    from task_cascadence.plugins import ExampleTask
+    import yaml
+
+    sched = CronScheduler(storage_path=tmp_path / "sched.yml")
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+    sched.register_task(name_or_task="example", task_or_expr=ExampleTask())
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["schedule", "example", "0 12 * * *", "--user-id", "charlie"],
+    )
+
+    assert result.exit_code == 0
+    data = yaml.safe_load((tmp_path / "sched.yml").read_text())
+    assert data["ExampleTask"]["expr"] == "0 12 * * *"
+    assert data["ExampleTask"]["user_id"] == "charlie"
+
+
 def test_cli_schedule_unknown_task(monkeypatch):
     from task_cascadence.scheduler import CronScheduler
 

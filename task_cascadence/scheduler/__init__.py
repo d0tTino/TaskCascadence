@@ -180,16 +180,22 @@ class CronScheduler(BaseScheduler):
         return {}
 
     def _restore_jobs(self, tasks):
-        for job_id, expr in self.schedules.items():
+        for job_id, data in self.schedules.items():
             task = tasks.get(job_id)
             if not task:
                 continue
+            if isinstance(data, dict):
+                expr = data.get("expr")
+                user_id = data.get("user_id")
+            else:
+                expr = data
+                user_id = None
             super().register_task(job_id, task)
             trigger = self._CronTrigger.from_crontab(
                 expr, timezone=self.scheduler.timezone
             )
             self.scheduler.add_job(
-                self._wrap_task(task), trigger=trigger, id=job_id
+                self._wrap_task(task, user_id=user_id), trigger=trigger, id=job_id
             )
 
     def _save_schedules(self):
@@ -233,6 +239,8 @@ class CronScheduler(BaseScheduler):
         self,
         name_or_task: str | BaseTask,
         task_or_expr: BaseTask | str,
+        *,
+        user_id: str | None = None,
     ) -> None:
         """Register a task with optional scheduling.
 
@@ -263,19 +271,26 @@ class CronScheduler(BaseScheduler):
         task, cron_expression = name_or_task, task_or_expr
         job_id = task.__class__.__name__
         super().register_task(job_id, task)
-        self.schedules[job_id] = cron_expression
+        if user_id is None:
+            self.schedules[job_id] = cron_expression
+        else:
+            self.schedules[job_id] = {"expr": cron_expression, "user_id": user_id}
         self._save_schedules()
 
         trigger = self._CronTrigger.from_crontab(
             cron_expression, timezone=self.scheduler.timezone
         )
         self.scheduler.add_job(
-            self._wrap_task(task), trigger=trigger, id=job_id
+            self._wrap_task(task, user_id=user_id), trigger=trigger, id=job_id
         )
 
-    def schedule_task(self, task: Any, cron_expression: str) -> None:
+    def schedule_task(
+        self, task: Any, cron_expression: str, *, user_id: str | None = None
+    ) -> None:
         """Convenience wrapper for :meth:`register_task`."""
-        self.register_task(name_or_task=task, task_or_expr=cron_expression)
+        self.register_task(
+            name_or_task=task, task_or_expr=cron_expression, user_id=user_id
+        )
 
     def start(self):
         self.scheduler.start()
