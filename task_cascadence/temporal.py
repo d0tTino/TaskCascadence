@@ -35,4 +35,5 @@ class TemporalBackend:
 
     def replay(self, history_path: str) -> None:
         """Replay a workflow history from ``history_path`` for debugging."""
-        Replayer().replay(history_path)
+        replayer = Replayer()  # type: ignore[call-arg]
+        replayer.replay(history_path)  # type: ignore[attr-defined]

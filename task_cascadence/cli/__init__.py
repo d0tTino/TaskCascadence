@@ -13,14 +13,18 @@ import typer
 
 from ..scheduler import (
     get_default_scheduler,
-    default_scheduler,
+    default_scheduler as _default_scheduler,
     CronScheduler,
+    BaseScheduler,
 )
-
 from .. import plugins  # noqa: F401
 from ..metrics import start_metrics_server  # noqa: F401
 import task_cascadence as tc
 from ..n8n import export_workflow
+
+from typing import Callable, Union
+
+default_scheduler: Union[Callable[[], BaseScheduler], BaseScheduler] = _default_scheduler
 
 
 app = typer.Typer(help="Interact with Cascadence tasks")
@@ -180,7 +184,10 @@ def replay_history(path: str) -> None:
     """Replay a workflow history from ``PATH``."""
 
     try:
-        default_scheduler.replay_history(path)
+        sched = default_scheduler
+        if callable(sched):
+            sched = sched()
+        sched.replay_history(path)
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc

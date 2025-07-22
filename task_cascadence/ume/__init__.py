@@ -9,11 +9,11 @@ from typing import Any
 import hashlib
 from ..config import load_config
 
-from ..transport import BaseTransport, get_client
+from ..transport import BaseTransport, AsyncBaseTransport, get_client
 from .models import TaskRun, TaskSpec
 
 
-_default_client: BaseTransport | None = None
+_default_client: BaseTransport | AsyncBaseTransport | None = None
 
 
 def _hash_user_id(user_id: str) -> str:
