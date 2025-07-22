@@ -106,6 +106,29 @@ provide a YAML file via ``CASCADENCE_CONFIG`` containing::
 This selects the Temporal-based scheduler. ``backend: base`` chooses the simple
 in-memory scheduler instead.
 
+### Cronyx Backend
+
+Selecting ``backend: cronyx`` or setting ``CASCADENCE_SCHEDULER=cronyx`` makes
+Cascadence retrieve tasks from a running CronyxServer. Use the following
+environment variables to configure the integration:
+
+``CRONYX_BASE_URL``
+    Base URL of the CronyxServer instance.
+``CRONYX_TIMEOUT``
+    Request timeout in seconds when contacting the server.
+``CASCADENCE_CRONYX_REFRESH``
+    Disable periodic refreshes when ``0`` or ``false``.
+
+Example workflow::
+
+    CronyxServer --listen :8000 &
+    curl -X POST -H 'Content-Type: application/json' \
+        -d '{"id":"demo","path":"examples.python_plugin.demo:DemoTask"}' \
+        http://localhost:8000/tasks
+    export CRONYX_BASE_URL=http://localhost:8000
+    export CASCADENCE_SCHEDULER=cronyx
+    task list
+
 
 ## Plugin Discovery
 
