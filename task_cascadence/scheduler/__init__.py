@@ -195,7 +195,10 @@ class CronScheduler(BaseScheduler):
                 expr, timezone=self.scheduler.timezone
             )
             self.scheduler.add_job(
-                self._wrap_task(task, user_id=user_id), trigger=trigger, id=job_id
+                self._wrap_task(task, user_id=user_id),
+                trigger=trigger,
+                id=job_id,
+                replace_existing=True,
             )
 
     def _save_schedules(self):
@@ -281,7 +284,10 @@ class CronScheduler(BaseScheduler):
             cron_expression, timezone=self.scheduler.timezone
         )
         self.scheduler.add_job(
-            self._wrap_task(task, user_id=user_id), trigger=trigger, id=job_id
+            self._wrap_task(task, user_id=user_id),
+            trigger=trigger,
+            id=job_id,
+            replace_existing=True,
         )
 
     def schedule_task(
