@@ -27,7 +27,10 @@ class ManualTask(ManualTrigger):
 
 def test_manual_trigger_cli(monkeypatch):
     initialize()
-    sched = get_default_scheduler()
+    from typing import cast
+    from task_cascadence.scheduler import CronScheduler
+
+    sched = cast(CronScheduler, get_default_scheduler())
     sched.register_task(name_or_task="manual_demo", task_or_expr=ManualTask())
 
     from task_cascadence import ume
@@ -311,7 +314,10 @@ def test_cli_transport_unknown(monkeypatch):
 
 def test_cli_run_user_id(monkeypatch):
     initialize()
-    sched = get_default_scheduler()
+    from typing import cast
+    from task_cascadence.scheduler import CronScheduler
+
+    sched = cast(CronScheduler, get_default_scheduler())
     sched.register_task(name_or_task="manual_demo", task_or_expr=ManualTask())
 
     captured = {}

@@ -15,7 +15,7 @@ def test_entrypoint_loading(monkeypatch):
         def run(self):
             return "ok"
 
-    mod.PluginTask = PluginTask
+    mod.PluginTask = PluginTask  # type: ignore[attr-defined]
     sys.modules["ep_mod"] = mod
 
     ep = metadata.EntryPoint(name="ep", value="ep_mod:PluginTask", group="task_cascadence.plugins")
