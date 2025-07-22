@@ -124,6 +124,47 @@ plugin source for Python, Rust and Go lives in the ``examples/`` directory.
 See the [Go plugin README](examples/go_plugin/README.md) and
 [Rust plugin README](examples/rust_plugin/README.md) for build instructions.
 
+To try the Python demo plugin install it in editable mode and list the
+available tasks:
+
+```bash
+$ pip install -e examples/python_plugin
+$ task list
+```
+
+``DemoTask`` from the plugin will appear alongside the built-in example task.
+
+## Environment Variables
+
+``load_config`` merges values from a YAML file specified by ``CASCADENCE_CONFIG``
+with the variables below. When set, they override values from the YAML file:
+
+``CASCADENCE_CONFIG``
+    Path to a YAML configuration file.
+
+``CASCADENCE_SCHEDULER``
+    Select the scheduler backend (``cron``/``base``/``temporal``).
+``CASCADENCE_CRONYX_REFRESH``
+    Disable Cronyx task refreshing when ``0`` or ``false``.
+``CRONYX_BASE_URL``
+    URL of a CronyxServer exposing additional tasks.
+``CRONYX_TIMEOUT``
+    Timeout in seconds when contacting the CronyxServer.
+``TEMPORAL_SERVER``
+    Address of the Temporal service.
+``UME_TRANSPORT``
+    Transport type for UME event emission (``grpc`` or ``nats``).
+``UME_GRPC_STUB``
+    Import path to the gRPC stub class.
+``UME_GRPC_METHOD``
+    RPC method used by the gRPC stub.
+``UME_NATS_CONN``
+    Import path to a configured NATS connection.
+``UME_NATS_SUBJECT``
+    NATS subject for event publishing.
+``CASCADENCE_HASH_SECRET``
+    Salt used when hashing user identifiers.
+
 ## Hashing User IDs
 
 User identifiers passed to emission helpers are hashed before transport.
