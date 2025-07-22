@@ -55,8 +55,13 @@ scrape_configs:
 ``task webhook`` launches a FastAPI application that dispatches incoming
 events to any registered :class:`WebhookTask` implementations.
 
+Two built-in webhook tasks show how payloads from different services can be
+handled:
 
-The repository ships with a single ``example`` task to demonstrate the
+* ``GitHubWebhookTask`` extracts the ``action`` field from ``issues`` events.
+* ``CalComWebhookTask`` records the ``event`` name from Cal.com bookings.
+
+The repository also ships with a small ``example`` cron task to demonstrate the
 mechanics.
 
 The CLI's ``main`` function can also be called programmatically:
