@@ -342,6 +342,9 @@ def create_scheduler(backend: str) -> BaseScheduler:
         return BaseScheduler()
     if backend == "temporal":
         return TemporalScheduler()
+    if backend == "cronyx":
+        from .cronyx import CronyxScheduler
+        return CronyxScheduler()
     raise ValueError(f"Unknown scheduler backend: {backend}")
 
 
