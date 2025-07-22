@@ -11,6 +11,7 @@ from importlib import metadata
 from typing import Dict
 
 from ..ume.models import TaskPointer
+from ..pointer_store import PointerStore
 
 
 from ..scheduler import get_default_scheduler
@@ -62,13 +63,17 @@ class ManualTrigger(BaseTask):
 class PointerTask(BaseTask):
     """Task referencing other users' task runs via pointers."""
 
-    def __init__(self) -> None:
-        self.pointers: list[TaskPointer] = []
+    def __init__(self, *, store: PointerStore | None = None) -> None:
+        self.store = store or PointerStore()
+        self.pointers: list[TaskPointer] = [
+            TaskPointer(**p) for p in self.store.get_pointers(self.name)
+        ]
 
     def add_pointer(self, user_id: str, run_id: str) -> None:
         from ..ume import _hash_user_id
 
         self.pointers.append(TaskPointer(run_id=run_id, user_hash=_hash_user_id(user_id)))
+        self.store.add_pointer(self.name, user_id, run_id)
 
     def get_pointers(self) -> list[TaskPointer]:
         return list(self.pointers)

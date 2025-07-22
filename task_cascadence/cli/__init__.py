@@ -19,6 +19,7 @@ from ..scheduler import (
 
 from .. import plugins  # noqa: F401
 from ..metrics import start_metrics_server  # noqa: F401
+from ..pointer_store import PointerStore
 import task_cascadence as tc
 from ..n8n import export_workflow
 
@@ -222,6 +223,36 @@ def reload_plugins_cmd() -> None:
     typer.echo("plugins reloaded")
 
 
+@app.command("pointer-add")
+def pointer_add(name: str, user_id: str, run_id: str) -> None:
+    """Add a pointer to ``NAME`` for ``USER_ID`` and ``RUN_ID``."""
+
+    sched = get_default_scheduler()
+    task_info = dict(sched._tasks).get(name)
+    if not task_info or not isinstance(task_info["task"], plugins.PointerTask):
+        typer.echo(f"error: '{name}' is not a pointer task", err=True)
+        raise typer.Exit(code=1)
+
+    task: plugins.PointerTask = task_info["task"]
+    task.add_pointer(user_id, run_id)
+    typer.echo("pointer added")
+
+
+@app.command("pointer-list")
+def pointer_list(name: str) -> None:
+    """List pointers for ``NAME``."""
+
+    sched = get_default_scheduler()
+    task_info = dict(sched._tasks).get(name)
+    if not task_info or not isinstance(task_info["task"], plugins.PointerTask):
+        typer.echo(f"error: '{name}' is not a pointer task", err=True)
+        raise typer.Exit(code=1)
+
+    store = PointerStore()
+    for entry in store.get_pointers(name):
+        typer.echo(f"{entry['run_id']}\t{entry['user_hash']}")
+
+
 
 def main(args: list[str] | None = None) -> None:
     """CLI entry point used by ``console_scripts`` or directly.
@@ -245,5 +276,7 @@ __all__ = [
     "webhook",
     "start_metrics_server",
     "reload_plugins_cmd",
+    "pointer_add",
+    "pointer_list",
 ]
 
