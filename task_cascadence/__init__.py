@@ -46,6 +46,7 @@ def initialize() -> None:
 
 
 from . import cli  # noqa: F401,E402
+from . import api  # noqa: F401,E402
 
 
 __all__ = [
@@ -53,6 +54,7 @@ __all__ = [
     "plugins",
     "ume",
     "cli",
+    "api",
     "metrics",
     "temporal",
     "initialize",

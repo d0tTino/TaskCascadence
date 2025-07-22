@@ -13,3 +13,10 @@ def shutdown_scheduler():
         except Exception:
             pass
     scheduler_module._default_scheduler = None
+
+
+@pytest.fixture(autouse=True)
+def tmp_pointers(monkeypatch, tmp_path):
+    path = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(path))
+    yield

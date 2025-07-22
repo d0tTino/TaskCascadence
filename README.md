@@ -75,6 +75,27 @@ main([])  # run without command-line arguments
 ``main`` accepts an optional ``args`` list which defaults to ``[]`` and is
 passed to the underlying Typer application.
 
+## REST API
+
+In addition to the CLI and webhook server, Cascadence provides a small FastAPI
+application for programmatic task management. Start it with:
+
+```bash
+uvicorn task_cascadence.api:app
+```
+
+Example usage with ``httpx``:
+
+```python
+import httpx
+
+tasks = httpx.get("http://localhost:8000/tasks").json()
+httpx.post("http://localhost:8000/tasks/example/run", headers={"X-User-ID": "bob"})
+```
+
+Including the ``X-User-ID`` header attaches a hashed identifier to emitted
+events, aligning with the project's privacy goals.
+
 ## Schedule Persistence
 
 ``CronScheduler`` stores cron expressions in ``schedules.yml`` by default.  The
