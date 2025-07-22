@@ -88,6 +88,36 @@ class ExampleTask(CronTask):
         print("Example task executed")
 
 
+@register_webhook_task
+class GitHubWebhookTask(WebhookTask):
+    """Example task parsing GitHub webhook events."""
+
+    events: list[str] = []
+
+    def handle_event(self, source: str, event_type: str, payload: dict) -> None:
+        """Record issue actions from GitHub events."""
+
+        if source == "github" and event_type == "issues":
+            action = payload.get("action")
+            if action:
+                self.__class__.events.append(action)
+
+
+@register_webhook_task
+class CalComWebhookTask(WebhookTask):
+    """Example task parsing Cal.com webhook events."""
+
+    events: list[str] = []
+
+    def handle_event(self, source: str, event_type: str, payload: dict) -> None:
+        """Record booking events from Cal.com."""
+
+        if source == "calcom" and event_type == "booking":
+            event = payload.get("event")
+            if event:
+                self.__class__.events.append(event)
+
+
 # ``registered_tasks`` is consumed by the scheduler during initialisation.
 registered_tasks: Dict[str, BaseTask] = {
     ExampleTask.name: ExampleTask(),
