@@ -13,6 +13,7 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
 
     The configuration currently supports selecting the scheduler backend via the
     ``backend`` key (``scheduler`` is accepted for backwards compatibility).
+    ``backend`` may be ``cron``, ``base``, ``temporal`` or ``cronyx``.
     Environment variable ``CASCADENCE_SCHEDULER`` overrides any value found in
     the YAML file. If no configuration is provided the scheduler defaults to
     ``cron``.

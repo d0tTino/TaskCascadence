@@ -119,13 +119,14 @@ allows scheduled tasks to survive process restarts.
 
 ``task_cascadence.initialize`` reads configuration to decide which scheduler
 backend to instantiate. By default the cron-based scheduler is used. Set the
-``CASCADENCE_SCHEDULER`` environment variable to ``base`` or ``temporal`` or
-provide a YAML file via ``CASCADENCE_CONFIG`` containing::
+``CASCADENCE_SCHEDULER`` environment variable to ``base``, ``temporal`` or
+``cronyx`` or provide a YAML file via ``CASCADENCE_CONFIG`` containing::
 
     backend: temporal
 
 This selects the Temporal-based scheduler. ``backend: base`` chooses the simple
-in-memory scheduler instead.
+in-memory scheduler instead. ``backend: cronyx`` configures a
+``CronyxScheduler`` which forwards task execution to a running CronyxServer.
 
 ### Cronyx Backend
 
@@ -192,7 +193,7 @@ with the variables below. When set, they override values from the YAML file:
     Path to a YAML configuration file.
 
 ``CASCADENCE_SCHEDULER``
-    Select the scheduler backend (``cron``/``base``/``temporal``).
+    Select the scheduler backend (``cron``/``base``/``temporal``/``cronyx``).
 ``CASCADENCE_CRONYX_REFRESH``
     Disable Cronyx task refreshing when ``0`` or ``false``.
 ``CRONYX_BASE_URL``
