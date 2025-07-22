@@ -40,10 +40,11 @@ class WebhookTask(BaseTask):
 
 
 _old_module = sys.modules.get(__name__)
+webhook_task_registry: list[type[WebhookTask]]
 if _old_module and hasattr(_old_module, "webhook_task_registry"):
-    webhook_task_registry = _old_module.webhook_task_registry
+    webhook_task_registry = _old_module.webhook_task_registry  # type: ignore[assignment]
 else:
-    webhook_task_registry: list[type[WebhookTask]] = []
+    webhook_task_registry = []
 
 
 def register_webhook_task(cls: type[WebhookTask]) -> type[WebhookTask]:
