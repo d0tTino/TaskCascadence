@@ -1,6 +1,7 @@
 from datetime import datetime
 import threading
 import time
+import asyncio
 
 import pytest
 
@@ -15,6 +16,19 @@ class MockClient:
 
     def enqueue(self, obj):
         self.events.append((obj, time.monotonic()))
+
+
+class AsyncMockClient:
+    def __init__(self):
+        self.events = []
+
+    async def enqueue(self, obj):
+        self.events.append((obj, asyncio.get_running_loop().time()))
+
+
+class SlowAsyncClient:
+    async def enqueue(self, obj):
+        await asyncio.sleep(0.3)
 
 
 def test_emit_task_run_within_deadline():
@@ -87,3 +101,38 @@ def test_emit_timeout_elapsed(monkeypatch):
     monkeypatch.setattr(time, "monotonic", fake_monotonic)
     with pytest.raises(RuntimeError, match="took"):
         emit_task_spec(spec, client)
+
+
+def test_async_emit_task_spec_and_run():
+    client = AsyncMockClient()
+    spec = TaskSpec(id="5", name="async")
+    run = TaskRun(
+        spec=spec,
+        run_id="rasync",
+        status="ok",
+        started_at=datetime.now(),
+        finished_at=datetime.now(),
+    )
+
+    async def runner():
+        t1 = emit_task_spec(spec, client, use_asyncio=True)
+        t2 = emit_task_run(run, client, use_asyncio=True)
+        await asyncio.gather(t1, t2)
+
+    asyncio.run(runner())
+
+    assert len(client.events) == 2
+    assert isinstance(client.events[0][0], TaskSpec)
+    assert isinstance(client.events[1][0], TaskRun)
+
+
+def test_async_emit_timeout():
+    client = SlowAsyncClient()
+    spec = TaskSpec(id="6", name="slow")
+
+    async def runner():
+        task = emit_task_spec(spec, client, use_asyncio=True)
+        await task
+
+    with pytest.raises(RuntimeError):
+        asyncio.run(runner())
