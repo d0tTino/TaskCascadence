@@ -101,3 +101,38 @@ def test_plugin_watcher_auto_reload(tmp_path, monkeypatch):
     pl_mod = importlib.reload(pl)
     pl_mod.initialize()
     assert pl_mod.registered_tasks["ep"].run() == "v2"
+
+
+def test_plugin_watcher_triggers_reload_once(tmp_path, monkeypatch):
+    monkeypatch.setenv("PYTHONDONTWRITEBYTECODE", "1")
+    module = setup_plugin(tmp_path, monkeypatch, PLUGIN_V1)
+
+    call_count = 0
+
+    def _reload():
+        nonlocal call_count
+        call_count += 1
+
+    monkeypatch.setattr(pl, "reload_plugins", _reload)
+    monkeypatch.setattr("task_cascadence.plugins.watcher.reload_plugins", _reload)
+
+    watcher = PluginWatcher(tmp_path)
+    watcher.start()
+    try:
+        time.sleep(1)
+        module.write_text(PLUGIN_V2)
+        time.sleep(2)
+    finally:
+        watcher.stop()
+
+    assert call_count == 1
+
+
+def test_plugin_watcher_stop_stops_thread(tmp_path):
+    watcher = PluginWatcher(tmp_path)
+    watcher.start()
+    try:
+        assert watcher._observer.is_alive()
+    finally:
+        watcher.stop()
+    assert not watcher._observer.is_alive()
