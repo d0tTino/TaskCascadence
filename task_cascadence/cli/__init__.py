@@ -260,6 +260,31 @@ def pointer_list(name: str) -> None:
         typer.echo(f"{entry['run_id']}\t{entry['user_hash']}")
 
 
+@app.command("pointer-send")
+def pointer_send(name: str, user_id: str, run_id: str) -> None:
+    """Publish a pointer update via the configured transport."""
+
+    from ..ume import emit_pointer_update, _hash_user_id
+    from ..ume.models import PointerUpdate
+
+    update = PointerUpdate(
+        task_name=name, run_id=run_id, user_hash=_hash_user_id(user_id)
+    )
+    emit_pointer_update(update)
+    typer.echo("pointer sent")
+
+
+@app.command("pointer-receive")
+def pointer_receive(name: str, run_id: str, user_hash: str) -> None:
+    """Store a received pointer update."""
+
+    store = PointerStore()
+    from ..ume.models import PointerUpdate
+
+    store.apply_update(PointerUpdate(task_name=name, run_id=run_id, user_hash=user_hash))
+    typer.echo("pointer stored")
+
+
 
 def main(args: list[str] | None = None) -> None:
     """CLI entry point used by ``console_scripts`` or directly.
@@ -285,5 +310,7 @@ __all__ = [
     "reload_plugins_cmd",
     "pointer_add",
     "pointer_list",
+    "pointer_send",
+    "pointer_receive",
 ]
 

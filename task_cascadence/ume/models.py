@@ -33,3 +33,12 @@ class TaskPointer:
 
     run_id: str
     user_hash: str
+
+
+@dataclass
+class PointerUpdate:
+    """Pointer synchronization message."""
+
+    task_name: str
+    run_id: str
+    user_hash: str
