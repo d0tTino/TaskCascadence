@@ -1,4 +1,3 @@
-import os
 from typing import Any
 
 import requests
@@ -19,7 +18,10 @@ class CronyxServerLoader:
     ) -> None:
         self.base_url = base_url.rstrip("/")
         if timeout is None:
-            timeout = float(os.getenv("CRONYX_TIMEOUT", "5.0"))
+            from ..config import load_config
+
+            cfg_timeout = load_config().get("cronyx_timeout")
+            timeout = float(cfg_timeout if cfg_timeout is not None else 5.0)
         self.timeout = timeout
         self.retries = retries
         self.backoff_factor = backoff_factor

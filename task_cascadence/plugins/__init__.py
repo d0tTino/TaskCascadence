@@ -6,7 +6,6 @@ complex projects could load plugins dynamically using entry points.
 """
 
 import importlib
-import os
 import sys
 from importlib import metadata
 from typing import Dict
@@ -132,15 +131,20 @@ def initialize() -> None:
 
     load_entrypoint_plugins()
 
-    if "CRONYX_BASE_URL" in os.environ:
-        load_cronyx_plugins(os.environ["CRONYX_BASE_URL"])
+    from ..config import load_config
+
+    cfg = load_config()
+    if cfg.get("cronyx_base_url"):
+        load_cronyx_plugins(cfg["cronyx_base_url"])
 
 
 
 
 def load_cronyx_tasks() -> None:
     """Load tasks from a configured Cronyx server."""
-    url = os.getenv("CRONYX_BASE_URL")
+    from ..config import load_config
+
+    url = load_config().get("cronyx_base_url")
     if not url:
         return
     try:

@@ -12,7 +12,11 @@ from temporalio.worker import Replayer
 class TemporalBackend:
     """Thin wrapper around :class:`temporalio.client.Client`."""
 
-    def __init__(self, server: str = "localhost:7233") -> None:
+    def __init__(self, server: str | None = None) -> None:
+        if server is None:
+            from .config import load_config
+
+            server = load_config().get("temporal_server", "localhost:7233")
         self.server = server
         self._client: Optional[Client] = None
 

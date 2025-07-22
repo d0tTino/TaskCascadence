@@ -78,3 +78,9 @@ def test_replay_uses_replayer(monkeypatch):
     backend.replay("history.json")
 
     replayer.replay.assert_called_once_with("history.json")
+
+
+def test_backend_server_from_env(monkeypatch):
+    monkeypatch.setenv("TEMPORAL_SERVER", "remote:4444")
+    backend = TemporalBackend()
+    assert backend.server == "remote:4444"
