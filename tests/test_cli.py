@@ -363,4 +363,32 @@ def test_cli_schedules_empty(monkeypatch, tmp_path):
     assert result.output == ""
 
 
+def test_cli_pointer_add_and_list(monkeypatch, tmp_path):
+    from task_cascadence.scheduler import BaseScheduler
+    from task_cascadence.plugins import PointerTask
+    import yaml
+
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+
+    class DemoPointer(PointerTask):
+        name = "demo_pointer"
+
+    sched = BaseScheduler()
+    task = DemoPointer()
+    sched.register_task("demo_pointer", task)
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["pointer-add", "demo_pointer", "alice", "run1"])
+    assert result.exit_code == 0
+    assert task.get_pointers()[0].run_id == "run1"
+
+    result = runner.invoke(app, ["pointer-list", "demo_pointer"])
+    assert result.exit_code == 0
+    data = yaml.safe_load(store.read_text())
+    assert data["demo_pointer"][0]["run_id"] == "run1"
+
+
 
