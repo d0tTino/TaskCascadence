@@ -34,5 +34,29 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
     else:
         cfg["cronyx_refresh"] = bool(cfg.get("cronyx_refresh", True))
 
+    if "CRONYX_BASE_URL" in os.environ:
+        cfg["cronyx_base_url"] = os.environ["CRONYX_BASE_URL"]
+    if "CRONYX_TIMEOUT" in os.environ:
+        cfg["cronyx_timeout"] = float(os.environ["CRONYX_TIMEOUT"])
+
+    if "TEMPORAL_SERVER" in os.environ:
+        cfg["temporal_server"] = os.environ["TEMPORAL_SERVER"]
+
+    if "UME_TRANSPORT" in os.environ:
+        cfg["ume_transport"] = os.environ["UME_TRANSPORT"]
+    if "UME_GRPC_STUB" in os.environ:
+        cfg["ume_grpc_stub"] = os.environ["UME_GRPC_STUB"]
+    if "UME_GRPC_METHOD" in os.environ:
+        cfg["ume_grpc_method"] = os.environ["UME_GRPC_METHOD"]
+    if "UME_NATS_CONN" in os.environ:
+        cfg["ume_nats_conn"] = os.environ["UME_NATS_CONN"]
+    if "UME_NATS_SUBJECT" in os.environ:
+        cfg["ume_nats_subject"] = os.environ["UME_NATS_SUBJECT"]
+
+    if "CASCADENCE_HASH_SECRET" in os.environ:
+        cfg["hash_secret"] = os.environ["CASCADENCE_HASH_SECRET"]
+    else:
+        cfg.setdefault("hash_secret", "")
+
     return cfg
 

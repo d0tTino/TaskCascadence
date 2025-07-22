@@ -7,7 +7,7 @@ import time
 import asyncio
 from typing import Any
 import hashlib
-import os
+from ..config import load_config
 
 from ..transport import BaseTransport, get_client
 from .models import TaskRun, TaskSpec
@@ -17,7 +17,7 @@ _default_client: BaseTransport | None = None
 
 
 def _hash_user_id(user_id: str) -> str:
-    secret = os.getenv("CASCADENCE_HASH_SECRET", "")
+    secret = load_config().get("hash_secret", "")
     return hashlib.sha256((secret + user_id).encode()).hexdigest()
 
 
