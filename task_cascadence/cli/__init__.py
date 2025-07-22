@@ -138,7 +138,11 @@ def disable_task(name: str) -> None:
 
 
 @app.command("schedule")
-def schedule_task(name: str, expression: str) -> None:
+def schedule_task(
+    name: str,
+    expression: str,
+    user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+) -> None:
     """Schedule ``NAME`` according to ``EXPRESSION``."""
 
     sched = get_default_scheduler()
@@ -152,7 +156,9 @@ def schedule_task(name: str, expression: str) -> None:
 
     try:
         task = task_info["task"]
-        sched.register_task(name_or_task=task, task_or_expr=expression)
+        sched.register_task(
+            name_or_task=task, task_or_expr=expression, user_id=user_id
+        )
         typer.echo(f"{name} scheduled: {expression}")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
