@@ -238,6 +238,18 @@ def test_cli_transport_option(monkeypatch):
     }
 
 
+def test_cli_transport_missing_grpc_stub(monkeypatch):
+    """Missing --grpc-stub should cause an error for gRPC transport."""
+
+    initialize()
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["--transport", "grpc", "list"])
+
+    assert result.exit_code == 2
+    assert "--grpc-stub is required for grpc transport" in result.stderr
+
+
 def test_cli_transport_option_nats(monkeypatch):
     """The CLI should support configuring the NATS transport."""
 
@@ -271,6 +283,30 @@ def test_cli_transport_option_nats(monkeypatch):
         "connection": dummy_nats_conn,
         "subject": "demo",
     }
+
+
+def test_cli_transport_missing_nats_conn(monkeypatch):
+    """Missing --nats-conn should raise an error for NATS transport."""
+
+    initialize()
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["--transport", "nats", "list"])
+
+    assert result.exit_code == 2
+    assert "--nats-conn is required for nats transport" in result.stderr
+
+
+def test_cli_transport_unknown(monkeypatch):
+    """Unknown transport value should be rejected."""
+
+    initialize()
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["--transport", "foo", "list"])
+
+    assert result.exit_code == 2
+    assert "Unknown transport: foo" in result.stderr
 
 
 def test_cli_run_user_id(monkeypatch):
