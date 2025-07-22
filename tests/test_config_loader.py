@@ -1,5 +1,6 @@
 import importlib
 import os
+import pytest
 
 import task_cascadence
 from task_cascadence.scheduler import get_default_scheduler, BaseScheduler, CronScheduler
@@ -82,4 +83,16 @@ def test_env_parsed(monkeypatch):
     assert cfg["ume_nats_conn"] == "pkg:conn"
     assert cfg["ume_nats_subject"] == "demo"
     assert cfg["hash_secret"] == "s"
+
+
+def test_initialize_unknown_scheduler(monkeypatch):
+    """Providing an invalid scheduler should raise a ValueError."""
+
+    monkeypatch.setenv("CASCADENCE_SCHEDULER", "bogus")
+    import importlib
+    import task_cascadence
+
+    with pytest.raises(ValueError):
+        importlib.reload(task_cascadence)
+        task_cascadence.initialize()
 
