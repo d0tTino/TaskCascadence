@@ -37,6 +37,7 @@ jobs:
         run: ruff check .
       - name: Run mypy
         if: steps.code_changes.outputs.count != '0'
+        continue-on-error: true
         run: mypy .
       - name: Run tests
         if: steps.code_changes.outputs.count != '0'

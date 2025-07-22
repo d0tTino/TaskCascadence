@@ -2,8 +2,9 @@ from task_cascadence.plugins import PointerTask
 from task_cascadence.ume.models import TaskPointer
 
 
-def test_pointer_creation_and_retrieval(monkeypatch):
+def test_pointer_creation_and_retrieval(monkeypatch, tmp_path):
     monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(tmp_path / "pointers.yml"))
     task = PointerTask()
     task.add_pointer("alice", "run1")
     task.add_pointer("bob", "run2")

@@ -200,11 +200,12 @@ version constraint is respected:
 $ pip install -e .[dev]
 ```
 
-This will install tools like ``ruff`` and ``pytest``. Run them from the project
-root to lint and test the codebase:
+This will install tools like ``ruff``, ``pytest`` and ``mypy``. Run them from
+the project root to lint, type-check and test the codebase:
 
 ```bash
 $ ruff .
+$ mypy .
 $ pytest
 ```
 

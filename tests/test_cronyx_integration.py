@@ -113,7 +113,10 @@ def test_cronyx_refresh_job(monkeypatch, tmp_path):
     importlib.reload(task_cascadence)
     task_cascadence.initialize()
 
-    sched = task_cascadence.scheduler.get_default_scheduler()
+    from typing import cast
+    from task_cascadence.scheduler import CronScheduler
+
+    sched = cast(CronScheduler, task_cascadence.scheduler.get_default_scheduler())
     job = sched.scheduler.get_job("cronyx_refresh")
     assert job is not None
 

@@ -40,7 +40,10 @@ def test_disable_cronyx_refresh(monkeypatch):
     monkeypatch.setenv("CASCADENCE_CRONYX_REFRESH", "0")
     importlib.reload(task_cascadence)
     task_cascadence.initialize()
-    sched = get_default_scheduler()
+    from typing import cast
+    from task_cascadence.scheduler import CronScheduler
+
+    sched = cast(CronScheduler, get_default_scheduler())
     assert sched.scheduler.get_job("cronyx_refresh") is None
 
 

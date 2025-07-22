@@ -11,8 +11,10 @@ def test_jobs_run_on_initialize(monkeypatch):
             executed.append(1)
 
     def fake_plugins_initialize():
-        from task_cascadence.scheduler import get_default_scheduler
-        sched = get_default_scheduler()
+        from typing import cast
+        from task_cascadence.scheduler import get_default_scheduler, CronScheduler
+
+        sched = cast(CronScheduler, get_default_scheduler())
         sched.register_task(name_or_task=DummyTask(), task_or_expr="* * * * *")
 
     monkeypatch.setattr("task_cascadence.plugins.initialize", fake_plugins_initialize)
