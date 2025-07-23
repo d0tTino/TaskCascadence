@@ -222,6 +222,20 @@ Provide a secret via the ``CASCADENCE_HASH_SECRET`` environment variable to
 salt these hashes, e.g. ``CASCADENCE_HASH_SECRET=abc123``. Omitting the
 variable hashes the plain ID.
 
+## Pointer Sync Service
+
+When tasks emit pointer updates they can be synchronized across multiple
+instances.  Run the small service in :mod:`task_cascadence.pointer_sync` to
+store updates received via the configured transport:
+
+```bash
+$ python -m task_cascadence.pointer_sync
+```
+
+The service reads the same ``UME_*`` environment variables used for event
+emission and persists incoming :class:`PointerUpdate` messages via
+``PointerStore.apply_update``.
+
 ## n8n Export
 
 Tasks registered with Cascadence can be exported as an n8n workflow using the
