@@ -13,6 +13,7 @@ from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import yaml
+from google.protobuf.timestamp_pb2 import Timestamp
 
 
 from typing import Any, Dict, Iterable, Tuple, Optional, TYPE_CHECKING
@@ -87,7 +88,8 @@ class BaseScheduler:
             @metrics.track_task(name=task.__class__.__name__)
             def runner():
                 run_id = str(uuid4())
-                started = datetime.now()
+                started = Timestamp()
+                started.FromDatetime(datetime.now())
                 status = "success"
                 try:
                     result = task.run()
@@ -95,7 +97,8 @@ class BaseScheduler:
                     status = "error"
                     raise
                 finally:
-                    finished = datetime.now()
+                    finished = Timestamp()
+                    finished.FromDatetime(datetime.now())
                     run = TaskRun(
                         spec=spec,
                         run_id=run_id,
@@ -218,7 +221,8 @@ class CronScheduler(BaseScheduler):
                 id=task.__class__.__name__, name=task.__class__.__name__
             )
             run_id = str(uuid4())
-            started = datetime.now()
+            started = Timestamp()
+            started.FromDatetime(datetime.now())
             status = "success"
             try:
                 task.run()
@@ -226,7 +230,8 @@ class CronScheduler(BaseScheduler):
                 status = "error"
                 raise
             finally:
-                finished = datetime.now()
+                finished = Timestamp()
+                finished.FromDatetime(datetime.now())
                 run = TaskRun(
                     spec=spec,
                     run_id=run_id,

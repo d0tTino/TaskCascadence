@@ -9,7 +9,7 @@ from task_cascadence.transport import (
     AsyncNatsClient,
 )
 from task_cascadence.ume import emit_task_spec
-from task_cascadence.ume.models import TaskSpec
+from task_cascadence.ume.protos.tasks_pb2 import TaskSpec
 
 
 class Stub:

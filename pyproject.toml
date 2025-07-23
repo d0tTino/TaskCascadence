@@ -31,6 +31,7 @@ dependencies = [
     "temporalio",
     "httpx<0.28",  # pinned for compatibility with temporalio
     "watchdog",
+    "protobuf",
 ]
 
 [project.scripts]

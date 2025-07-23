@@ -1,5 +1,5 @@
 from task_cascadence.plugins import PointerTask
-from task_cascadence.ume.models import TaskPointer
+from task_cascadence.ume.protos.tasks_pb2 import TaskPointer
 
 
 def test_pointer_creation_and_retrieval(monkeypatch, tmp_path):

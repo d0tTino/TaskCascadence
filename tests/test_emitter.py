@@ -1,4 +1,5 @@
 from datetime import datetime
+from google.protobuf.timestamp_pb2 import Timestamp
 import threading
 import time
 import asyncio
@@ -7,7 +8,7 @@ import pytest
 
 
 from task_cascadence.ume import emit_task_run, emit_task_spec
-from task_cascadence.ume.models import TaskRun, TaskSpec
+from task_cascadence.ume.protos.tasks_pb2 import TaskRun, TaskSpec
 
 
 class MockClient:
@@ -34,12 +35,16 @@ class SlowAsyncClient:
 def test_emit_task_run_within_deadline():
     client = MockClient()
     spec = TaskSpec(id="1", name="sample")
+    start_ts = Timestamp()
+    start_ts.FromDatetime(datetime.now())
+    end_ts = Timestamp()
+    end_ts.FromDatetime(datetime.now())
     run = TaskRun(
         spec=spec,
         run_id="run1",
         status="success",
-        started_at=datetime.now(),
-        finished_at=datetime.now(),
+        started_at=start_ts,
+        finished_at=end_ts,
     )
 
     start = time.monotonic()
@@ -73,12 +78,16 @@ class SlowClient:
 def test_emit_timeout_no_lingering_threads():
     client = SlowClient()
     spec = TaskSpec(id="3", name="timeout")
+    start_ts = Timestamp()
+    start_ts.FromDatetime(datetime.now())
+    end_ts = Timestamp()
+    end_ts.FromDatetime(datetime.now())
     run = TaskRun(
         spec=spec,
         run_id="run3",
         status="success",
-        started_at=datetime.now(),
-        finished_at=datetime.now(),
+        started_at=start_ts,
+        finished_at=end_ts,
     )
 
     before = threading.active_count()
@@ -106,12 +115,16 @@ def test_emit_timeout_elapsed(monkeypatch):
 def test_async_emit_task_spec_and_run():
     client = AsyncMockClient()
     spec = TaskSpec(id="5", name="async")
+    start_ts = Timestamp()
+    start_ts.FromDatetime(datetime.now())
+    end_ts = Timestamp()
+    end_ts.FromDatetime(datetime.now())
     run = TaskRun(
         spec=spec,
         run_id="rasync",
         status="ok",
-        started_at=datetime.now(),
-        finished_at=datetime.now(),
+        started_at=start_ts,
+        finished_at=end_ts,
     )
 
     async def runner():

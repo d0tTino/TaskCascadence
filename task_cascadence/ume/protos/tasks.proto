@@ -1,0 +1,31 @@
+syntax = "proto3";
+package task_cascadence.ume.protos;
+
+import "google/protobuf/timestamp.proto";
+
+message TaskSpec {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string user_hash = 4;
+}
+
+message TaskRun {
+  TaskSpec spec = 1;
+  string run_id = 2;
+  string status = 3;
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp finished_at = 5;
+  string user_hash = 6;
+}
+
+message TaskPointer {
+  string run_id = 1;
+  string user_hash = 2;
+}
+
+message PointerUpdate {
+  string task_name = 1;
+  string run_id = 2;
+  string user_hash = 3;
+}

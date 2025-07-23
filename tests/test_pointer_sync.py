@@ -3,7 +3,7 @@ from typer.testing import CliRunner
 
 from task_cascadence.pointer_store import PointerStore
 from task_cascadence.cli import app
-from task_cascadence.ume.models import PointerUpdate
+from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
 
 
 def test_pointer_store_emits(monkeypatch, tmp_path):
