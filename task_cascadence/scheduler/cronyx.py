@@ -52,7 +52,11 @@ class CronyxScheduler(BaseScheduler):
         use_temporal: bool | None = None,
         user_id: str | None = None,
     ) -> Any:
-        if name in self._tasks and not self._tasks[name]["disabled"]:
+        if (
+            name in self._tasks
+            and not self._tasks[name]["disabled"]
+            and not self._tasks[name].get("paused")
+        ):
             return super().run_task(name, use_temporal=use_temporal, user_id=user_id)
         payload = {"task": name}
         if user_id is not None:

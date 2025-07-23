@@ -142,6 +142,30 @@ def disable_task(name: str) -> None:
         raise typer.Exit(code=1) from exc
 
 
+@app.command("pause")
+def pause_task(name: str) -> None:
+    """Pause ``NAME`` so it temporarily stops running."""
+
+    try:
+        get_default_scheduler().pause_task(name)
+        typer.echo(f"{name} paused")
+    except Exception as exc:  # pragma: no cover - simple error propagation
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
+@app.command("resume")
+def resume_task(name: str) -> None:
+    """Resume a paused task called ``NAME``."""
+
+    try:
+        get_default_scheduler().resume_task(name)
+        typer.echo(f"{name} resumed")
+    except Exception as exc:  # pragma: no cover - simple error propagation
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
 @app.command("schedule")
 def schedule_task(
     name: str,
