@@ -14,12 +14,17 @@ class _ReloadHandler(FileSystemEventHandler):
 
     def __init__(self) -> None:
         self._last: tuple[str | None, float] = (None, 0.0)
+        self._ignore = True
 
     def on_any_event(self, event):  # pragma: no cover - simple passthrough
         if event.is_directory:
             return
 
         now = time.monotonic()
+        if self._ignore:
+            self._ignore = False
+            self._last = (event.src_path, now)
+            return
         path, last = self._last
         if event.src_path == path and now - last < 1:
             return

@@ -13,6 +13,7 @@ from . import plugins  # noqa: F401
 from . import ume  # noqa: F401
 from . import metrics  # noqa: F401
 from . import temporal  # noqa: F401
+from . import research  # noqa: F401
 from .config import load_config
 from apscheduler.triggers.cron import CronTrigger
 
@@ -57,6 +58,7 @@ __all__ = [
     "api",
     "metrics",
     "temporal",
+    "research",
     "initialize",
     "create_scheduler",
     "TemporalScheduler",

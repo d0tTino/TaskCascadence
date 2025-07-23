@@ -11,6 +11,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 
 from .ume import emit_task_spec, emit_task_run, emit_stage_update
 from .ume.models import TaskRun, TaskSpec
+from . import research
 
 
 @dataclass
@@ -35,6 +36,15 @@ class TaskPipeline:
         if hasattr(self.task, "intake"):
             self.task.intake()
         self._emit_stage("intake", user_id)
+
+    def research(self, *, user_id: str | None = None) -> Any:
+        """Perform optional research for the task."""
+        if hasattr(self.task, "research"):
+            query = self.task.research()
+            result = research.gather(query)
+            self._emit_stage("research", user_id)
+            return result
+        return None
 
     def plan(self, *, user_id: str | None = None) -> Any:
         plan_result = None
@@ -79,6 +89,7 @@ class TaskPipeline:
     # ------------------------------------------------------------------
     def run(self, *, user_id: str | None = None) -> Any:
         self.intake(user_id=user_id)
+        self.research(user_id=user_id)
         plan_result = self.plan(user_id=user_id)
         exec_result = self.execute(plan_result, user_id=user_id)
         return self.verify(exec_result, user_id=user_id)
