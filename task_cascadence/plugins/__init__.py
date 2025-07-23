@@ -204,6 +204,7 @@ def reload_plugins() -> None:
     from importlib import reload, invalidate_caches
     import task_cascadence
     from .. import scheduler as _scheduler
+    from ..config import load_config
 
     for task in registered_tasks.values():
         mod = task.__class__.__module__
@@ -212,7 +213,9 @@ def reload_plugins() -> None:
 
     invalidate_caches()
     _scheduler._default_scheduler = None  # reset singleton
-    _scheduler.set_default_scheduler(_scheduler.CronScheduler())
+    cfg = load_config()
+    sched = _scheduler.create_scheduler(cfg["backend"])
+    _scheduler.set_default_scheduler(sched)
     reload(sys.modules[__name__])
     task_cascadence.initialize()
 

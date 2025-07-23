@@ -136,3 +136,30 @@ def test_plugin_watcher_stop_stops_thread(tmp_path):
     finally:
         watcher.stop()
     assert not watcher._observer.is_alive()
+
+
+def test_scheduler_type_preserved_on_reload(tmp_path, monkeypatch):
+    setup_plugin(tmp_path, monkeypatch, PLUGIN_V1)
+
+    from task_cascadence import scheduler
+
+    def _reload():
+        from importlib import reload, invalidate_caches
+        invalidate_caches()
+        reload(sys.modules["plug"])  # reload plugin module
+        scheduler.set_default_scheduler(scheduler.CronScheduler())
+        pl.initialize()
+
+    monkeypatch.setattr(pl, "reload_plugins", _reload)
+    monkeypatch.setattr("task_cascadence.plugins.watcher.reload_plugins", _reload)
+
+    from task_cascadence import initialize
+    initialize()
+
+    before_type = type(scheduler.get_default_scheduler())
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["reload-plugins"])
+
+    assert result.exit_code == 0
+    assert type(scheduler.get_default_scheduler()) is before_type
