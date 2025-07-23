@@ -44,7 +44,7 @@ class BaseScheduler:
     def register_task(self, name: str, task: Any) -> None:
         """Register a task object under ``name``."""
 
-        self._tasks[name] = {"task": task, "disabled": False}
+        self._tasks[name] = {"task": task, "disabled": False, "paused": False}
 
     # ------------------------------------------------------------------
     # Query helpers
@@ -68,6 +68,8 @@ class BaseScheduler:
             raise ValueError(f"Unknown task: {name}")
         if info["disabled"]:
             raise ValueError(f"Task '{name}' is disabled")
+        if info.get("paused"):
+            raise ValueError(f"Task '{name}' is paused")
         task = info["task"]
 
         if (use_temporal or (use_temporal is None and self._temporal)):
@@ -125,6 +127,20 @@ class BaseScheduler:
         if name not in self._tasks:
             raise ValueError(f"Unknown task: {name}")
         self._tasks[name]["disabled"] = True
+
+    def pause_task(self, name: str) -> None:
+        """Temporarily pause a registered task."""
+
+        if name not in self._tasks:
+            raise ValueError(f"Unknown task: {name}")
+        self._tasks[name]["paused"] = True
+
+    def resume_task(self, name: str) -> None:
+        """Resume a previously paused task."""
+
+        if name not in self._tasks:
+            raise ValueError(f"Unknown task: {name}")
+        self._tasks[name]["paused"] = False
 
 
 class TemporalScheduler(BaseScheduler):
@@ -211,6 +227,9 @@ class CronScheduler(BaseScheduler):
     def _wrap_task(self, task, user_id: str | None = None):
         @metrics.track_task(name=task.__class__.__name__)
         def runner():
+            info = self._tasks.get(task.__class__.__name__)
+            if info and info.get("paused"):
+                return
             from datetime import datetime
             from uuid import uuid4
 

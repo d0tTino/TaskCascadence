@@ -126,6 +126,9 @@ class DagCronScheduler(CronScheduler):
 
     def _wrap_task(self, task: Any, user_id: str | None = None):
         def runner():
+            info = self._tasks.get(task.__class__.__name__)
+            if info and info.get("paused"):
+                return
             self.run_task(task.__class__.__name__, user_id=user_id)
 
         return runner
