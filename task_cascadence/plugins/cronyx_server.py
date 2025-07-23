@@ -1,8 +1,11 @@
 from typing import Any
 
+import logging
 import requests
 
 from ..http_utils import request_with_retry
+
+logger = logging.getLogger(__name__)
 
 
 class CronyxServerLoader:
@@ -37,7 +40,7 @@ class CronyxServerLoader:
                 backoff_factor=self.backoff_factor,
             )
         except (requests.ConnectionError, requests.Timeout) as exc:
-            print(f"Failed to reach CronyxServer at {url}: {exc}")
+            logger.warning("Failed to reach CronyxServer at %s: %s", url, exc)
             return None
         return response.json()
 
