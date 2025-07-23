@@ -350,6 +350,9 @@ def create_scheduler(backend: str) -> BaseScheduler:
     if backend == "cronyx":
         from .cronyx import CronyxScheduler
         return CronyxScheduler()
+    if backend == "dag":
+        from .dag import DagCronScheduler
+        return DagCronScheduler()
     raise ValueError(f"Unknown scheduler backend: {backend}")
 
 

@@ -115,6 +115,41 @@ When a new ``CronScheduler`` instance starts it reads this file and re-creates
 any jobs for which task objects are supplied via the ``tasks`` argument.  This
 allows scheduled tasks to survive process restarts.
 
+## Task DAGs
+
+``DagCronScheduler`` extends the cron backend with support for task
+dependencies.  Tasks can declare prerequisite task names which are executed in
+topological order before the task itself.
+
+```python
+from task_cascadence.scheduler.dag import DagCronScheduler
+from task_cascadence.plugins import CronTask
+
+
+class Extract(CronTask):
+    def run(self):
+        print("extract")
+
+
+class Transform(CronTask):
+    def run(self):
+        print("transform")
+
+
+class Load(CronTask):
+    def run(self):
+        print("load")
+
+
+sched = DagCronScheduler()
+sched.register_task(Extract(), "0 * * * *")
+sched.register_task(Transform(), "5 * * * *", dependencies=["Extract"])
+sched.register_task(Load(), "10 * * * *", dependencies=["Transform"])
+```
+
+Running ``Load`` via ``sched.run_task("Load")`` first executes ``Extract`` and
+``Transform`` before ``Load``.
+
 ## Scheduler Backend
 
 ``task_cascadence.initialize`` reads configuration to decide which scheduler
