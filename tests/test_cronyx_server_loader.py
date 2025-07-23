@@ -1,5 +1,6 @@
 import pytest
 import requests
+import logging
 
 from task_cascadence.plugins.cronyx_server import CronyxServerLoader
 
@@ -61,7 +62,7 @@ def test_loader_retries(monkeypatch):
     assert failing.calls == 3
 
 
-def test_loader_connection_error(monkeypatch):
+def test_loader_connection_error(monkeypatch, caplog):
     def fail(*args, **kwargs):
         raise requests.ConnectionError("boom")
 
@@ -71,8 +72,13 @@ def test_loader_connection_error(monkeypatch):
         fail,
     )
 
-    assert loader.list_tasks() == []
-    assert loader.load_task("42") == {}
+    with caplog.at_level(logging.WARNING):
+        assert loader.list_tasks() == []
+        assert loader.load_task("42") == {}
+
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("Failed to reach CronyxServer" in m for m in messages)
+    assert sum("Failed to reach CronyxServer" in m for m in messages) == 2
 
 
 def test_loader_timeout_from_env(monkeypatch):
