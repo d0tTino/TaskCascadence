@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import FastAPI, Depends, HTTPException, Header
 
 from ..scheduler import get_default_scheduler, CronScheduler
+from ..stage_store import StageStore
 
 app = FastAPI()
 
@@ -69,4 +70,42 @@ def disable_task(name: str):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-__all__ = ["app", "list_tasks", "run_task", "schedule_task", "disable_task"]
+@app.post("/tasks/{name}/pause")
+def pause_task(name: str):
+    """Pause ``name`` so it temporarily stops running."""
+    sched = get_default_scheduler()
+    try:
+        sched.pause_task(name)
+        return {"status": "paused"}
+    except Exception as exc:  # pragma: no cover - passthrough
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/tasks/{name}/resume")
+def resume_task(name: str):
+    """Resume a previously paused task."""
+    sched = get_default_scheduler()
+    try:
+        sched.resume_task(name)
+        return {"status": "resumed"}
+    except Exception as exc:  # pragma: no cover - passthrough
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/pipeline/{name}")
+def pipeline_status(name: str):
+    """Return stored pipeline stage events for ``name``."""
+    store = StageStore()
+    return store.get_events(name)
+
+
+__all__ = [
+    "app",
+    "list_tasks",
+    "run_task",
+    "schedule_task",
+    "disable_task",
+    "pause_task",
+    "resume_task",
+    "pipeline_status",
+]
