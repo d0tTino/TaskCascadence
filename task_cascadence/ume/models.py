@@ -1,44 +1,21 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime
-from typing import Optional
+from .protos import tasks_pb2
 
 
-@dataclass
-class TaskSpec:
-    """Definition of a task to be executed."""
-
-    id: str
-    name: str
-    description: Optional[str] = None
-    user_hash: Optional[str] = None
+TaskSpec = tasks_pb2.TaskSpec
+"""Definition of a task to be executed."""
 
 
-@dataclass
-class TaskRun:
-    """Metadata about a specific execution of a task."""
-
-    spec: TaskSpec
-    run_id: str
-    status: str
-    started_at: datetime
-    finished_at: datetime
-    user_hash: Optional[str] = None
+TaskRun = tasks_pb2.TaskRun
+"""Metadata about a specific execution of a task."""
 
 
-@dataclass
-class TaskPointer:
-    """Reference to another user's task run."""
-
-    run_id: str
-    user_hash: str
+TaskPointer = tasks_pb2.TaskPointer
+"""Reference to another user's task run."""
 
 
-@dataclass
-class PointerUpdate:
-    """Pointer synchronization message."""
+PointerUpdate = tasks_pb2.PointerUpdate
+"""Pointer synchronization message."""
 
-    task_name: str
-    run_id: str
-    user_hash: str
+__all__ = ["TaskSpec", "TaskRun", "TaskPointer", "PointerUpdate"]

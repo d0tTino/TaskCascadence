@@ -1,7 +1,8 @@
 from datetime import datetime
+from google.protobuf.timestamp_pb2 import Timestamp
 
 from task_cascadence.ume import emit_task_spec, emit_task_run, _hash_user_id
-from task_cascadence.ume.models import TaskSpec, TaskRun
+from task_cascadence.ume.protos.tasks_pb2 import TaskSpec, TaskRun
 
 
 class Collector:
@@ -26,12 +27,16 @@ def test_spec_user_hashes_unique():
 def test_run_user_hash_not_raw():
     client = Collector()
     spec = TaskSpec(id="3", name="c")
+    start_ts = Timestamp()
+    start_ts.FromDatetime(datetime.now())
+    end_ts = Timestamp()
+    end_ts.FromDatetime(datetime.now())
     run = TaskRun(
         spec=spec,
         run_id="r1",
         status="ok",
-        started_at=datetime.now(),
-        finished_at=datetime.now(),
+        started_at=start_ts,
+        finished_at=end_ts,
     )
     emit_task_run(run, client, user_id="alice")
     assert client.events[0].user_hash != "alice"

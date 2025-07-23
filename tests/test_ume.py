@@ -1,9 +1,10 @@
 import time
 
 from datetime import datetime
+from google.protobuf.timestamp_pb2 import Timestamp
 
 from task_cascadence import ume
-from task_cascadence.ume.models import TaskRun, TaskSpec
+from task_cascadence.ume.protos.tasks_pb2 import TaskRun, TaskSpec
 
 
 def test_ume_emission_order(monkeypatch):
@@ -21,12 +22,16 @@ def test_ume_emission_order(monkeypatch):
     spec = TaskSpec(id="1", name="test")
     ume.emit_task_spec(spec)
     time.sleep(0.01)
+    start_ts = Timestamp()
+    start_ts.FromDatetime(datetime.now())
+    end_ts = Timestamp()
+    end_ts.FromDatetime(datetime.now())
     run = TaskRun(
         spec=spec,
         run_id="run1",
         status="success",
-        started_at=datetime.now(),
-        finished_at=datetime.now(),
+        started_at=start_ts,
+        finished_at=end_ts,
     )
     ume.emit_task_run(run)
 

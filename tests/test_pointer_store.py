@@ -51,7 +51,7 @@ def test_apply_update_deduplicates(monkeypatch, tmp_path):
     monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
     path = tmp_path / "pointers.yml"
     store = PointerStore(path=path)
-    from task_cascadence.ume.models import PointerUpdate
+    from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
 
     update = PointerUpdate(
         task_name="t", run_id="r1", user_hash=_hash_user_id("alice")
