@@ -43,6 +43,8 @@ class PluginWatcher:
         """Start watching the directory."""
         self._observer.schedule(self._handler, str(self.path), recursive=True)
         self._observer.start()
+        # Ensure the first modification triggers a reload when using polling
+        self._handler._ignore = False
 
     def stop(self) -> None:
         """Stop watching."""
