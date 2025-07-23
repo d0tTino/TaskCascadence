@@ -37,7 +37,11 @@ class PointerStore:
     def add_pointer(self, task_name: str, user_id: str, run_id: str) -> None:
         user_hash = _hash_user_id(user_id)
         entry = {"run_id": run_id, "user_hash": user_hash}
-        self._data.setdefault(task_name, []).append(entry)
+        pointers = self._data.setdefault(task_name, [])
+        if any(e == entry for e in pointers):
+            return
+
+        pointers.append(entry)
         self._save()
         try:
             emit_pointer_update(
@@ -48,7 +52,11 @@ class PointerStore:
 
     def apply_update(self, update: PointerUpdate) -> None:
         entry = {"run_id": update.run_id, "user_hash": update.user_hash}
-        self._data.setdefault(update.task_name, []).append(entry)
+        pointers = self._data.setdefault(update.task_name, [])
+        if any(e == entry for e in pointers):
+            return
+
+        pointers.append(entry)
         self._save()
 
     def get_pointers(self, task_name: str) -> List[Dict[str, Any]]:

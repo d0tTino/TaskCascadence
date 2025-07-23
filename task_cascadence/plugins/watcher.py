@@ -4,6 +4,7 @@ from pathlib import Path
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers.polling import PollingObserver as Observer
+import time
 
 from . import reload_plugins
 
@@ -11,9 +12,19 @@ from . import reload_plugins
 class _ReloadHandler(FileSystemEventHandler):
     """Internal handler that reloads plugins on any file change."""
 
+    def __init__(self) -> None:
+        self._last: tuple[str | None, float] = (None, 0.0)
+
     def on_any_event(self, event):  # pragma: no cover - simple passthrough
         if event.is_directory:
             return
+
+        now = time.monotonic()
+        path, last = self._last
+        if event.src_path == path and now - last < 1:
+            return
+
+        self._last = (event.src_path, now)
         reload_plugins()
 
 
