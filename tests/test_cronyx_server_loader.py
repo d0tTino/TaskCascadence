@@ -76,9 +76,9 @@ def test_loader_connection_error(monkeypatch, caplog):
         assert loader.list_tasks() == []
         assert loader.load_task("42") == {}
 
-    messages = [r.getMessage() for r in caplog.records]
-    assert any("Failed to reach CronyxServer" in m for m in messages)
-    assert sum("Failed to reach CronyxServer" in m for m in messages) == 2
+    records = [r for r in caplog.records if "Failed to reach CronyxServer" in r.getMessage()]
+    assert len(records) == 2
+    assert all(r.levelno >= logging.WARNING for r in records)
 
 
 def test_loader_timeout_from_env(monkeypatch):
