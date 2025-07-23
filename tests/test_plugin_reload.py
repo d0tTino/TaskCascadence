@@ -163,3 +163,59 @@ def test_scheduler_type_preserved_on_reload(tmp_path, monkeypatch):
 
     assert result.exit_code == 0
     assert type(scheduler.get_default_scheduler()) is before_type
+
+
+def test_reload_preserves_temporal_scheduler(monkeypatch):
+    monkeypatch.setenv("CASCADENCE_SCHEDULER", "temporal")
+    monkeypatch.setenv("TEMPORAL_SERVER", "local:7233")
+
+    import importlib
+    import task_cascadence
+
+    importlib.reload(task_cascadence)
+    task_cascadence.initialize()
+
+    from task_cascadence import scheduler
+
+    before_type = type(scheduler.get_default_scheduler())
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["reload-plugins"])
+
+    assert result.exit_code == 0
+    assert type(scheduler.get_default_scheduler()) is before_type
+
+
+def test_reload_preserves_cronyx_scheduler(monkeypatch):
+    monkeypatch.setenv("CASCADENCE_SCHEDULER", "cronyx")
+    monkeypatch.setenv("CRONYX_BASE_URL", "http://server")
+    monkeypatch.setattr(pl, "load_cronyx_plugins", lambda url: None)
+
+    class DummyResp:
+        def __init__(self, data: dict):
+            self.data = data
+
+        def raise_for_status(self) -> None:
+            pass
+
+        def json(self) -> dict:
+            return self.data
+
+    import requests
+    monkeypatch.setattr(requests, "request", lambda *a, **k: DummyResp({}))
+
+    import importlib
+    import task_cascadence
+
+    importlib.reload(task_cascadence)
+    task_cascadence.initialize()
+
+    from task_cascadence import scheduler
+
+    before_type = type(scheduler.get_default_scheduler())
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["reload-plugins"])
+
+    assert result.exit_code == 0
+    assert type(scheduler.get_default_scheduler()) is before_type
