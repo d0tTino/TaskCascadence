@@ -107,9 +107,14 @@ def run_task(
 ) -> None:
     """Run ``NAME`` if it exists and is enabled."""
 
+    from ..ume import emit_stage_update
+
     try:
+        emit_stage_update(name, "start", user_id=user_id)
         get_default_scheduler().run_task(name, use_temporal=temporal, user_id=user_id)
+        emit_stage_update(name, "finish", user_id=user_id)
     except Exception as exc:  # pragma: no cover - simple error propagation
+        emit_stage_update(name, "error", user_id=user_id)
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
