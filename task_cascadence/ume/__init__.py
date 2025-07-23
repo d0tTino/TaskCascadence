@@ -11,14 +11,31 @@ from ..config import load_config
 
 from ..transport import BaseTransport, AsyncBaseTransport, get_client
 from .models import TaskRun, TaskSpec, PointerUpdate
+from ..stage_store import StageStore
 
 
 _default_client: BaseTransport | AsyncBaseTransport | None = None
+_stage_store: StageStore | None = None
 
 
 def _hash_user_id(user_id: str) -> str:
     secret = load_config().get("hash_secret", "")
     return hashlib.sha256((secret + user_id).encode()).hexdigest()
+
+
+def _get_stage_store() -> StageStore:
+    global _stage_store
+    if _stage_store is None:
+        _stage_store = StageStore()
+    return _stage_store
+
+
+def emit_stage_update(task_name: str, stage: str, user_id: str | None = None) -> None:
+    """Persist a pipeline stage event via :class:`StageStore`."""
+
+    store = _get_stage_store()
+    user_hash = _hash_user_id(user_id) if user_id is not None else None
+    store.add_event(task_name, stage, user_hash)
 
 
 def configure_transport(transport: str, **kwargs: Any) -> None:

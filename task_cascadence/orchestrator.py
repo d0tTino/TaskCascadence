@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from .ume import emit_task_spec, emit_task_run
+from .ume import emit_task_spec, emit_task_run, emit_stage_update
 from .ume.models import TaskRun, TaskSpec
 
 
@@ -29,6 +29,7 @@ class TaskPipeline:
             description=stage,
         )
         emit_task_spec(spec, user_id=user_id)
+        emit_stage_update(self.task.__class__.__name__, stage, user_id=user_id)
 
     def intake(self, *, user_id: str | None = None) -> None:
         if hasattr(self.task, "intake"):
@@ -48,6 +49,7 @@ class TaskPipeline:
         status = "success"
         try:
             result = self._call_run(plan_result)
+            emit_stage_update(self.task.__class__.__name__, "run", user_id=user_id)
         except Exception:
             status = "error"
             raise
