@@ -34,3 +34,31 @@ def test_get_pointers_persist(monkeypatch, tmp_path):
         {"run_id": "r1", "user_hash": _hash_user_id("alice")}
     ]
 
+
+def test_add_pointer_deduplicates(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    path = tmp_path / "pointers.yml"
+    store = PointerStore(path=path)
+
+    store.add_pointer("t", "alice", "r1")
+    store.add_pointer("t", "alice", "r1")
+
+    data = yaml.safe_load(path.read_text())
+    assert data["t"] == [{"run_id": "r1", "user_hash": _hash_user_id("alice")}] 
+
+
+def test_apply_update_deduplicates(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    path = tmp_path / "pointers.yml"
+    store = PointerStore(path=path)
+    from task_cascadence.ume.models import PointerUpdate
+
+    update = PointerUpdate(
+        task_name="t", run_id="r1", user_hash=_hash_user_id("alice")
+    )
+    store.apply_update(update)
+    store.apply_update(update)
+
+    data = yaml.safe_load(path.read_text())
+    assert data["t"] == [{"run_id": "r1", "user_hash": _hash_user_id("alice")}] 
+
