@@ -7,6 +7,8 @@ from datetime import datetime, timezone
 
 import yaml
 
+from .config import load_config
+
 
 class StageStore:
     """Persistent store for pipeline stage events."""
@@ -14,6 +16,9 @@ class StageStore:
     def __init__(self, path: str | Path | None = None) -> None:
         if path is None:
             path = os.getenv("CASCADENCE_STAGES_PATH")
+        if path is None:
+            cfg = load_config()
+            path = cfg.get("stages_path")
         if path is None:
             path = Path.home() / ".cascadence" / "stages.yml"
         self.path = Path(path)
