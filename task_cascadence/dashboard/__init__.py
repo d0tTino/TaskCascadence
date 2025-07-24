@@ -5,6 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..scheduler import get_default_scheduler
 from ..stage_store import StageStore
+from ..pointer_store import PointerStore
 
 app = FastAPI()
 
@@ -17,6 +18,7 @@ def _get_event(store: StageStore, task_name: str) -> dict | None:
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request) -> HTMLResponse:
     store = StageStore()
+    p_store = PointerStore()
     sched = get_default_scheduler()
     rows = []
     for name, info in sched._tasks.items():
@@ -24,6 +26,7 @@ def dashboard(request: Request) -> HTMLResponse:
         stage = event["stage"] if event else None
         ts = event.get("time") if event else None
         paused = info.get("paused", False)
+        ptrs = len(p_store.get_pointers(name))
         button = (
             f"<form method='post' action='/resume/{name}'>"
             "<button type='submit'>Resume</button></form>"
@@ -35,13 +38,13 @@ def dashboard(request: Request) -> HTMLResponse:
         )
         status = "paused" if paused else "running"
         rows.append(
-            f"<tr><td>{name}</td><td>{stage or ''}</td><td>{ts or ''}</td><td>{status}</td><td>{button}</td></tr>"
+            f"<tr><td>{name}</td><td>{stage or ''}</td><td>{ts or ''}</td><td>{status}</td><td>{ptrs}</td><td>{button}</td></tr>"
         )
     body = """
     <html><body>
     <h1>Cascadence Dashboard</h1>
     <table>
-    <tr><th>Task</th><th>Stage</th><th>Time</th><th>Status</th><th>Control</th></tr>
+    <tr><th>Task</th><th>Stage</th><th>Time</th><th>Status</th><th>Pointers</th><th>Control</th></tr>
     {rows}
     </table>
     </body></html>
