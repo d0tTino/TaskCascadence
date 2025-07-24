@@ -8,6 +8,7 @@ import yaml
 
 from .ume import _hash_user_id, emit_pointer_update
 from .ume.models import PointerUpdate
+from .config import load_config
 
 
 class PointerStore:
@@ -16,6 +17,9 @@ class PointerStore:
     def __init__(self, path: str | Path | None = None) -> None:
         if path is None:
             path = os.getenv("CASCADENCE_POINTERS_PATH")
+        if path is None:
+            cfg = load_config()
+            path = cfg.get("pointers_path")
         if path is None:
             path = Path.home() / ".cascadence" / "pointers.yml"
         self.path = Path(path)
