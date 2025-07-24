@@ -208,6 +208,8 @@ and Cascadence will fetch and register any advertised tasks on startup. Example
 plugin source for Python, Rust and Go lives in the ``examples/`` directory.
 See the [Go plugin README](examples/go_plugin/README.md) and
 [Rust plugin README](examples/rust_plugin/README.md) for build instructions.
+The ``examples/orchestrated_mod_setup.py`` script demonstrates a staged mod
+installation workflow that can be paused and resumed.
 
 To try the Python demo plugin install it in editable mode and list the
 available tasks:

@@ -10,13 +10,13 @@ from . import reload_plugins
 
 
 class _ReloadHandler(FileSystemEventHandler):
-    """Internal handler that reloads plugins on any file change."""
+    """Internal handler that reloads plugins on file modifications."""
 
     def __init__(self) -> None:
         self._last: tuple[str | None, float] = (None, 0.0)
         self._start = time.monotonic()
 
-    def on_any_event(self, event):  # pragma: no cover - simple passthrough
+    def on_modified(self, event):  # pragma: no cover - simple passthrough
         if event.is_directory:
             return
 
