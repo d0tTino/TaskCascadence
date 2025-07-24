@@ -1,76 +1,53 @@
-import yaml
-from fastapi.testclient import TestClient
-
 from task_cascadence.api import app
 from task_cascadence.scheduler import BaseScheduler
 from task_cascadence.plugins import PointerTask
+from task_cascadence.ume import _hash_user_id
+from fastapi.testclient import TestClient
+import tempfile
+import yaml
 
 
 class DemoPointer(PointerTask):
     name = "demo_pointer"
 
 
-def setup_scheduler(monkeypatch, tmp_path):
+def setup_scheduler(monkeypatch):
     sched = BaseScheduler()
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", tmp.name)
     task = DemoPointer()
     sched.register_task("demo_pointer", task)
     monkeypatch.setattr("task_cascadence.api.get_default_scheduler", lambda: sched)
-    return sched, task
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+    return sched, task, tmp.name
 
 
-def test_api_pointer_add_and_list(monkeypatch, tmp_path):
-    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
-    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(tmp_path / "pointers.yml"))
-
-    sched, _task = setup_scheduler(monkeypatch, tmp_path)
+def test_pointer_add_and_list(monkeypatch):
+    sched, task, store = setup_scheduler(monkeypatch)
     client = TestClient(app)
-
-    resp = client.post(
-        "/pointers/demo_pointer/add",
-        params={"user_id": "alice", "run_id": "run1"},
-    )
+    resp = client.post("/pointers/demo_pointer", params={"user_id": "alice", "run_id": "r1"})
     assert resp.status_code == 200
+    assert resp.json() == {"status": "added"}
+
 
     resp = client.get("/pointers/demo_pointer")
     assert resp.status_code == 200
     data = resp.json()
-
-    stored = yaml.safe_load((tmp_path / "pointers.yml").read_text())
-    user_hash = stored["demo_pointer"][0]["user_hash"]
-    assert user_hash != "alice"
-    assert data == [{"run_id": "run1", "user_hash": user_hash}]
+    assert data == [{"run_id": "r1", "user_hash": _hash_user_id("alice")}] 
+    assert task.get_pointers()[0].run_id == "r1"
 
 
-def test_api_pointer_send(monkeypatch):
-    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
-    sent = {}
-
-    def fake_emit(update):
-        sent["update"] = update
-
-    monkeypatch.setattr("task_cascadence.api.emit_pointer_update", fake_emit)
+def test_pointer_receive(monkeypatch):
+    sched, task, store_path = setup_scheduler(monkeypatch)
     client = TestClient(app)
-
-    resp = client.post(
-        "/pointers/demo_pointer/send",
-        params={"user_id": "alice", "run_id": "r1"},
-    )
-    assert resp.status_code == 200
-    update = sent["update"]
-    assert update.task_name == "demo_pointer"
-    assert update.run_id == "r1"
-    assert update.user_hash != "alice"
-
-
-def test_api_pointer_receive(monkeypatch, tmp_path):
-    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(tmp_path / "pointers.yml"))
-
-    client = TestClient(app)
+    user_hash = _hash_user_id("bob")
     resp = client.post(
         "/pointers/demo_pointer/receive",
-        params={"run_id": "r2", "user_hash": "xyz"},
+        params={"run_id": "r2", "user_hash": user_hash},
     )
     assert resp.status_code == 200
+    assert resp.json() == {"status": "stored"}
 
-    data = yaml.safe_load((tmp_path / "pointers.yml").read_text())
-    assert data["demo_pointer"][0] == {"run_id": "r2", "user_hash": "xyz"}
+    data = yaml.safe_load(open(store_path).read())
+    assert data["demo_pointer"] == [{"run_id": "r2", "user_hash": user_hash}]
+

@@ -259,34 +259,48 @@ def reload_plugins_cmd() -> None:
     typer.echo("plugins reloaded")
 
 
+def _pointer_add(name: str, user_id: str, run_id: str) -> None:
+    sched = get_default_scheduler()
+    task_info = dict(sched._tasks).get(name)
+    if not task_info or not isinstance(task_info["task"], plugins.PointerTask):
+        raise ValueError(f"'{name}' is not a pointer task")
+
+    task: plugins.PointerTask = task_info["task"]
+    task.add_pointer(user_id, run_id)
+
+
 @app.command("pointer-add")
 def pointer_add(name: str, user_id: str, run_id: str) -> None:
     """Add a pointer to ``NAME`` for ``USER_ID`` and ``RUN_ID``."""
 
+    try:
+        _pointer_add(name, user_id, run_id)
+        typer.echo("pointer added")
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _pointer_list(name: str) -> list[dict[str, str]]:
     sched = get_default_scheduler()
     task_info = dict(sched._tasks).get(name)
     if not task_info or not isinstance(task_info["task"], plugins.PointerTask):
-        typer.echo(f"error: '{name}' is not a pointer task", err=True)
-        raise typer.Exit(code=1)
+        raise ValueError(f"'{name}' is not a pointer task")
 
-    task: plugins.PointerTask = task_info["task"]
-    task.add_pointer(user_id, run_id)
-    typer.echo("pointer added")
+    store = PointerStore()
+    return store.get_pointers(name)
 
 
 @app.command("pointer-list")
 def pointer_list(name: str) -> None:
     """List pointers for ``NAME``."""
 
-    sched = get_default_scheduler()
-    task_info = dict(sched._tasks).get(name)
-    if not task_info or not isinstance(task_info["task"], plugins.PointerTask):
-        typer.echo(f"error: '{name}' is not a pointer task", err=True)
-        raise typer.Exit(code=1)
-
-    store = PointerStore()
-    for entry in store.get_pointers(name):
-        typer.echo(f"{entry['run_id']}\t{entry['user_hash']}")
+    try:
+        for entry in _pointer_list(name):
+            typer.echo(f"{entry['run_id']}\t{entry['user_hash']}")
+    except ValueError as exc:
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
 
 
 @app.command("pointer-send")
@@ -303,14 +317,18 @@ def pointer_send(name: str, user_id: str, run_id: str) -> None:
     typer.echo("pointer sent")
 
 
-@app.command("pointer-receive")
-def pointer_receive(name: str, run_id: str, user_hash: str) -> None:
-    """Store a received pointer update."""
-
+def _pointer_receive(name: str, run_id: str, user_hash: str) -> None:
     store = PointerStore()
     from ..ume.models import PointerUpdate
 
     store.apply_update(PointerUpdate(task_name=name, run_id=run_id, user_hash=user_hash))
+
+
+@app.command("pointer-receive")
+def pointer_receive(name: str, run_id: str, user_hash: str) -> None:
+    """Store a received pointer update."""
+
+    _pointer_receive(name, run_id, user_hash)
     typer.echo("pointer stored")
 
 

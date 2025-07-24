@@ -4,6 +4,7 @@ from fastapi import FastAPI, Depends, HTTPException, Header
 
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
+from ..cli import _pointer_add, _pointer_list, _pointer_receive
 from ..pointer_store import PointerStore
 from ..plugins import PointerTask
 from ..ume import emit_pointer_update, _hash_user_id
@@ -103,47 +104,34 @@ def pipeline_status(name: str):
     return store.get_events(name)
 
 
-@app.post("/pointers/{name}/add")
-def pointer_add(name: str, user_id: str, run_id: str) -> dict[str, str]:
+@app.post("/pointers/{name}")
+def pointer_add(name: str, user_id: str, run_id: str):
     """Add a pointer for ``name``."""
 
-    sched = get_default_scheduler()
-    task_info = dict(sched._tasks).get(name)
-    if not task_info or not isinstance(task_info["task"], PointerTask):
-        raise HTTPException(400, "unknown pointer task")
+    try:
+        _pointer_add(name, user_id, run_id)
+        return {"status": "added"}
+    except ValueError as exc:  # pragma: no cover - validation
+        raise HTTPException(400, str(exc)) from exc
 
-    task: PointerTask = task_info["task"]
-    task.add_pointer(user_id, run_id)
-    return {"status": "pointer added"}
 
 
 @app.get("/pointers/{name}")
 def pointer_list(name: str):
-    """List stored pointers for ``name``."""
+    """List pointers for ``name``."""
 
-    store = PointerStore()
-    return store.get_pointers(name)
-
-
-@app.post("/pointers/{name}/send")
-def pointer_send(name: str, user_id: str, run_id: str) -> dict[str, str]:
-    """Publish a pointer update."""
-
-    update = PointerUpdate(
-        task_name=name,
-        run_id=run_id,
-        user_hash=_hash_user_id(user_id),
-    )
-    emit_pointer_update(update)
-    return {"status": "sent"}
+    try:
+        return _pointer_list(name)
+    except ValueError as exc:  # pragma: no cover - validation
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/pointers/{name}/receive")
-def pointer_receive(name: str, run_id: str, user_hash: str) -> dict[str, str]:
+def pointer_receive(name: str, run_id: str, user_hash: str):
     """Store a received pointer update."""
 
-    store = PointerStore()
-    store.apply_update(PointerUpdate(task_name=name, run_id=run_id, user_hash=user_hash))
+    _pointer_receive(name, run_id, user_hash)
+
     return {"status": "stored"}
 
 
@@ -158,6 +146,5 @@ __all__ = [
     "pipeline_status",
     "pointer_add",
     "pointer_list",
-    "pointer_send",
     "pointer_receive",
 ]
