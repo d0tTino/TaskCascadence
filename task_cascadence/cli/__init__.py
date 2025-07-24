@@ -314,6 +314,15 @@ def pointer_receive(name: str, run_id: str, user_hash: str) -> None:
     typer.echo("pointer stored")
 
 
+@app.command("pointer-sync")
+def pointer_sync_cmd() -> None:
+    """Start the pointer synchronization service."""
+
+    from .. import pointer_sync
+
+    pointer_sync.run()
+
+
 
 def main(args: list[str] | None = None) -> None:
     """CLI entry point used by ``console_scripts`` or directly.
@@ -341,5 +350,6 @@ __all__ = [
     "pointer_list",
     "pointer_send",
     "pointer_receive",
+    "pointer_sync_cmd",
 ]
 
