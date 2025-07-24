@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
+import asyncio
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
@@ -39,12 +40,28 @@ class TaskPipeline:
 
     def research(self, *, user_id: str | None = None) -> Any:
         """Perform optional research for the task."""
-        if hasattr(self.task, "research"):
-            query = self.task.research()
-            result = research.gather(query)
-            self._emit_stage("research", user_id)
-            return result
-        return None
+        if not hasattr(self.task, "research"):
+            return None
+
+        query = self.task.research()
+
+        loop_running = True
+        try:
+            asyncio.current_task()
+        except RuntimeError:
+            loop_running = False
+
+        if loop_running:
+            async def _async_call() -> Any:
+                result = await research.async_gather(query)
+                self._emit_stage("research", user_id)
+                return result
+
+            return _async_call()
+
+        result = research.gather(query)
+        self._emit_stage("research", user_id)
+        return result
 
     def plan(self, *, user_id: str | None = None) -> Any:
         plan_result = None
