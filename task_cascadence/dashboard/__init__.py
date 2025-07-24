@@ -28,7 +28,6 @@ def dashboard(request: Request) -> HTMLResponse:
         ts = event.get("time") if event else None
         pointer_count = len(pointers.get_pointers(name))
         paused = info.get("paused", False)
-        ptrs = len(p_store.get_pointers(name))
         button = (
             f"<form method='post' action='/resume/{name}'>"
             "<button type='submit'>Resume</button></form>"
