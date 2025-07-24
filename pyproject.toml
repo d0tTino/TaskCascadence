@@ -56,3 +56,7 @@ ignore_missing_imports = true
 check_untyped_defs = true
 files = ["task_cascadence"]
 exclude = "tests"
+
+[[tool.mypy.overrides]]
+module = ["requests", "yaml"]
+ignore_missing_imports = false

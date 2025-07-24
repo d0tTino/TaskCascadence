@@ -360,6 +360,9 @@ version constraint is respected:
 $ pip install -e .[dev]
 ```
 
+The ``dev`` extras also install stub packages for ``requests`` and ``PyYAML`` so
+that ``mypy`` can perform complete type checking.
+
 This will install tools like ``ruff``, ``pytest`` and ``mypy``. Run them from
 the project root to lint, type-check and test the codebase:
 

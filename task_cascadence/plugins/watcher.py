@@ -15,6 +15,7 @@ class _ReloadHandler(FileSystemEventHandler):
     def __init__(self) -> None:
         self._last: tuple[str | None, float] = (None, 0.0)
         self._start = time.monotonic()
+        self._ignore = True
 
     def on_modified(self, event):  # pragma: no cover - simple passthrough
         if event.is_directory:
