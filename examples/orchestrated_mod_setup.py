@@ -5,50 +5,57 @@ from task_cascadence.plugins import CronTask
 from task_cascadence.ume import emit_stage_update
 
 
-class DownloadMod(CronTask):
-    name = "DownloadMod"
+def plan_mod_setup() -> list[str]:
+    """Return the ordered installation steps."""
+
+    # In a real deployment this would call into an external planner
+    return ["download", "install", "enable"]
+
+
+class ModSetup(CronTask):
+    """Multi-stage mod setup task using :class:`TaskPipeline`."""
+
+    name = "ModSetup"
+
+    def __init__(self) -> None:
+        self._plan: list[str] = []
+
+    def plan(self) -> list[str]:
+        print("Planning mod setup")
+        self._plan = plan_mod_setup()
+        return self._plan
 
     def run(self) -> None:
-        print("Downloading mod archive")
-        emit_stage_update("mod_setup", "download")
+        for step in self._plan:
+            if step == "download":
+                print("Downloading mod archive")
+            elif step == "install":
+                print("Installing mod")
+            elif step == "enable":
+                print("Enabling mod")
+            emit_stage_update("mod_setup", step)
 
-
-class InstallMod(CronTask):
-    name = "InstallMod"
-
-    def run(self) -> None:
-        print("Installing mod")
-        emit_stage_update("mod_setup", "install")
-
-
-class EnableMod(CronTask):
-    name = "EnableMod"
-
-    def run(self) -> None:
-        print("Enabling mod")
-        emit_stage_update("mod_setup", "enable")
+    def verify(self, _result: None) -> None:
+        print("Mod enabled and verified")
 
 
 def main() -> None:
     sched = DagCronScheduler(timezone="UTC")
-    sched.register_task(DownloadMod(), "* * * * *")
-    sched.register_task(InstallMod(), "* * * * *", dependencies=["DownloadMod"]) \
-        # run after download
-    sched.register_task(EnableMod(), "* * * * *", dependencies=["InstallMod"])  # final step
+    sched.register_task(ModSetup(), "* * * * *")
 
     # Run the full pipeline once
-    sched.run_task("EnableMod")
+    sched.run_task("ModSetup")
 
-    # Pause the install stage
-    sched.pause_task("InstallMod")
+    # Pause the task and attempt another run
+    sched.pause_task("ModSetup")
     try:
-        sched.run_task("EnableMod")
+        sched.run_task("ModSetup")
     except ValueError as exc:
         print(f"Pipeline halted: {exc}")
 
-    # Resume the stage and finish the pipeline
-    sched.resume_task("InstallMod")
-    sched.run_task("EnableMod")
+    # Resume the task and finish the pipeline
+    sched.resume_task("ModSetup")
+    sched.run_task("ModSetup")
 
 
 if __name__ == "__main__":
