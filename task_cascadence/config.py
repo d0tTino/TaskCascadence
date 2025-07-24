@@ -59,5 +59,15 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
     else:
         cfg.setdefault("hash_secret", "")
 
+    if "CASCADENCE_STAGES_PATH" in os.environ:
+        cfg["stages_path"] = os.environ["CASCADENCE_STAGES_PATH"]
+    elif "stages_path" in cfg:
+        cfg["stages_path"] = cfg["stages_path"]
+
+    if "CASCADENCE_POINTERS_PATH" in os.environ:
+        cfg["pointers_path"] = os.environ["CASCADENCE_POINTERS_PATH"]
+    elif "pointers_path" in cfg:
+        cfg["pointers_path"] = cfg["pointers_path"]
+
     return cfg
 

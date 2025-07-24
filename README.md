@@ -302,6 +302,13 @@ with the variables below. When set, they override values from the YAML file:
     NATS subject for event publishing.
 ``CASCADENCE_HASH_SECRET``
     Salt used when hashing user identifiers.
+``CASCADENCE_STAGES_PATH``
+    Location of the ``stages.yml`` file used by :class:`StageStore`.
+``CASCADENCE_POINTERS_PATH``
+    Location of the ``pointers.yml`` file used by :class:`PointerStore`.
+
+The YAML configuration may also define ``stages_path`` and ``pointers_path``
+to override these defaults.
 
 Example ``cascadence.yml`` enabling gRPC transport and research support:
 
@@ -311,6 +318,8 @@ ume_transport: grpc
 ume_grpc_stub: myproject.rpc:Stub
 ume_grpc_method: Send
 hash_secret: supersecret
+stages_path: /tmp/stages.yml
+pointers_path: /tmp/pointers.yml
 ```
 
 Install ``tino_storm`` to allow tasks to perform research queries during the
