@@ -5,10 +5,6 @@ from fastapi import FastAPI, Depends, HTTPException, Header
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
 from ..cli import _pointer_add, _pointer_list, _pointer_receive
-from ..pointer_store import PointerStore
-from ..plugins import PointerTask
-from ..ume import emit_pointer_update, _hash_user_id
-from ..ume.models import PointerUpdate
 
 app = FastAPI()
 

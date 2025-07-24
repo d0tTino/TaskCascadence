@@ -18,13 +18,15 @@ def _get_event(store: StageStore, task_name: str) -> dict | None:
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request) -> HTMLResponse:
     store = StageStore()
-    p_store = PointerStore()
+    pointers = PointerStore()
+
     sched = get_default_scheduler()
     rows = []
     for name, info in sched._tasks.items():
         event = _get_event(store, name)
         stage = event["stage"] if event else None
         ts = event.get("time") if event else None
+        pointer_count = len(pointers.get_pointers(name))
         paused = info.get("paused", False)
         ptrs = len(p_store.get_pointers(name))
         button = (
@@ -38,7 +40,15 @@ def dashboard(request: Request) -> HTMLResponse:
         )
         status = "paused" if paused else "running"
         rows.append(
-            f"<tr><td>{name}</td><td>{stage or ''}</td><td>{ts or ''}</td><td>{status}</td><td>{ptrs}</td><td>{button}</td></tr>"
+            "<tr>"
+            f"<td>{name}</td>"
+            f"<td>{stage or ''}</td>"
+            f"<td>{ts or ''}</td>"
+            f"<td>{status}</td>"
+            f"<td>{pointer_count or ''}</td>"
+            f"<td>{button}</td>"
+            "</tr>"
+
         )
     body = """
     <html><body>
