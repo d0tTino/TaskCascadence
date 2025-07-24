@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 import tempfile
 import yaml
 
+
 class DemoPointer(PointerTask):
     name = "demo_pointer"
 
@@ -28,6 +29,7 @@ def test_pointer_add_and_list(monkeypatch):
     assert resp.status_code == 200
     assert resp.json() == {"status": "added"}
 
+
     resp = client.get("/pointers/demo_pointer")
     assert resp.status_code == 200
     data = resp.json()
@@ -48,3 +50,4 @@ def test_pointer_receive(monkeypatch):
 
     data = yaml.safe_load(open(store_path).read())
     assert data["demo_pointer"] == [{"run_id": "r2", "user_hash": user_hash}]
+

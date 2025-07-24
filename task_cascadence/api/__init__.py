@@ -5,6 +5,10 @@ from fastapi import FastAPI, Depends, HTTPException, Header
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
 from ..cli import _pointer_add, _pointer_list, _pointer_receive
+from ..pointer_store import PointerStore
+from ..plugins import PointerTask
+from ..ume import emit_pointer_update, _hash_user_id
+from ..ume.models import PointerUpdate
 
 app = FastAPI()
 
@@ -111,6 +115,7 @@ def pointer_add(name: str, user_id: str, run_id: str):
         raise HTTPException(400, str(exc)) from exc
 
 
+
 @app.get("/pointers/{name}")
 def pointer_list(name: str):
     """List pointers for ``name``."""
@@ -126,6 +131,7 @@ def pointer_receive(name: str, run_id: str, user_hash: str):
     """Store a received pointer update."""
 
     _pointer_receive(name, run_id, user_hash)
+
     return {"status": "stored"}
 
 
