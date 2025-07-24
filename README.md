@@ -41,6 +41,8 @@ pipeline.run(user_id="alice")
 
 The optional ``research`` step relies on the ``tino_storm`` package which may
 be installed separately. The provided ``user_id`` is hashed before transport.
+If the optional ``ai_plan`` package is present, tasks without a ``plan`` method
+fall back to ``ai_plan.plan`` during the planning stage.
 
 ## Command Line Usage
 
@@ -339,6 +341,8 @@ pointers_path: /tmp/pointers.yml
 
 Install ``tino_storm`` to allow tasks to perform research queries during the
 ``research`` pipeline stage.
+Install ``ai_plan`` if you want automatic planning for tasks missing a ``plan``
+method.
 
 ## Hashing User IDs
 

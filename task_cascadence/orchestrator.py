@@ -8,6 +8,11 @@ from typing import Any
 from uuid import uuid4
 import asyncio
 
+try:
+    import ai_plan  # type: ignore
+except Exception:  # pragma: no cover - optional dependency may be missing
+    ai_plan = None  # type: ignore
+
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from .ume import emit_task_spec, emit_task_run, emit_stage_update
@@ -67,6 +72,8 @@ class TaskPipeline:
         plan_result = None
         if hasattr(self.task, "plan"):
             plan_result = self.task.plan()
+        elif ai_plan is not None and hasattr(ai_plan, "plan"):
+            plan_result = ai_plan.plan(self.task)
         self._emit_stage("planning", user_id)
         return plan_result
 
