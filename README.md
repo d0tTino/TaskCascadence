@@ -15,16 +15,56 @@ The :mod:`task_cascadence.temporal` module wraps the ``temporalio`` client.
 Schedulers can use this backend to execute workflows remotely and replay
 workflow histories for debugging purposes.
 
+## Task Orchestrator
+
+Tasks can be executed through the :class:`~task_cascadence.orchestrator.TaskPipeline`.
+Each pipeline step emits UME events so external systems can observe progress.
+Stages are executed in the following order when present on the task object:
+``intake`` → ``research`` → ``plan`` → ``run`` → ``verify``.
+
+```python
+from task_cascadence.orchestrator import TaskPipeline
+
+class Demo:
+    def research(self):
+        return "search terms"
+
+    def plan(self):
+        return "plan"
+
+    def run(self):
+        return "result"
+
+pipeline = TaskPipeline(Demo())
+pipeline.run(user_id="alice")
+```
+
+The optional ``research`` step relies on the ``tino_storm`` package which may
+be installed separately. The provided ``user_id`` is hashed before transport.
+
 ## Command Line Usage
 
 After installing the package in an environment with ``typer`` available, the
 ``task`` command becomes available.  It exposes several sub-commands:
 
 ```bash
-$ task list       # show all registered tasks
-$ task run NAME   # execute a task
-$ task disable NAME  # disable a task
+$ task list            # show all registered tasks
+$ task run NAME        # execute a task
+$ task trigger NAME    # run a manual trigger task
+$ task disable NAME    # disable a task
+$ task pause NAME      # pause a task
+$ task resume NAME     # resume a paused task
+$ task schedule NAME CRON  # register a cron schedule
+$ task schedules       # list configured schedules
+$ task export-n8n FILE # dump tasks as n8n workflow
 $ task webhook [--host HOST] [--port PORT]  # start webhook server
+```
+
+Global options allow metrics and UME transport configuration:
+
+```bash
+$ task --metrics-port 9000 --transport grpc \
+      --grpc-stub module:Stub run example
 ```
 
 ### Metrics Endpoint
@@ -95,6 +135,17 @@ httpx.post("http://localhost:8000/tasks/example/run", headers={"X-User-ID": "bob
 
 Including the ``X-User-ID`` header attaches a hashed identifier to emitted
 events, aligning with the project's privacy goals.
+
+## Dashboard
+
+Launch the web dashboard with:
+
+```bash
+uvicorn task_cascadence.dashboard:app
+```
+
+Navigate to ``http://localhost:8000`` to see task statuses and pause or resume
+individual tasks.
 
 ## Schedule Persistence
 
@@ -249,6 +300,19 @@ with the variables below. When set, they override values from the YAML file:
     NATS subject for event publishing.
 ``CASCADENCE_HASH_SECRET``
     Salt used when hashing user identifiers.
+
+Example ``cascadence.yml`` enabling gRPC transport and research support:
+
+```yaml
+backend: cron
+ume_transport: grpc
+ume_grpc_stub: myproject.rpc:Stub
+ume_grpc_method: Send
+hash_secret: supersecret
+```
+
+Install ``tino_storm`` to allow tasks to perform research queries during the
+``research`` pipeline stage.
 
 ## Hashing User IDs
 
