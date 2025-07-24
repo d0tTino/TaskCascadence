@@ -159,7 +159,8 @@ uvicorn task_cascadence.dashboard:app
 ```
 
 Navigate to ``http://localhost:8000`` to see task statuses and pause or resume
-individual tasks.
+individual tasks. The table also lists the number of pointers stored for each
+task via ``PointerStore``.
 
 ## Schedule Persistence
 
