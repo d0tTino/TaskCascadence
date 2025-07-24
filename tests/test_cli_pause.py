@@ -1,12 +1,18 @@
 from typer.testing import CliRunner
 
 from task_cascadence.cli import app
-from task_cascadence.scheduler import BaseScheduler, CronScheduler
+from task_cascadence.scheduler import CronScheduler
 from task_cascadence.plugins import ExampleTask, CronTask
+from task_cascadence.stage_store import StageStore
 
 
-def test_cli_pause_resume(monkeypatch):
-    sched = BaseScheduler()
+
+def test_cli_pause_resume(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+
+    sched = CronScheduler(storage_path=tmp_path / "sched.yml")
     task = ExampleTask()
     sched.register_task("example", task)
     monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
@@ -15,10 +21,14 @@ def test_cli_pause_resume(monkeypatch):
     result = runner.invoke(app, ["pause", "example"])
     assert result.exit_code == 0
     assert sched._tasks["example"]["paused"] is True
+    events = StageStore(path=tmp_path / "stages.yml").get_events("example")
+    assert events[-1]["stage"] == "paused"
 
     result = runner.invoke(app, ["resume", "example"])
     assert result.exit_code == 0
     assert sched._tasks["example"]["paused"] is False
+    events = StageStore(path=tmp_path / "stages.yml").get_events("example")
+    assert events[-1]["stage"] == "resumed"
 
 
 class DummyTask(CronTask):

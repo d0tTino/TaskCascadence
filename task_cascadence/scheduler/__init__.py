@@ -331,6 +331,22 @@ class CronScheduler(BaseScheduler):
     def list_jobs(self):
         return self.scheduler.get_jobs()
 
+    def pause_task(self, name: str) -> None:
+        """Pause ``name`` and emit a stage event."""
+
+        super().pause_task(name)
+        from ..ume import emit_stage_update
+
+        emit_stage_update(name, "paused")
+
+    def resume_task(self, name: str) -> None:
+        """Resume ``name`` and emit a stage event."""
+
+        super().resume_task(name)
+        from ..ume import emit_stage_update
+
+        emit_stage_update(name, "resumed")
+
 
 # ---------------------------------------------------------------------------
 # Default scheduler accessor
