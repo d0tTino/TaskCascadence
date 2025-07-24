@@ -4,6 +4,10 @@ from fastapi import FastAPI, Depends, HTTPException, Header
 
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
+from ..pointer_store import PointerStore
+from ..plugins import PointerTask
+from ..ume import emit_pointer_update, _hash_user_id
+from ..ume.models import PointerUpdate
 
 app = FastAPI()
 
@@ -99,6 +103,50 @@ def pipeline_status(name: str):
     return store.get_events(name)
 
 
+@app.post("/pointers/{name}/add")
+def pointer_add(name: str, user_id: str, run_id: str) -> dict[str, str]:
+    """Add a pointer for ``name``."""
+
+    sched = get_default_scheduler()
+    task_info = dict(sched._tasks).get(name)
+    if not task_info or not isinstance(task_info["task"], PointerTask):
+        raise HTTPException(400, "unknown pointer task")
+
+    task: PointerTask = task_info["task"]
+    task.add_pointer(user_id, run_id)
+    return {"status": "pointer added"}
+
+
+@app.get("/pointers/{name}")
+def pointer_list(name: str):
+    """List stored pointers for ``name``."""
+
+    store = PointerStore()
+    return store.get_pointers(name)
+
+
+@app.post("/pointers/{name}/send")
+def pointer_send(name: str, user_id: str, run_id: str) -> dict[str, str]:
+    """Publish a pointer update."""
+
+    update = PointerUpdate(
+        task_name=name,
+        run_id=run_id,
+        user_hash=_hash_user_id(user_id),
+    )
+    emit_pointer_update(update)
+    return {"status": "sent"}
+
+
+@app.post("/pointers/{name}/receive")
+def pointer_receive(name: str, run_id: str, user_hash: str) -> dict[str, str]:
+    """Store a received pointer update."""
+
+    store = PointerStore()
+    store.apply_update(PointerUpdate(task_name=name, run_id=run_id, user_hash=user_hash))
+    return {"status": "stored"}
+
+
 __all__ = [
     "app",
     "list_tasks",
@@ -108,4 +156,8 @@ __all__ = [
     "pause_task",
     "resume_task",
     "pipeline_status",
+    "pointer_add",
+    "pointer_list",
+    "pointer_send",
+    "pointer_receive",
 ]
