@@ -397,4 +397,36 @@ def test_cli_pointer_add_and_list(monkeypatch, tmp_path):
     assert data["demo_pointer"][0]["run_id"] == "run1"
 
 
+def test_cli_run_pipeline_task(monkeypatch):
+    steps = []
+
+    class PipelineDemo:
+        name = "pipe_demo"
+
+        def __init__(self, steps):
+            self.steps = steps
+
+        def intake(self):
+            self.steps.append("intake")
+
+        def run(self):
+            self.steps.append("run")
+            return "ok"
+
+    sched = BaseScheduler()
+    sched.register_task("pipe_demo", PipelineDemo(steps))
+
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+    monkeypatch.setattr("task_cascadence.ume.emit_stage_update", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["run", "pipe_demo"])
+
+    assert result.exit_code == 0
+    assert steps == ["intake", "run"]
+
+
 
