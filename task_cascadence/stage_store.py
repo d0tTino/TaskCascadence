@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import os
 from typing import Any, Dict, List
+from datetime import datetime, timezone
 
 import yaml
 
@@ -24,6 +25,16 @@ class StageStore:
             with open(self.path, "r") as fh:
                 data = yaml.safe_load(fh) or {}
                 if isinstance(data, dict):
+                    for key, events in data.items():
+                        if isinstance(events, list):
+                            normalized = []
+                            for event in events:
+                                if isinstance(event, dict):
+                                    normalized.append(event)
+                                else:
+                                    # legacy string entry
+                                    normalized.append({"stage": str(event)})
+                            data[key] = normalized
                     return data
         return {}
 
@@ -32,7 +43,10 @@ class StageStore:
             yaml.safe_dump(self._data, fh)
 
     def add_event(self, task_name: str, stage: str, user_hash: str | None) -> None:
-        entry: Dict[str, Any] = {"stage": stage}
+        entry: Dict[str, Any] = {
+            "stage": stage,
+            "time": datetime.now(timezone.utc).isoformat(),
+        }
         if user_hash is not None:
             entry["user_hash"] = user_hash
         events = self._data.setdefault(task_name, [])

@@ -20,11 +20,13 @@ def setup(monkeypatch, tmp_path):
 def test_dashboard_index(monkeypatch, tmp_path):
     sched, store = setup(monkeypatch, tmp_path)
     store.add_event("example", "run", None)
+    ts = store.get_events("example")[0]["time"]
     client = TestClient(app)
     resp = client.get("/")
     assert resp.status_code == 200
     assert "example" in resp.text
     assert "run" in resp.text
+    assert ts in resp.text
 
 
 def test_pause_resume(monkeypatch, tmp_path):

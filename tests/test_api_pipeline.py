@@ -27,22 +27,25 @@ def test_api_pause_resume(monkeypatch, tmp_path):
     assert sched._tasks["example"]["paused"] is True
     events = StageStore(path=tmp_path / "stages.yml").get_events("example")
     assert events[-1]["stage"] == "paused"
+    assert "time" in events[-1]
 
     resp = client.post("/tasks/example/resume")
     assert resp.status_code == 200
     assert sched._tasks["example"]["paused"] is False
     events = StageStore(path=tmp_path / "stages.yml").get_events("example")
     assert events[-1]["stage"] == "resumed"
+    assert "time" in events[-1]
 
 
 def test_api_pipeline_status(monkeypatch, tmp_path):
     monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
     StageStore().add_event("example", "start", None)
     StageStore().add_event("example", "finish", None)
+    events = StageStore().get_events("example")
 
     setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
 
     resp = client.get("/pipeline/example")
     assert resp.status_code == 200
-    assert resp.json() == [{"stage": "start"}, {"stage": "finish"}]
+    assert resp.json() == events
