@@ -84,6 +84,7 @@ class BaseScheduler:
 
             from ..ume import emit_task_run
             from ..ume.models import TaskRun, TaskSpec
+            from ..orchestrator import TaskPipeline
 
             spec = TaskSpec(id=task.__class__.__name__, name=task.__class__.__name__)
 
@@ -94,7 +95,14 @@ class BaseScheduler:
                 started.FromDatetime(datetime.now())
                 status = "success"
                 try:
-                    result = task.run()
+                    if any(
+                        hasattr(task, attr)
+                        for attr in ("intake", "research", "plan", "verify")
+                    ):
+                        pipeline = TaskPipeline(task)
+                        result = pipeline.run(user_id=user_id)
+                    else:
+                        result = task.run()
                 except Exception:
                     status = "error"
                     raise
