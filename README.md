@@ -136,6 +136,20 @@ httpx.post("http://localhost:8000/tasks/example/run", headers={"X-User-ID": "bob
 Including the ``X-User-ID`` header attaches a hashed identifier to emitted
 events, aligning with the project's privacy goals.
 
+Pointers for :class:`PointerTask` implementations can be managed via the API as well:
+
+```python
+httpx.post(
+    "http://localhost:8000/pointers/family_pointer",
+    params={"user_id": "alice", "run_id": "run42"},
+)
+httpx.get("http://localhost:8000/pointers/family_pointer").json()
+httpx.post(
+    "http://localhost:8000/pointers/family_pointer/receive",
+    params={"run_id": "xyz", "user_hash": "abc"},
+)
+```
+
 ## Dashboard
 
 Launch the web dashboard with:

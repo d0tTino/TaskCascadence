@@ -4,6 +4,7 @@ from fastapi import FastAPI, Depends, HTTPException, Header
 
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
+from ..cli import _pointer_add, _pointer_list, _pointer_receive
 
 app = FastAPI()
 
@@ -99,6 +100,35 @@ def pipeline_status(name: str):
     return store.get_events(name)
 
 
+@app.post("/pointers/{name}")
+def pointer_add(name: str, user_id: str, run_id: str):
+    """Add a pointer for ``name``."""
+
+    try:
+        _pointer_add(name, user_id, run_id)
+        return {"status": "added"}
+    except ValueError as exc:  # pragma: no cover - validation
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/pointers/{name}")
+def pointer_list(name: str):
+    """List pointers for ``name``."""
+
+    try:
+        return _pointer_list(name)
+    except ValueError as exc:  # pragma: no cover - validation
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/pointers/{name}/receive")
+def pointer_receive(name: str, run_id: str, user_hash: str):
+    """Store a received pointer update."""
+
+    _pointer_receive(name, run_id, user_hash)
+    return {"status": "stored"}
+
+
 __all__ = [
     "app",
     "list_tasks",
@@ -108,4 +138,7 @@ __all__ = [
     "pause_task",
     "resume_task",
     "pipeline_status",
+    "pointer_add",
+    "pointer_list",
+    "pointer_receive",
 ]
