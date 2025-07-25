@@ -60,6 +60,7 @@ $ task schedule NAME CRON  # register a cron schedule
 $ task schedules       # list configured schedules
 $ task export-n8n FILE # dump tasks as n8n workflow
 $ task webhook [--host HOST] [--port PORT]  # start webhook server
+$ task watch-plugins DIR # reload plugins on changes in DIR
 ```
 
 Global options allow metrics and UME transport configuration:

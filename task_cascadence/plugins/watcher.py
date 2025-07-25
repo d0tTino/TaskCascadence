@@ -25,6 +25,7 @@ class _ReloadHandler(FileSystemEventHandler):
             return
         path, last = self._last
         if event.src_path == path and now - last < 2:
+
             return
 
         self._last = (event.src_path, now)
