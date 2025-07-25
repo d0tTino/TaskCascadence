@@ -22,8 +22,9 @@ def setup(monkeypatch, tmp_path):
 def test_dashboard_index(monkeypatch, tmp_path):
     sched, s_store, p_store = setup(monkeypatch, tmp_path)
     s_store.add_event("example", "run", None)
+    s_store.add_event("example", "finish", None)
     p_store.add_pointer("example", "alice", "r1")
-    ts = s_store.get_events("example")[0]["time"]
+    ts = s_store.get_events("example")[-1]["time"]
     client = TestClient(app)
     resp = client.get("/")
     assert resp.status_code == 200
@@ -31,6 +32,10 @@ def test_dashboard_index(monkeypatch, tmp_path):
     assert "run" in resp.text
     assert ts in resp.text
     assert "<td>1</td>" in resp.text
+    assert "Queued Tasks" in resp.text
+    assert "<li>example</li>" in resp.text
+    assert "<th>Last Run</th>" in resp.text
+    assert "finish" in resp.text
 
 
 def test_pause_resume(monkeypatch, tmp_path):
@@ -68,4 +73,6 @@ def test_dashboard_pointer_counts(monkeypatch, tmp_path):
 
     assert resp.status_code == 200
     assert "<th>Pointers</th>" in resp.text
+    assert "<th>Last Run</th>" in resp.text
     assert "<td>2</td>" in resp.text
+
