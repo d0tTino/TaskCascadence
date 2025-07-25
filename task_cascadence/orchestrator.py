@@ -145,6 +145,18 @@ class TaskPipeline:
 
         sig = inspect.signature(self.task.run)
 
+        async def _async_call() -> Any:
+            if len(sig.parameters) > 0:
+                return await self.task.run(plan_result)
+            return await self.task.run()
+
+        if inspect.iscoroutinefunction(self.task.run):
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                return asyncio.run(_async_call())
+            return _async_call()
+
         if len(sig.parameters) > 0:
             return self.task.run(plan_result)
         return self.task.run()
