@@ -15,7 +15,6 @@ class _ReloadHandler(FileSystemEventHandler):
     def __init__(self) -> None:
         self._last: tuple[str | None, float] = (None, 0.0)
         self._start = time.monotonic()
-        self._ignore = True
 
     def on_modified(self, event):  # pragma: no cover - simple passthrough
         if event.is_directory:
@@ -42,10 +41,9 @@ class PluginWatcher:
 
     def start(self) -> None:
         """Start watching the directory."""
+        self._handler._start = time.monotonic()
         self._observer.schedule(self._handler, str(self.path), recursive=True)
         self._observer.start()
-        # Ensure the first modification triggers a reload when using polling
-        self._handler._ignore = False
 
     def stop(self) -> None:
         """Stop watching."""
