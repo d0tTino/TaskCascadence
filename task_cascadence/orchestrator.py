@@ -120,4 +120,10 @@ class TaskPipeline:
 
     def _call_run(self, plan_result: Any) -> Any:
         """Execute the task's ``run`` method."""
+        import inspect
+
+        sig = inspect.signature(self.task.run)
+
+        if len(sig.parameters) > 0:
+            return self.task.run(plan_result)
         return self.task.run()
