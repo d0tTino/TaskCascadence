@@ -6,6 +6,8 @@ from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
 from ..cli import _pointer_add, _pointer_list, _pointer_receive
 from ..pipeline_registry import get_pipeline
+from ..plugins import load_plugin
+from ..task_store import TaskStore
 
 app = FastAPI()
 
@@ -23,6 +25,26 @@ def list_tasks():
         {"name": name, "disabled": disabled}
         for name, disabled in sched.list_tasks()
     ]
+
+
+@app.post("/tasks")
+def register_task(path: str, schedule: str | None = None):
+    """Load a task plugin and optionally schedule it."""
+    sched = get_default_scheduler()
+    try:
+        task = load_plugin(path)
+        TaskStore().add_path(path)
+        sched.register_task(task.name, task)
+        if schedule:
+            if isinstance(sched, CronScheduler):
+                sched.register_task(task, schedule)
+            elif hasattr(sched, "schedule_task"):
+                sched.schedule_task(task.name, schedule)
+            else:
+                raise HTTPException(400, "scheduler lacks cron capabilities")
+        return {"status": "registered", "name": task.name}
+    except Exception as exc:  # pragma: no cover - passthrough
+        raise HTTPException(400, detail=str(exc)) from exc
 
 
 @app.post("/tasks/{name}/run")
@@ -143,6 +165,7 @@ def pointer_receive(name: str, run_id: str, user_hash: str):
 __all__ = [
     "app",
     "list_tasks",
+    "register_task",
     "run_task",
     "schedule_task",
     "disable_task",

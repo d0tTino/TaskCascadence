@@ -16,6 +16,7 @@ from . import temporal  # noqa: F401
 from . import research  # noqa: F401
 from .config import load_config
 from apscheduler.triggers.cron import CronTrigger
+from .task_store import TaskStore
 
 
 
@@ -24,9 +25,14 @@ def initialize() -> None:
     """Load built-in tasks and any external plugins."""
 
     cfg = load_config()
+    store = TaskStore()
+    loaded = store.load_tasks()
     backend = cfg.get("backend", cfg.get("scheduler", "cron"))
-    sched = create_scheduler(backend)
+    sched = create_scheduler(backend, tasks=loaded)
     set_default_scheduler(sched)
+    for task in loaded.values():
+        if task.name not in sched._tasks:
+            sched.register_task(task.name, task)
 
     plugins.initialize()
     plugins.load_cronyx_tasks()
