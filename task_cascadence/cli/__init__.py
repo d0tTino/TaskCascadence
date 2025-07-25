@@ -350,6 +350,25 @@ def pointer_sync_cmd() -> None:
     pointer_sync.run()
 
 
+@app.command("watch-plugins")
+def watch_plugins(directory: str = typer.Argument(".")) -> None:
+    """Reload plugins when files in ``DIRECTORY`` change."""
+
+    from ..plugins.watcher import PluginWatcher
+    import time
+
+    watcher = PluginWatcher(directory)
+    watcher.start()
+    typer.echo(f"watching {directory}... press Ctrl+C to stop")
+    try:
+        while True:  # pragma: no cover - loop interrupted by KeyboardInterrupt
+            time.sleep(1)
+    except KeyboardInterrupt:  # pragma: no cover - manual interruption
+        pass
+    finally:
+        watcher.stop()
+
+
 
 def main(args: list[str] | None = None) -> None:
     """CLI entry point used by ``console_scripts`` or directly.
@@ -378,5 +397,6 @@ __all__ = [
     "pointer_send",
     "pointer_receive",
     "pointer_sync_cmd",
+    "watch_plugins",
 ]
 
