@@ -14,6 +14,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import yaml
 from google.protobuf.timestamp_pb2 import Timestamp
+import asyncio
+import inspect
 
 
 from typing import Any, Dict, Iterable, Tuple, Optional, TYPE_CHECKING
@@ -104,10 +106,28 @@ class BaseScheduler:
                         add_pipeline(name, pipeline)
                         try:
                             result = pipeline.run(user_id=user_id)
+                            if inspect.iscoroutine(result):
+                                try:
+                                    asyncio.get_running_loop()
+                                except RuntimeError:
+                                    result = asyncio.run(result)
+                                else:
+                                    async def _await_result() -> Any:
+                                        return await result
+                                    result = _await_result()
                         finally:
                             remove_pipeline(name)
                     else:
                         result = task.run()
+                        if inspect.iscoroutine(result):
+                            try:
+                                asyncio.get_running_loop()
+                            except RuntimeError:
+                                result = asyncio.run(result)
+                            else:
+                                async def _await_result() -> Any:
+                                    return await result
+                                result = _await_result()
                 except Exception:
                     status = "error"
                     raise
