@@ -74,3 +74,38 @@ def test_async_pipeline_research(monkeypatch):
     assert result == "ainfo"
     assert steps == ["research:foo"]
     assert emitted == ["research"]
+
+
+async def async_research_method():
+    await asyncio.sleep(0)
+    return "bar"
+
+
+def test_async_research_method(monkeypatch):
+    steps = []
+    emitted = []
+
+    def fake_spec(spec, user_id=None):
+        emitted.append(spec.description)
+
+    async def fake_async_gather(query: str):
+        steps.append(f"research:{query}")
+        return "info2"
+
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", fake_spec)
+    monkeypatch.setattr("task_cascadence.research.async_gather", fake_async_gather)
+
+    class ResearchTask:
+        async def research(self):
+            return async_research_method()
+
+    pipeline = TaskPipeline(ResearchTask())
+
+    async def runner():
+        return await pipeline.research()
+
+    result = asyncio.run(runner())
+
+    assert result == "info2"
+    assert steps == ["research:bar"]
+    assert emitted == ["research"]
