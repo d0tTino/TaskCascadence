@@ -44,8 +44,27 @@ class StageStore:
         return {}
 
     def _save(self) -> None:
-        with open(self.path, "w") as fh:
-            yaml.safe_dump(self._data, fh)
+        """Persist data to disk with an exclusive file lock."""
+        mode = "r+" if self.path.exists() else "w+"
+        with open(self.path, mode) as fh:
+            if os.name == "nt":
+                import msvcrt
+
+                msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)  # type: ignore[attr-defined]
+            else:
+                import fcntl
+
+                fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+            try:
+                fh.seek(0)
+                yaml.safe_dump(self._data, fh)
+                fh.truncate()
+                fh.flush()
+            finally:
+                if os.name == "nt":
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
+                else:
+                    fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
     def add_event(self, task_name: str, stage: str, user_hash: str | None) -> None:
         entry: Dict[str, Any] = {
