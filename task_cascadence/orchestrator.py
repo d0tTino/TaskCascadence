@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 from uuid import uuid4
@@ -18,6 +18,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from .ume import emit_task_spec, emit_task_run, emit_stage_update
 from .ume.models import TaskRun, TaskSpec
 from . import research
+import time
 
 
 @dataclass
@@ -28,6 +29,7 @@ class TaskPipeline:
     """
 
     task: Any
+    _paused: bool = field(default=False, init=False, repr=False)
 
     def _emit_stage(self, stage: str, user_id: str | None = None) -> None:
         spec = TaskSpec(
@@ -111,11 +113,30 @@ class TaskPipeline:
         return verify_result
 
     # ------------------------------------------------------------------
+    def pause(self, *, user_id: str | None = None) -> None:
+        """Pause execution of this pipeline."""
+        self._paused = True
+        emit_stage_update(self.task.__class__.__name__, "paused", user_id=user_id)
+
+    def resume(self, *, user_id: str | None = None) -> None:
+        """Resume a previously paused pipeline."""
+        self._paused = False
+        emit_stage_update(self.task.__class__.__name__, "resumed", user_id=user_id)
+
+    def _wait_if_paused(self) -> None:
+        while self._paused:
+            time.sleep(0.1)
+
+    # ------------------------------------------------------------------
     def run(self, *, user_id: str | None = None) -> Any:
         self.intake(user_id=user_id)
+        self._wait_if_paused()
         self.research(user_id=user_id)
+        self._wait_if_paused()
         plan_result = self.plan(user_id=user_id)
+        self._wait_if_paused()
         exec_result = self.execute(plan_result, user_id=user_id)
+        self._wait_if_paused()
         return self.verify(exec_result, user_id=user_id)
 
     def _call_run(self, plan_result: Any) -> Any:

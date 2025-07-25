@@ -85,6 +85,7 @@ class BaseScheduler:
             from ..ume import emit_task_run
             from ..ume.models import TaskRun, TaskSpec
             from ..orchestrator import TaskPipeline
+            from ..pipeline_registry import add_pipeline, remove_pipeline
 
             spec = TaskSpec(id=task.__class__.__name__, name=task.__class__.__name__)
 
@@ -100,7 +101,11 @@ class BaseScheduler:
                         for attr in ("intake", "research", "plan", "verify")
                     ):
                         pipeline = TaskPipeline(task)
-                        result = pipeline.run(user_id=user_id)
+                        add_pipeline(name, pipeline)
+                        try:
+                            result = pipeline.run(user_id=user_id)
+                        finally:
+                            remove_pipeline(name)
                     else:
                         result = task.run()
                 except Exception:
