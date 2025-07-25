@@ -128,6 +128,12 @@ registered_tasks: Dict[str, BaseTask] = {
     ExampleTask.name: ExampleTask(),
 }
 
+try:
+    _tino_cls = importlib.import_module("task_cascadence.plugins.d0tTino").D0tTinoTask
+    registered_tasks[_tino_cls.name] = _tino_cls()
+except Exception:  # pragma: no cover - optional plugin may fail to import
+    pass
+
 def load_plugin(path: str) -> BaseTask:
     """Load ``path`` of the form ``module:Class`` and return an instance."""
 

@@ -289,6 +289,19 @@ $ task list
 
 ``DemoTask`` from the plugin will appear alongside the built-in example task.
 
+The package also ships with ``D0tTinoTask`` which talks to the
+`d0tTino` helpers.  It invokes ``d0tTino ai-plan`` during the planning stage
+and ``d0tTino ai`` when running.  Instantiate it with a prompt and optionally
+``use_api=True`` to call a running API server:
+
+```python
+from task_cascadence.plugins import D0tTinoTask
+
+task = D0tTinoTask("Hello world")
+task.plan()
+task.run()
+```
+
 ## Environment Variables
 
 ``load_config`` merges values from a YAML file specified by ``CASCADENCE_CONFIG``
