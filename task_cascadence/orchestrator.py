@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 import asyncio
+import inspect
 
 try:
     import ai_plan  # type: ignore
@@ -57,6 +58,19 @@ class TaskPipeline:
             asyncio.current_task()
         except RuntimeError:
             loop_running = False
+
+        if inspect.isawaitable(query):
+            async def _await_query() -> Any:
+                q = await query
+                if inspect.isawaitable(q):
+                    q = await q
+                result = await research.async_gather(q)
+                self._emit_stage("research", user_id)
+                return result
+
+            if loop_running:
+                return _await_query()
+            return asyncio.run(_await_query())
 
         if loop_running:
             async def _async_call() -> Any:
