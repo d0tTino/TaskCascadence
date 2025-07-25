@@ -211,6 +211,7 @@ def reload_plugins() -> None:
     import task_cascadence
     from .. import scheduler as _scheduler
     from ..config import load_config
+    from ..task_store import TaskStore
 
     for task in registered_tasks.values():
         mod = task.__class__.__module__
@@ -220,8 +221,13 @@ def reload_plugins() -> None:
     invalidate_caches()
     _scheduler._default_scheduler = None  # reset singleton
     cfg = load_config()
-    sched = _scheduler.create_scheduler(cfg["backend"])
+    store = TaskStore()
+    tasks = store.load_tasks()
+    sched = _scheduler.create_scheduler(cfg["backend"], tasks=tasks)
     _scheduler.set_default_scheduler(sched)
+    for task in tasks.values():
+        if task.name not in sched._tasks:
+            sched.register_task(task.name, task)
     reload(sys.modules[__name__])
     task_cascadence.initialize()
 

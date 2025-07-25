@@ -133,7 +133,15 @@ import httpx
 
 tasks = httpx.get("http://localhost:8000/tasks").json()
 httpx.post("http://localhost:8000/tasks/example/run", headers={"X-User-ID": "bob"})
+
+# capture a task definition from another machine
+httpx.post(
+    "http://localhost:8000/tasks",
+    params={"path": "myproject.tasks:Demo", "schedule": "0 * * * *"},
+)
 ```
+
+This allows capturing a task definition on one device and registering it on another.
 
 Including the ``X-User-ID`` header attaches a hashed identifier to emitted
 events, aligning with the project's privacy goals.
@@ -336,9 +344,10 @@ with the variables below. When set, they override values from the YAML file:
     Location of the ``stages.yml`` file used by :class:`StageStore`.
 ``CASCADENCE_POINTERS_PATH``
     Location of the ``pointers.yml`` file used by :class:`PointerStore`.
+``CASCADENCE_TASKS_PATH``
+    Location of the ``tasks.yml`` file used by :class:`TaskStore`.
 
-The YAML configuration may also define ``stages_path`` and ``pointers_path``
-to override these defaults.
+The YAML configuration may also define ``stages_path``, ``pointers_path`` and ``tasks_path`` to override these defaults.
 
 Example ``cascadence.yml`` enabling gRPC transport and research support:
 
@@ -350,6 +359,7 @@ ume_grpc_method: Send
 hash_secret: supersecret
 stages_path: /tmp/stages.yml
 pointers_path: /tmp/pointers.yml
+tasks_path: /tmp/tasks.yml
 ```
 
 Install ``tino_storm`` to allow tasks to perform research queries during the
