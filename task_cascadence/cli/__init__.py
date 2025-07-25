@@ -17,6 +17,7 @@ from ..scheduler import (
     CronScheduler,
     BaseScheduler,
 )
+from ..pipeline_registry import get_pipeline
 from .. import plugins  # noqa: F401
 from ..metrics import start_metrics_server  # noqa: F401
 from ..pointer_store import PointerStore
@@ -152,7 +153,11 @@ def pause_task(name: str) -> None:
     """Pause ``NAME`` so it temporarily stops running."""
 
     try:
-        get_default_scheduler().pause_task(name)
+        pipeline = get_pipeline(name)
+        if pipeline:
+            pipeline.pause()
+        else:
+            get_default_scheduler().pause_task(name)
         typer.echo(f"{name} paused")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
@@ -164,7 +169,11 @@ def resume_task(name: str) -> None:
     """Resume a paused task called ``NAME``."""
 
     try:
-        get_default_scheduler().resume_task(name)
+        pipeline = get_pipeline(name)
+        if pipeline:
+            pipeline.resume()
+        else:
+            get_default_scheduler().resume_task(name)
         typer.echo(f"{name} resumed")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)

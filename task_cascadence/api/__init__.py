@@ -5,6 +5,7 @@ from fastapi import FastAPI, Depends, HTTPException, Header
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
 from ..cli import _pointer_add, _pointer_list, _pointer_receive
+from ..pipeline_registry import get_pipeline
 
 app = FastAPI()
 
@@ -76,7 +77,11 @@ def pause_task(name: str):
     """Pause ``name`` so it temporarily stops running."""
     sched = get_default_scheduler()
     try:
-        sched.pause_task(name)
+        pipeline = get_pipeline(name)
+        if pipeline:
+            pipeline.pause()
+        else:
+            sched.pause_task(name)
         return {"status": "paused"}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -87,7 +92,11 @@ def resume_task(name: str):
     """Resume a previously paused task."""
     sched = get_default_scheduler()
     try:
-        sched.resume_task(name)
+        pipeline = get_pipeline(name)
+        if pipeline:
+            pipeline.resume()
+        else:
+            sched.resume_task(name)
         return {"status": "resumed"}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
