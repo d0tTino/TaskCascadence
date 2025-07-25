@@ -24,7 +24,7 @@ class DemoTask:
 
 
 def test_pipeline_emits_events(monkeypatch):
-    steps = []
+    steps: list[str] = []
     emitted = []
 
     def fake_spec(spec, user_id=None):
@@ -77,7 +77,7 @@ def test_pipeline_without_optional(monkeypatch):
 
 
 def test_scheduler_runs_pipeline(monkeypatch):
-    steps = []
+    steps: list[str] = []
 
     monkeypatch.setattr(
         "task_cascadence.orchestrator.emit_task_spec",
@@ -109,3 +109,26 @@ def test_scheduler_runs_pipeline(monkeypatch):
 
     assert result == "ok"
     assert steps == ["intake", "run"]
+
+
+def test_plan_result_passed_to_run(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    class PlanTask:
+        def __init__(self):
+            self.received = None
+
+        def plan(self):
+            return "myplan"
+
+        def run(self, plan):
+            self.received = plan
+            return plan
+
+    task = PlanTask()
+    pipeline = TaskPipeline(task)
+    result = pipeline.run()
+
+    assert result == "myplan"
+    assert task.received == "myplan"
