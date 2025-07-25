@@ -219,3 +219,26 @@ def test_reload_preserves_cronyx_scheduler(monkeypatch):
 
     assert result.exit_code == 0
     assert type(scheduler.get_default_scheduler()) is before_type
+
+
+def test_watch_plugins_invokes_watcher(tmp_path, monkeypatch):
+    """Running 'task watch-plugins' should start and stop the watcher."""
+
+    calls = {"start": 0, "stop": 0}
+
+    def fake_start(self):
+        calls["start"] += 1
+
+    def fake_stop(self):
+        calls["stop"] += 1
+
+    monkeypatch.setattr(PluginWatcher, "start", fake_start)
+    monkeypatch.setattr(PluginWatcher, "stop", fake_stop)
+    monkeypatch.setattr(time, "sleep", lambda s: (_ for _ in ()).throw(KeyboardInterrupt()))
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["watch-plugins", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert calls["start"] == 1
+    assert calls["stop"] == 1
