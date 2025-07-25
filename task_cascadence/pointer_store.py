@@ -4,6 +4,8 @@ from pathlib import Path
 import os
 from typing import Any, Dict, List
 
+from filelock import FileLock
+
 import yaml
 
 from .ume import _hash_user_id, emit_pointer_update
@@ -23,6 +25,7 @@ class PointerStore:
         if path is None:
             path = Path.home() / ".cascadence" / "pointers.yml"
         self.path = Path(path)
+        self._lock = FileLock(str(self.path) + ".lock")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._data: Dict[str, List[Dict[str, Any]]] = self._load()
 
@@ -35,8 +38,18 @@ class PointerStore:
         return {}
 
     def _save(self) -> None:
-        with open(self.path, "w") as fh:
-            yaml.safe_dump(self._data, fh)
+        with self._lock:
+            current = self._load()
+            for task, entries in current.items():
+                existing = self._data.setdefault(task, [])
+                for entry in entries:
+                    if entry not in existing:
+                        existing.append(entry)
+
+            tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+            with open(tmp, "w") as fh:
+                yaml.safe_dump(self._data, fh)
+            os.replace(tmp, self.path)
 
     def add_pointer(self, task_name: str, user_id: str, run_id: str) -> None:
         user_hash = _hash_user_id(user_id)

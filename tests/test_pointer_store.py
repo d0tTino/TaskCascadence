@@ -3,6 +3,7 @@ from pathlib import Path
 
 from task_cascadence.pointer_store import PointerStore
 from task_cascadence.ume import _hash_user_id
+import multiprocessing
 
 
 def test_add_pointer_writes_hashed(monkeypatch, tmp_path):
@@ -94,3 +95,47 @@ def test_apply_update_deduplicates_after_reload(monkeypatch, tmp_path):
 
     data = yaml.safe_load(path.read_text())
     assert data["t"] == [{"run_id": "r1", "user_hash": _hash_user_id("alice")}]
+
+
+def _proc_add(path: Path, run_id: str) -> None:
+    store = PointerStore(path=path)
+    store.add_pointer("t", "alice", run_id)
+
+
+def test_concurrent_add_pointer(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    path = tmp_path / "pointers.yml"
+
+    procs = [multiprocessing.Process(target=_proc_add, args=(path, str(i))) for i in range(5)]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join()
+
+    data = yaml.safe_load(path.read_text())
+    run_ids = sorted(e["run_id"] for e in data["t"])
+    assert run_ids == [str(i) for i in range(5)]
+
+
+def _proc_update(path: Path, run_id: str) -> None:
+    from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+
+    store = PointerStore(path=path)
+    store.apply_update(
+        PointerUpdate(task_name="t", run_id=run_id, user_hash=_hash_user_id("alice"))
+    )
+
+
+def test_concurrent_apply_update(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    path = tmp_path / "pointers.yml"
+
+    procs = [multiprocessing.Process(target=_proc_update, args=(path, str(i))) for i in range(5)]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join()
+
+    data = yaml.safe_load(path.read_text())
+    run_ids = sorted(e["run_id"] for e in data["t"])
+    assert run_ids == [str(i) for i in range(5)]
