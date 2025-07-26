@@ -44,6 +44,30 @@ be installed separately. The provided ``user_id`` is hashed before transport.
 If the optional ``ai_plan`` package is present, tasks without a ``plan`` method
 fall back to ``ai_plan.plan`` during the planning stage.
 
+## Asynchronous Tasks
+
+Cascadence supports coroutine-based tasks. Define an ``async`` ``run`` method
+or other asynchronous stage functions and the scheduler will ensure they are
+executed in an event loop. If no loop is active, ``asyncio.run`` is used; when a
+loop is already running the coroutine is returned so callers can ``await`` it.
+
+```python
+class AsyncExample:
+    async def run(self) -> str:
+        await asyncio.sleep(0)
+        return "async result"
+
+```
+
+This task can be registered dynamically via the API:
+
+```python
+httpx.post(
+    "http://localhost:8000/tasks",
+    params={"path": "myproject.tasks:AsyncExample", "schedule": "*/5 * * * *"},
+)
+```
+
 ## Command Line Usage
 
 After installing the package in an environment with ``typer`` available, the
