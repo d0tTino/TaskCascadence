@@ -26,6 +26,13 @@ class DynamicTask(CronTask):
         return "dyn"
 
 
+class AsyncTask(CronTask):
+    name = "async"
+
+    async def run(self):
+        return "async"
+
+
 def setup_scheduler(monkeypatch, tmp_path):
     sched = CronScheduler(storage_path=tmp_path / "sched.yml")
     task = DummyTask()
@@ -53,6 +60,16 @@ def test_run_task(monkeypatch, tmp_path):
     assert resp.status_code == 200
     assert resp.json() == {"result": "ok"}
     assert task.ran == 1
+
+
+def test_run_task_async_endpoint(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    async_task = AsyncTask()
+    sched.register_task(name_or_task="async", task_or_expr=async_task)
+    client = TestClient(app)
+    resp = client.post("/tasks/async/run-async")
+    assert resp.status_code == 200
+    assert resp.json() == {"result": "async"}
 
 
 def test_run_task_user_header(monkeypatch, tmp_path):
