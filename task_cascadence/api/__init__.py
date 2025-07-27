@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Depends, HTTPException, Header
+import inspect
 
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
@@ -57,6 +58,23 @@ def run_task(
     sched = get_default_scheduler()
     try:
         result = sched.run_task(name, use_temporal=temporal, user_id=user_id)
+        return {"result": result}
+    except Exception as exc:  # pragma: no cover - passthrough
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/tasks/{name}/run-async")
+async def run_task_async(
+    name: str,
+    temporal: bool = False,
+    user_id: str | None = Depends(get_user_id),
+):
+    """Execute ``name`` asynchronously and return its result."""
+    sched = get_default_scheduler()
+    try:
+        result = sched.run_task(name, use_temporal=temporal, user_id=user_id)
+        if inspect.isawaitable(result):
+            result = await result
         return {"result": result}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -167,6 +185,7 @@ __all__ = [
     "list_tasks",
     "register_task",
     "run_task",
+    "run_task_async",
     "schedule_task",
     "disable_task",
     "pause_task",

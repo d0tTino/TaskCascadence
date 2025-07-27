@@ -112,8 +112,9 @@ class BaseScheduler:
                                 except RuntimeError:
                                     result = asyncio.run(result)
                                 else:
+                                    _res = result
                                     async def _await_result() -> Any:
-                                        return await result
+                                        return await _res
                                     result = _await_result()
                         finally:
                             remove_pipeline(name)
@@ -125,8 +126,9 @@ class BaseScheduler:
                             except RuntimeError:
                                 result = asyncio.run(result)
                             else:
+                                _res = result
                                 async def _await_result() -> Any:
-                                    return await result
+                                    return await _res
                                 result = _await_result()
                 except Exception:
                     status = "error"
