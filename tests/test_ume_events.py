@@ -142,3 +142,28 @@ def test_emit_stage_update_event(monkeypatch, tmp_path):
 
     data = yaml.safe_load((tmp_path / "stages.yml").read_text())
     assert data["demo"][0]["user_hash"] == _hash_user_id("alice")
+
+
+def test_emit_stage_update_event_default_client(monkeypatch, tmp_path):
+    """StageUpdate events include a hashed user ID when using the default client."""
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "events.yml"))
+
+    class Client:
+        def __init__(self) -> None:
+            self.events = []
+
+        def enqueue(self, obj) -> None:
+            self.events.append(obj)
+
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+    client = Client()
+    monkeypatch.setattr(ume, "_default_client", client)
+
+    ume.emit_stage_update_event("demo", "planning", user_id="bob")
+
+    assert isinstance(client.events[0], StageUpdate)
+    assert client.events[0].user_hash == _hash_user_id("bob")
+    data = yaml.safe_load((tmp_path / "events.yml").read_text())
+    assert data["demo"][0]["user_hash"] == _hash_user_id("bob")
