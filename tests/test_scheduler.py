@@ -25,6 +25,33 @@ def test_timezone_awareness(tmp_path):
     assert isinstance(job.trigger.timezone, ZoneInfo)
 
 
+def test_env_timezone_applied_on_initialize(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_TIMEZONE", "US/Pacific")
+    import importlib
+    import task_cascadence
+
+    monkeypatch.setattr(task_cascadence.plugins, "initialize", lambda: None)
+    monkeypatch.setattr(task_cascadence.plugins, "load_cronyx_tasks", lambda: None)
+
+    importlib.reload(task_cascadence)
+    task_cascadence.initialize()
+
+    from task_cascadence.scheduler import get_default_scheduler
+
+    sched = get_default_scheduler()
+    from zoneinfo import ZoneInfo
+
+    assert str(sched.scheduler.timezone) == "US/Pacific"
+
+    sched.storage_path = tmp_path / "sched.yml"
+    task = DummyTask()
+    sched.register_task(name_or_task=task, task_or_expr="0 6 * * *")
+    job = sched.scheduler.get_job("DummyTask")
+
+    assert str(job.trigger.timezone) == "US/Pacific"
+    assert isinstance(job.trigger.timezone, ZoneInfo)
+
+
 def test_schedule_persistence(tmp_path):
     storage = tmp_path / "sched.yml"
     sched = CronScheduler(timezone="UTC", storage_path=storage)

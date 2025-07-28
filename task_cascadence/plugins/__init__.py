@@ -223,7 +223,9 @@ def reload_plugins() -> None:
     cfg = load_config()
     store = TaskStore()
     tasks = store.load_tasks()
-    sched = _scheduler.create_scheduler(cfg["backend"], tasks=tasks)
+    sched = _scheduler.create_scheduler(
+        cfg["backend"], tasks=tasks, timezone=cfg.get("timezone", "UTC")
+    )
     _scheduler.set_default_scheduler(sched)
     for task in tasks.values():
         if task.name not in sched._tasks:
