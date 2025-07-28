@@ -35,6 +35,8 @@ def test_dashboard_index(monkeypatch, tmp_path):
     assert "Queued Tasks" in resp.text
     assert "<li>example</li>" in resp.text
     assert "<th>Last Run</th>" in resp.text
+    assert "<th>Mode</th>" in resp.text
+    assert "<td>sync</td>" in resp.text
     assert "finish" in resp.text
 
 
@@ -75,4 +77,27 @@ def test_dashboard_pointer_counts(monkeypatch, tmp_path):
     assert "<th>Pointers</th>" in resp.text
     assert "<th>Last Run</th>" in resp.text
     assert "<td>2</td>" in resp.text
+
+
+def test_dashboard_async_mode(monkeypatch, tmp_path):
+    class AsyncTask:
+        async def run(self):
+            return "ok"
+
+    sched = BaseScheduler()
+    sched.register_task("async_task", AsyncTask())
+    monkeypatch.setattr(
+        "task_cascadence.dashboard.get_default_scheduler",
+        lambda: sched,
+    )
+    store = StageStore(path=tmp_path / "stages.yml")
+    ptr_store = PointerStore(path=tmp_path / "pointers.yml")
+    monkeypatch.setattr("task_cascadence.dashboard.StageStore", lambda: store)
+    monkeypatch.setattr("task_cascadence.dashboard.PointerStore", lambda: ptr_store)
+
+    client = TestClient(app)
+    resp = client.get("/")
+
+    assert resp.status_code == 200
+    assert "<td>async</td>" in resp.text
 

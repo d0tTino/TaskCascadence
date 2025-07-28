@@ -56,6 +56,16 @@ class BaseScheduler:
         for name, info in self._tasks.items():
             yield name, info["disabled"]
 
+    def is_async(self, name: str) -> bool:
+        """Return ``True`` if the task registered under ``name`` is asynchronous."""
+
+        info = self._tasks.get(name)
+        if not info:
+            raise ValueError(f"Unknown task: {name}")
+        task = info["task"]
+        run = getattr(task, "run", None)
+        return inspect.iscoroutinefunction(run)
+
     def run_task(
         self,
         name: str,

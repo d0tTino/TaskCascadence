@@ -40,6 +40,7 @@ def dashboard(request: Request) -> HTMLResponse:
         if pointer_count:
             queued.append(name)
         paused = info.get("paused", False)
+        mode = "async" if sched.is_async(name) else "sync"
         button = (
             f"<form method='post' action='/resume/{name}'>"
             "<button type='submit'>Resume</button></form>"
@@ -57,6 +58,7 @@ def dashboard(request: Request) -> HTMLResponse:
             f"<td>{stage or ''}</td>"
             f"<td>{ts or ''}</td>"
             f"<td>{status}</td>"
+            f"<td>{mode}</td>"
             f"<td>{pointer_count or ''}</td>"
             f"<td>{last_status}</td>"
             f"<td>{button}</td>"
@@ -71,7 +73,8 @@ def dashboard(request: Request) -> HTMLResponse:
     <h2>Queued Tasks</h2>
     <ul>{queued}</ul>
     <table>
-    <tr><th>Task</th><th>Stage</th><th>Time</th><th>Status</th><th>Pointers</th><th>Last Run</th><th>Control</th></tr>
+    <tr><th>Task</th><th>Stage</th><th>Time</th><th>Status</th><th>Mode</th><th>Pointers</th>
+    <th>Last Run</th><th>Control</th></tr>
     {rows}
     </table>
     </body></html>
