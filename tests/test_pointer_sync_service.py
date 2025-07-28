@@ -116,3 +116,53 @@ conn = Conn()
     assert data["demo"] == [{"run_id": "cli2", "user_hash": "x"}]
 
 
+def test_pointer_sync_broadcast(monkeypatch, tmp_path):
+    store_a = tmp_path / "a.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store_a))
+    monkeypatch.setenv("UME_TRANSPORT", "grpc")
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe_initial")
+    monkeypatch.setenv("UME_BROADCAST_POINTERS", "1")
+
+    module = tmp_path / "stub_b.py"
+    module.write_text(
+        """
+from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+messages = []
+
+class Stub:
+    @staticmethod
+    def Subscribe_initial():
+        return [PointerUpdate(task_name='demo', run_id='r1', user_hash='u')]
+
+    @staticmethod
+    def Subscribe_queue():
+        out = list(messages)
+        messages.clear()
+        return out
+
+    @staticmethod
+    def Send(update, timeout=None):
+        messages.append(update)
+"""
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("UME_GRPC_STUB", "stub_b:Stub")
+
+    importlib.invalidate_caches()
+    monkeypatch.setattr(pointer_sync, "emit_pointer_update", __import__("stub_b").Stub.Send)
+    pointer_sync.run()
+
+    data = yaml.safe_load(store_a.read_text())
+    assert data["demo"] == [{"run_id": "r1", "user_hash": "u"}]
+
+    store_b = tmp_path / "b.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store_b))
+    monkeypatch.setenv("UME_BROADCAST_POINTERS", "0")
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe_queue")
+
+    pointer_sync.run()
+
+    data = yaml.safe_load(store_b.read_text())
+    assert data["demo"] == [{"run_id": "r1", "user_hash": "u"}]
+
+

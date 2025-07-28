@@ -387,6 +387,8 @@ with the variables below. When set, they override values from the YAML file:
     Import path to a configured NATS connection.
 ``UME_NATS_SUBJECT``
     NATS subject for event publishing.
+``UME_BROADCAST_POINTERS``
+    Re-emit pointer updates received by ``pointer_sync`` when ``true``.
 ``CASCADENCE_HASH_SECRET``
     Salt used when hashing user identifiers.
 ``CASCADENCE_STAGES_PATH``
@@ -409,6 +411,7 @@ hash_secret: supersecret
 stages_path: /tmp/stages.yml
 pointers_path: /tmp/pointers.yml
 tasks_path: /tmp/tasks.yml
+broadcast_pointers: true
 ```
 
 Install ``tino_storm`` to allow tasks to perform research queries during the

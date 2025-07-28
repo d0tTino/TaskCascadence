@@ -8,6 +8,7 @@ from typing import Iterable, Any
 from .config import load_config
 from .pointer_store import PointerStore
 from .ume.models import PointerUpdate
+from .ume import emit_pointer_update
 
 
 def _import_object(path: str) -> Any:
@@ -22,6 +23,15 @@ def run() -> None:
     cfg = load_config()
     transport = cfg.get("ume_transport")
     store = PointerStore()
+    broadcast = bool(cfg.get("ume_broadcast_pointers"))
+
+    def _maybe_broadcast(update: PointerUpdate) -> None:
+        if not broadcast:
+            return
+        try:
+            emit_pointer_update(update)
+        except Exception:  # pragma: no cover - best effort transport
+            pass
 
     if transport == "grpc":
         if not cfg.get("ume_grpc_stub"):
@@ -31,6 +41,7 @@ def run() -> None:
         listener = getattr(stub, method)()
         for update in listener:
             store.apply_update(update)
+            _maybe_broadcast(update)
         return
 
     if transport == "nats":
@@ -47,6 +58,7 @@ def run() -> None:
             else:
                 update.ParseFromString(data)
             store.apply_update(update)
+            _maybe_broadcast(update)
         return
 
     raise ValueError("Unknown or unset UME transport")
