@@ -12,10 +12,12 @@ from ..config import load_config
 from ..transport import BaseTransport, AsyncBaseTransport, get_client
 from .models import TaskRun, TaskSpec, PointerUpdate, TaskNote, IdeaSeed
 from ..stage_store import StageStore
+from ..idea_store import IdeaStore
 
 
 _default_client: BaseTransport | AsyncBaseTransport | None = None
 _stage_store: StageStore | None = None
+_idea_store: IdeaStore | None = None
 
 
 def _hash_user_id(user_id: str) -> str:
@@ -28,6 +30,13 @@ def _get_stage_store() -> StageStore:
     if _stage_store is None:
         _stage_store = StageStore()
     return _stage_store
+
+
+def _get_idea_store() -> IdeaStore:
+    global _idea_store
+    if _idea_store is None:
+        _idea_store = IdeaStore()
+    return _idea_store
 
 
 def emit_stage_update(task_name: str, stage: str, user_id: str | None = None) -> None:
@@ -194,6 +203,7 @@ def emit_idea_seed(
         raise ValueError("No transport client configured")
     if user_id is not None:
         seed.user_hash = _hash_user_id(user_id)
+    _get_idea_store().add_seed(seed)
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
             _async_queue_within_deadline(seed, target)
