@@ -29,6 +29,9 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
     )
     cfg["backend"] = backend
 
+    timezone = os.getenv("CASCADENCE_TIMEZONE", cfg.get("timezone", "UTC"))
+    cfg["timezone"] = timezone
+
     refresh_env = os.getenv("CASCADENCE_CRONYX_REFRESH")
     if refresh_env is not None:
         cfg["cronyx_refresh"] = refresh_env.lower() not in ("0", "false", "no")

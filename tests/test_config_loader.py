@@ -8,6 +8,34 @@ from task_cascadence.scheduler import TemporalScheduler
 from task_cascadence.config import load_config
 
 
+def test_yaml_timezone(monkeypatch, tmp_path):
+    cfg = tmp_path / "cfg.yml"
+    cfg.write_text("timezone: Europe/Paris")
+    monkeypatch.setenv("CASCADENCE_CONFIG", str(cfg))
+    monkeypatch.delenv("CASCADENCE_TIMEZONE", raising=False)
+    importlib.reload(task_cascadence)
+    task_cascadence.initialize()
+    from zoneinfo import ZoneInfo
+
+    sched = get_default_scheduler()
+    assert str(sched.scheduler.timezone) == "Europe/Paris"
+    assert isinstance(sched.scheduler.timezone, ZoneInfo)
+
+
+def test_env_overrides_yaml_timezone(monkeypatch, tmp_path):
+    cfg = tmp_path / "cfg.yml"
+    cfg.write_text("timezone: Europe/Paris")
+    monkeypatch.setenv("CASCADENCE_CONFIG", str(cfg))
+    monkeypatch.setenv("CASCADENCE_TIMEZONE", "Asia/Tokyo")
+    importlib.reload(task_cascadence)
+    task_cascadence.initialize()
+    from zoneinfo import ZoneInfo
+
+    sched = get_default_scheduler()
+    assert str(sched.scheduler.timezone) == "Asia/Tokyo"
+    assert isinstance(sched.scheduler.timezone, ZoneInfo)
+
+
 def test_env_selects_base_scheduler(monkeypatch):
     monkeypatch.setenv("CASCADENCE_SCHEDULER", "base")
     importlib.reload(task_cascadence)

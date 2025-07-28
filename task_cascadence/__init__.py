@@ -28,7 +28,8 @@ def initialize() -> None:
     store = TaskStore()
     loaded = store.load_tasks()
     backend = cfg.get("backend", cfg.get("scheduler", "cron"))
-    sched = create_scheduler(backend, tasks=loaded)
+    timezone = cfg.get("timezone", "UTC")
+    sched = create_scheduler(backend, tasks=loaded, timezone=timezone)
     set_default_scheduler(sched)
     for task in loaded.values():
         if task.name not in sched._tasks:

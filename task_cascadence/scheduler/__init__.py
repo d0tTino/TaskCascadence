@@ -418,12 +418,17 @@ def get_default_scheduler() -> BaseScheduler:
 default_scheduler = get_default_scheduler
 
 
-def create_scheduler(backend: str, tasks: dict[str, Any] | None = None) -> BaseScheduler:
+def create_scheduler(
+    backend: str,
+    tasks: dict[str, Any] | None = None,
+    *,
+    timezone: str | ZoneInfo = "UTC",
+) -> BaseScheduler:
     """Factory returning a scheduler for ``backend``."""
 
     tasks = tasks or {}
     if backend == "cron":
-        return CronScheduler(tasks=tasks)
+        return CronScheduler(timezone=timezone, tasks=tasks)
     if backend == "base":
         return BaseScheduler()
     if backend == "temporal":
@@ -433,7 +438,7 @@ def create_scheduler(backend: str, tasks: dict[str, Any] | None = None) -> BaseS
         return CronyxScheduler()
     if backend == "dag":
         from .dag import DagCronScheduler
-        return DagCronScheduler(tasks=tasks)
+        return DagCronScheduler(timezone=timezone, tasks=tasks)
     raise ValueError(f"Unknown scheduler backend: {backend}")
 
 
