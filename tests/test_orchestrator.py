@@ -132,3 +132,61 @@ def test_plan_result_passed_to_run(monkeypatch):
 
     assert result == "myplan"
     assert task.received == "myplan"
+
+
+def test_nested_task_execution(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    steps: list[str] = []
+
+    class Child:
+        def __init__(self, name: str):
+            self.name = name
+
+        def run(self) -> str:
+            steps.append(f"run-{self.name}")
+            return self.name
+
+    class Parent:
+        def plan(self):
+            return [Child("a"), TaskPipeline(Child("b"))]
+
+        def verify(self, result):
+            steps.append(f"verify-{result}")
+            return result
+
+    pipeline = TaskPipeline(Parent())
+    result = pipeline.run()
+
+    assert result == ["a", "b"]
+    assert steps == ["run-a", "run-b", "verify-['a', 'b']"]
+
+
+def test_nested_tasks_parent_run(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    steps: list[str] = []
+
+    class Child:
+        def __init__(self, name: str):
+            self.name = name
+
+        def run(self) -> str:
+            steps.append(f"run-{self.name}")
+            return self.name
+
+    class Parent:
+        def plan(self):
+            return [Child("x"), Child("y")]
+
+        def run(self, results):
+            steps.append(f"parent-run-{results}")
+            return results
+
+    pipeline = TaskPipeline(Parent())
+    result = pipeline.run()
+
+    assert result == ["x", "y"]
+    assert steps == ["run-x", "run-y", "parent-run-['x', 'y']"]
