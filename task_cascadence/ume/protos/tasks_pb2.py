@@ -27,7 +27,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import timestamp_pb2 as google_dot_protobuf_dot_timestamp__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0btasks.proto\x12\x1atask_cascadence.ume.protos\x1a\x1fgoogle/protobuf/timestamp.proto\"L\n\x08TaskSpec\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x03 \x01(\t\x12\x11\n\tuser_hash\x18\x04 \x01(\t\"\xd1\x01\n\x07TaskRun\x12\x32\n\x04spec\x18\x01 \x01(\x0b\x32$.task_cascadence.ume.protos.TaskSpec\x12\x0e\n\x06run_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12.\n\nstarted_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12/\n\x0b\x66inished_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tuser_hash\x18\x06 \x01(\t\"0\n\x0bTaskPointer\x12\x0e\n\x06run_id\x18\x01 \x01(\t\x12\x11\n\tuser_hash\x18\x02 \x01(\t\"E\n\rPointerUpdate\x12\x11\n\ttask_name\x18\x01 \x01(\t\x12\x0e\n\x06run_id\x18\x02 \x01(\t\x12\x11\n\tuser_hash\x18\x03 \x01(\t\"N\n\x08TaskNote\x12\x11\n\ttask_name\x18\x01 \x01(\t\x12\x0e\n\x06run_id\x18\x02 \x01(\t\x12\x0c\n\x04note\x18\x03 \x01(\t\x12\x11\n\tuser_hash\x18\x04 \x01(\t\"+\n\x08IdeaSeed\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x11\n\tuser_hash\x18\x02 \x01(\tb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0btasks.proto\x12\x1atask_cascadence.ume.protos\x1a\x1fgoogle/protobuf/timestamp.proto\"L\n\x08TaskSpec\x12\n\n\x02id\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x03 \x01(\t\x12\x11\n\tuser_hash\x18\x04 \x01(\t\"\xd1\x01\n\x07TaskRun\x12\x32\n\x04spec\x18\x01 \x01(\x0b\x32$.task_cascadence.ume.protos.TaskSpec\x12\x0e\n\x06run_id\x18\x02 \x01(\t\x12\x0e\n\x06status\x18\x03 \x01(\t\x12.\n\nstarted_at\x18\x04 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12/\n\x0b\x66inished_at\x18\x05 \x01(\x0b\x32\x1a.google.protobuf.Timestamp\x12\x11\n\tuser_hash\x18\x06 \x01(\t\"0\n\x0bTaskPointer\x12\x0e\n\x06run_id\x18\x01 \x01(\t\x12\x11\n\tuser_hash\x18\x02 \x01(\t\"E\n\rPointerUpdate\x12\x11\n\ttask_name\x18\x01 \x01(\t\x12\x0e\n\x06run_id\x18\x02 \x01(\t\x12\x11\n\tuser_hash\x18\x03 \x01(\t\"N\n\x08TaskNote\x12\x11\n\ttask_name\x18\x01 \x01(\t\x12\x0e\n\x06run_id\x18\x02 \x01(\t\x12\x0c\n\x04note\x18\x03 \x01(\t\x12\x11\n\tuser_hash\x18\x04 \x01(\t\"+\n\x08IdeaSeed\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x11\n\tuser_hash\x18\x02 \x01(\t\"B\n\x0bStageUpdate\x12\x11\n\ttask_name\x18\x01 \x01(\t\x12\r\n\x05stage\x18\x02 \x01(\t\x12\x11\n\tuser_hash\x18\x03 \x01(\tb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -46,4 +46,6 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_TASKNOTE']._serialized_end=565
   _globals['_IDEASEED']._serialized_start=567
   _globals['_IDEASEED']._serialized_end=610
+  _globals['_STAGEUPDATE']._serialized_start=612
+  _globals['_STAGEUPDATE']._serialized_end=678
 # @@protoc_insertion_point(module_scope)

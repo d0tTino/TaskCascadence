@@ -26,6 +26,9 @@ TaskNote = tasks_pb2.TaskNote  # type: ignore[attr-defined]
 IdeaSeed = tasks_pb2.IdeaSeed  # type: ignore[attr-defined]
 """Freeform idea prompt from a user."""
 
+StageUpdate = tasks_pb2.StageUpdate  # type: ignore[attr-defined]
+"""Pipeline stage change message."""
+
 __all__ = [
     "TaskSpec",
     "TaskRun",
@@ -33,4 +36,5 @@ __all__ = [
     "PointerUpdate",
     "TaskNote",
     "IdeaSeed",
+    "StageUpdate",
 ]

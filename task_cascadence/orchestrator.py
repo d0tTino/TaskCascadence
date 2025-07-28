@@ -16,7 +16,7 @@ except Exception:  # pragma: no cover - optional dependency may be missing
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from .ume import emit_task_spec, emit_task_run, emit_stage_update
+from .ume import emit_task_spec, emit_task_run, emit_stage_update_event
 from .ume.models import TaskRun, TaskSpec
 from . import research
 import time
@@ -50,7 +50,9 @@ class TaskPipeline:
             description=stage,
         )
         emit_task_spec(spec, user_id=user_id)
-        emit_stage_update(self.task.__class__.__name__, stage, user_id=user_id)
+        emit_stage_update_event(
+            self.task.__class__.__name__, stage, user_id=user_id
+        )
 
     def intake(self, *, user_id: str | None = None) -> None:
         if hasattr(self.task, "intake"):
@@ -191,7 +193,9 @@ class TaskPipeline:
             else:
                 result = self._call_run(plan_result)
 
-            emit_stage_update(self.task.__class__.__name__, "run", user_id=user_id)
+            emit_stage_update_event(
+                self.task.__class__.__name__, "run", user_id=user_id
+            )
         except Exception:
             status = "error"
             raise
@@ -222,12 +226,16 @@ class TaskPipeline:
     def pause(self, *, user_id: str | None = None) -> None:
         """Pause execution of this pipeline."""
         self._paused = True
-        emit_stage_update(self.task.__class__.__name__, "paused", user_id=user_id)
+        emit_stage_update_event(
+            self.task.__class__.__name__, "paused", user_id=user_id
+        )
 
     def resume(self, *, user_id: str | None = None) -> None:
         """Resume a previously paused pipeline."""
         self._paused = False
-        emit_stage_update(self.task.__class__.__name__, "resumed", user_id=user_id)
+        emit_stage_update_event(
+            self.task.__class__.__name__, "resumed", user_id=user_id
+        )
 
     def _wait_if_paused(self) -> None:
         while self._paused:

@@ -10,7 +10,14 @@ import hashlib
 from ..config import load_config
 
 from ..transport import BaseTransport, AsyncBaseTransport, get_client
-from .models import TaskRun, TaskSpec, PointerUpdate, TaskNote, IdeaSeed
+from .models import (
+    TaskRun,
+    TaskSpec,
+    PointerUpdate,
+    TaskNote,
+    IdeaSeed,
+    StageUpdate,
+)
 from ..stage_store import StageStore
 from ..idea_store import IdeaStore
 
@@ -45,6 +52,30 @@ def emit_stage_update(task_name: str, stage: str, user_id: str | None = None) ->
     store = _get_stage_store()
     user_hash = _hash_user_id(user_id) if user_id is not None else None
     store.add_event(task_name, stage, user_hash)
+
+
+def emit_stage_update_event(
+    task_name: str,
+    stage: str,
+    client: Any | None = None,
+    user_id: str | None = None,
+    *,
+    use_asyncio: bool = False,
+) -> asyncio.Task | threading.Thread | None:
+    """Persist and emit ``StageUpdate`` using the configured transport."""
+
+    emit_stage_update(task_name, stage, user_id=user_id)
+    target = client or _default_client
+    if target is None:
+        return None
+    update = StageUpdate(task_name=task_name, stage=stage)
+    if user_id is not None:
+        update.user_hash = _hash_user_id(user_id)
+    if use_asyncio:
+        return asyncio.get_running_loop().create_task(
+            _async_queue_within_deadline(update, target)
+        )
+    return _queue_within_deadline(update, target)
 
 
 def configure_transport(transport: str, **kwargs: Any) -> None:
