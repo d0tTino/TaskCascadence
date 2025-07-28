@@ -369,7 +369,7 @@ def pointer_sync_cmd() -> None:
 
 
 @app.command("watch-plugins")  # type: ignore[no-redef]
-def watch_plugins(directory: str = typer.Argument(".")) -> None:  # type: ignore[no-redef]
+def watch_plugins(directory: str = typer.Argument(".")) -> None:  # type: ignore[no-redef]  # noqa: F811
     """Reload plugins when files in ``DIRECTORY`` change."""
 
     from ..plugins.watcher import PluginWatcher
