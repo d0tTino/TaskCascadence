@@ -29,3 +29,10 @@ message PointerUpdate {
   string run_id = 2;
   string user_hash = 3;
 }
+
+message TaskNote {
+  string task_name = 1;
+  string run_id = 2;
+  string note = 3;
+  string user_hash = 4;
+}
