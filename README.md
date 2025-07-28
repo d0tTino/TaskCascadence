@@ -44,6 +44,12 @@ be installed separately. The provided ``user_id`` is hashed before transport.
 If the optional ``ai_plan`` package is present, tasks without a ``plan`` method
 fall back to ``ai_plan.plan`` during the planning stage.
 
+### Preflight Checks
+
+Before executing a task, ``TaskPipeline`` looks for a ``precheck()`` method.
+If implemented and it returns ``False`` or raises an error the pipeline stops
+before the ``run`` stage.
+
 ## Asynchronous Tasks
 
 Cascadence supports coroutine-based tasks. Define an ``async`` ``run`` method

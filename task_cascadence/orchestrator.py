@@ -22,6 +22,10 @@ from . import research
 import time
 
 
+class PrecheckError(RuntimeError):
+    """Raised when a task precheck fails."""
+
+
 @dataclass
 class TaskPipeline:
     """Orchestrate a task through multiple stages.
@@ -103,6 +107,25 @@ class TaskPipeline:
         status = "success"
 
         try:
+            if hasattr(self.task, "precheck"):
+                check = self.task.precheck()
+                if inspect.isawaitable(check):
+                    try:
+                        asyncio.get_running_loop()
+                    except RuntimeError:
+                        check = asyncio.run(cast(Coroutine[Any, Any, Any], check))
+                    else:
+                        _res = check
+
+                        async def _await_precheck(res=_res) -> Any:
+                            return await res
+
+                        check = _await_precheck()
+                if check is not True:
+                    status = "error"
+                    raise PrecheckError("precheck failed")
+                self._emit_stage("precheck", user_id)
+
             if isinstance(plan_result, list):
                 results = []
                 for sub in plan_result:
