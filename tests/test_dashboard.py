@@ -1,8 +1,9 @@
 from fastapi.testclient import TestClient
 
-from task_cascadence.dashboard import app, StageStore, PointerStore
+from task_cascadence.dashboard import app, StageStore, PointerStore, IdeaStore
 from task_cascadence.scheduler import BaseScheduler
 from task_cascadence.plugins import ExampleTask, PointerTask
+from task_cascadence.ume.models import IdeaSeed
 
 
 def setup(monkeypatch, tmp_path):
@@ -100,4 +101,18 @@ def test_dashboard_async_mode(monkeypatch, tmp_path):
 
     assert resp.status_code == 200
     assert "<td>async</td>" in resp.text
+
+
+def test_dashboard_idea_seeds(monkeypatch, tmp_path):
+    sched, _, _ = setup(monkeypatch, tmp_path)
+    idea_store = IdeaStore(path=tmp_path / "ideas.yml")
+    idea_store.add_seed(IdeaSeed(text="bright"))
+    monkeypatch.setattr("task_cascadence.dashboard.IdeaStore", lambda: idea_store)
+
+    client = TestClient(app)
+    resp = client.get("/")
+
+    assert resp.status_code == 200
+    assert "bright" in resp.text
+    assert "Promote" in resp.text
 

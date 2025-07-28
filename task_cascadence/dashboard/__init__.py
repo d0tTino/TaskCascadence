@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from ..scheduler import get_default_scheduler
 from ..stage_store import StageStore
 from ..pointer_store import PointerStore
+from ..idea_store import IdeaStore
 
 app = FastAPI()
 
@@ -28,6 +29,7 @@ def _get_last_status(store: StageStore, task_name: str) -> str | None:
 def dashboard(request: Request) -> HTMLResponse:
     store = StageStore()
     pointers = PointerStore()
+    ideas = IdeaStore()
 
     sched = get_default_scheduler()
     rows: list[str] = []
@@ -67,6 +69,16 @@ def dashboard(request: Request) -> HTMLResponse:
         )
 
     queued_items = "\n".join(f"<li>{q}</li>" for q in queued) or "<li>None</li>"
+    seed_items = (
+        "\n".join(
+            f"<li>{s['text']}" \
+            f"<form method='post' action='/promote'>" \
+            f"<input type='hidden' name='text' value='{s['text']}'>" \
+            "<button type='submit'>Promote</button></form></li>"
+            for s in ideas.get_seeds()
+        )
+        or "<li>None</li>"
+    )
     body = """
     <html><body>
     <h1>Cascadence Dashboard</h1>
@@ -77,8 +89,10 @@ def dashboard(request: Request) -> HTMLResponse:
     <th>Last Run</th><th>Control</th></tr>
     {rows}
     </table>
+    <h2>Idea Seeds</h2>
+    <ul>{seeds}</ul>
     </body></html>
-    """.format(rows="\n".join(rows), queued=queued_items)
+    """.format(rows="\n".join(rows), queued=queued_items, seeds=seed_items)
     return HTMLResponse(body)
 
 
@@ -96,4 +110,10 @@ def resume(name: str) -> RedirectResponse:
     return RedirectResponse("/", status_code=303)
 
 
-__all__ = ["app", "dashboard", "pause", "resume"]
+@app.post("/promote")
+def promote(text: str = Form(...)) -> RedirectResponse:
+    # placeholder action to promote an idea into a task
+    return RedirectResponse("/", status_code=303)
+
+
+__all__ = ["app", "dashboard", "pause", "resume", "promote"]
