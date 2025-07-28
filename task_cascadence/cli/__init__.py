@@ -208,6 +208,28 @@ def schedule_task(
         raise typer.Exit(code=1) from exc
 
 
+@app.command("unschedule")
+def unschedule_task(name: str) -> None:
+    """Remove any cron schedule for ``NAME``."""
+
+    sched = get_default_scheduler()
+    if not isinstance(sched, CronScheduler):
+        typer.echo("error: scheduler lacks cron capabilities", err=True)
+        raise typer.Exit(code=1)
+    task_info = dict(sched._tasks).get(name)
+    if not task_info:
+        typer.echo(f"error: unknown task '{name}'", err=True)
+        raise typer.Exit(code=1)
+
+    job_id = task_info["task"].__class__.__name__
+    try:
+        sched.unschedule(job_id)
+        typer.echo(f"{name} unscheduled")
+    except Exception as exc:  # pragma: no cover - simple error propagation
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
 @app.command("schedules")
 def show_schedules() -> None:
     """List configured cron schedules."""

@@ -132,3 +132,10 @@ class DagCronScheduler(CronScheduler):
             self.run_task(task.__class__.__name__, user_id=user_id)
 
         return runner
+
+    # ------------------------------------------------------------------
+    def unschedule(self, name: str) -> None:
+        """Remove ``name`` from schedules and dependencies."""
+
+        super().unschedule(name)
+        self.dependencies.pop(name, None)

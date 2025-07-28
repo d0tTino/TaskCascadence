@@ -286,3 +286,24 @@ def test_register_task_twice_running(tmp_path):
     data = yaml.safe_load(storage.read_text())
     assert data["DummyTask"] == "*/2 * * * *"
 
+
+def test_unschedule_removes_job(tmp_path):
+    storage = tmp_path / "sched.yml"
+    sched = CronScheduler(timezone="UTC", storage_path=storage)
+    task = DummyTask()
+    sched.register_task(name_or_task=task, task_or_expr="*/5 * * * *")
+
+    assert sched.scheduler.get_job("DummyTask") is not None
+
+    sched.unschedule("DummyTask")
+
+    assert sched.scheduler.get_job("DummyTask") is None
+    data = yaml.safe_load(storage.read_text()) or {}
+    assert "DummyTask" not in data
+
+
+def test_unschedule_unknown_job(tmp_path):
+    sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
+    with pytest.raises(ValueError):
+        sched.unschedule("MissingTask")
+
