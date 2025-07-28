@@ -1,14 +1,20 @@
-"""Synchronize PointerUpdate events via the configured transport."""
+"""Synchronize PointerUpdate events via the configured transport.
+
+Supported transports are ``grpc`` and ``nats``.
+"""
 
 from __future__ import annotations
 
 import importlib
+import logging
 from typing import Iterable, Any
 
 from .config import load_config
 from .pointer_store import PointerStore
 from .ume.models import PointerUpdate
 from .ume import emit_pointer_update
+
+logger = logging.getLogger(__name__)
 
 
 def _import_object(path: str) -> Any:
@@ -18,12 +24,19 @@ def _import_object(path: str) -> Any:
 
 
 def run() -> None:
-    """Receive ``PointerUpdate`` messages and persist them."""
+    """Receive ``PointerUpdate`` messages and persist them.
+
+    Supported transports are ``grpc`` and ``nats``.
+    """
 
     cfg = load_config()
     transport = cfg.get("ume_transport")
     store = PointerStore()
     broadcast = bool(cfg.get("ume_broadcast_pointers"))
+
+    if not transport:
+        print("UME transport not configured. Exiting.")
+        return
 
     def _maybe_broadcast(update: PointerUpdate) -> None:
         if not broadcast:
@@ -40,8 +53,12 @@ def run() -> None:
         method = cfg.get("ume_grpc_method", "Subscribe")
         listener = getattr(stub, method)()
         for update in listener:
-            store.apply_update(update)
-            _maybe_broadcast(update)
+            try:
+                store.apply_update(update)
+                _maybe_broadcast(update)
+            except Exception:  # pragma: no cover - resilient loop
+                logger.exception("Error processing pointer update")
+                continue
         return
 
     if transport == "nats":
@@ -51,17 +68,22 @@ def run() -> None:
         subject = cfg.get("ume_nats_subject", "events")
         subscription: Iterable[Any] = conn.subscribe_sync(subject)
         for msg in subscription:
-            data = getattr(msg, "data", msg)
-            update = PointerUpdate()
-            if isinstance(data, PointerUpdate):
-                update = data
-            else:
-                update.ParseFromString(data)
-            store.apply_update(update)
-            _maybe_broadcast(update)
+            try:
+                data = getattr(msg, "data", msg)
+                update = PointerUpdate()
+                if isinstance(data, PointerUpdate):
+                    update = data
+                else:
+                    update.ParseFromString(data)
+                store.apply_update(update)
+                _maybe_broadcast(update)
+            except Exception:  # pragma: no cover - resilient loop
+                logger.exception("Error processing pointer update")
+                continue
         return
 
-    raise ValueError("Unknown or unset UME transport")
+    print(f"Unknown UME transport: {transport}. Exiting.")
+    return
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution
