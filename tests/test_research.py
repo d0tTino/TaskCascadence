@@ -1,4 +1,5 @@
 import asyncio
+import pytest
 
 from task_cascadence.orchestrator import TaskPipeline
 
@@ -109,3 +110,13 @@ def test_async_research_method(monkeypatch):
     assert result == "info2"
     assert steps == ["research:bar"]
     assert emitted == ["research"]
+
+
+def test_gather_missing_tino_storm(monkeypatch):
+    """``gather`` raises ``RuntimeError`` when ``tino_storm`` is missing."""
+    import task_cascadence.research as research
+
+    monkeypatch.setattr(research, "tino_storm", None)
+
+    with pytest.raises(RuntimeError):
+        research.gather("query")
