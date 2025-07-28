@@ -23,7 +23,6 @@ from ..metrics import start_metrics_server  # noqa: F401
 from ..pointer_store import PointerStore
 import task_cascadence as tc
 from ..n8n import export_workflow
-import time
 
 from typing import Callable, Union
 
@@ -269,21 +268,6 @@ def reload_plugins_cmd() -> None:
     typer.echo("plugins reloaded")
 
 
-@app.command("watch-plugins")
-def watch_plugins(path: str) -> None:
-    """Watch ``PATH`` for plugin changes."""
-
-    from ..plugins.watcher import PluginWatcher
-
-    watcher = PluginWatcher(path)
-    watcher.start()
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:  # pragma: no cover - manual interruption
-        pass
-    finally:
-        watcher.stop()
 
 
 def _pointer_add(name: str, user_id: str, run_id: str) -> None:
@@ -416,6 +400,5 @@ __all__ = [
     "pointer_send",
     "pointer_receive",
     "pointer_sync_cmd",
-    "watch_plugins",
 ]
 

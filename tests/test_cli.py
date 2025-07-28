@@ -1,5 +1,6 @@
 from click.exceptions import UsageError
 import pytest
+import time
 from typer.testing import CliRunner
 
 from task_cascadence.cli import app, main
@@ -427,6 +428,33 @@ def test_cli_run_pipeline_task(monkeypatch):
 
     assert result.exit_code == 0
     assert steps == ["intake", "run"]
+
+
+def test_cli_watch_plugins(monkeypatch, tmp_path):
+    events = []
+
+    class DummyWatcher:
+        def __init__(self, path):
+            events.append(("init", path))
+
+        def start(self):
+            events.append("start")
+
+        def stop(self):
+            events.append("stop")
+
+    monkeypatch.setattr(
+        "task_cascadence.plugins.watcher.PluginWatcher",
+        DummyWatcher,
+    )
+
+    monkeypatch.setattr(time, "sleep", lambda _: (_ for _ in ()).throw(KeyboardInterrupt()))
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["watch-plugins", str(tmp_path)])
+
+    assert result.exit_code == 0
+    assert events == [("init", str(tmp_path)), "start", "stop"]
 
 
 
