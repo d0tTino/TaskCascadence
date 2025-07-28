@@ -5,7 +5,9 @@ Supported transports are ``grpc`` and ``nats``.
 
 from __future__ import annotations
 
+import asyncio
 import importlib
+import inspect
 import logging
 from typing import Iterable, Any
 
@@ -23,11 +25,8 @@ def _import_object(path: str) -> Any:
     return getattr(mod, attr)
 
 
-def run() -> None:
-    """Receive ``PointerUpdate`` messages and persist them.
-
-    Supported transports are ``grpc`` and ``nats``.
-    """
+async def run_async() -> None:
+    """Receive ``PointerUpdate`` messages and persist them using asyncio."""
 
     cfg = load_config()
     transport = cfg.get("ume_transport")
@@ -38,11 +37,16 @@ def run() -> None:
         print("UME transport not configured. Exiting.")
         return
 
-    def _maybe_broadcast(update: PointerUpdate) -> None:
+    async def _maybe_broadcast(update: PointerUpdate) -> None:
         if not broadcast:
             return
         try:
-            emit_pointer_update(update)
+            if "use_asyncio" in inspect.signature(emit_pointer_update).parameters:
+                result = emit_pointer_update(update, use_asyncio=True)
+            else:
+                result = emit_pointer_update(update)
+            if isinstance(result, asyncio.Task):
+                await result
         except Exception:  # pragma: no cover - best effort transport
             pass
 
@@ -52,10 +56,19 @@ def run() -> None:
         stub = _import_object(cfg["ume_grpc_stub"])
         method = cfg.get("ume_grpc_method", "Subscribe")
         listener = getattr(stub, method)()
-        for update in listener:
+        if inspect.isawaitable(listener):
+            listener = await listener
+        if hasattr(listener, "__aiter__"):
+            async_iter = listener
+        else:
+            async def _gen():
+                for item in listener:
+                    yield item
+            async_iter = _gen()
+        async for update in async_iter:
             try:
                 store.apply_update(update)
-                _maybe_broadcast(update)
+                await _maybe_broadcast(update)
             except Exception:  # pragma: no cover - resilient loop
                 logger.exception("Error processing pointer update")
                 continue
@@ -66,8 +79,20 @@ def run() -> None:
             raise ValueError("UME_NATS_CONN not configured")
         conn = _import_object(cfg["ume_nats_conn"])
         subject = cfg.get("ume_nats_subject", "events")
-        subscription: Iterable[Any] = conn.subscribe_sync(subject)
-        for msg in subscription:
+        if hasattr(conn, "subscribe"):
+            subscription: Iterable[Any] = conn.subscribe(subject)
+        else:
+            subscription = conn.subscribe_sync(subject)
+        if inspect.isawaitable(subscription):
+            subscription = await subscription
+        if hasattr(subscription, "__aiter__"):
+            async_iter = subscription
+        else:
+            async def _gen():
+                for item in subscription:
+                    yield item
+            async_iter = _gen()
+        async for msg in async_iter:
             try:
                 data = getattr(msg, "data", msg)
                 update = PointerUpdate()
@@ -76,7 +101,7 @@ def run() -> None:
                 else:
                     update.ParseFromString(data)
                 store.apply_update(update)
-                _maybe_broadcast(update)
+                await _maybe_broadcast(update)
             except Exception:  # pragma: no cover - resilient loop
                 logger.exception("Error processing pointer update")
                 continue
@@ -84,6 +109,12 @@ def run() -> None:
 
     print(f"Unknown UME transport: {transport}. Exiting.")
     return
+
+
+def run() -> None:
+    """Synchronous wrapper for :func:`run_async`."""
+
+    asyncio.run(run_async())
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution

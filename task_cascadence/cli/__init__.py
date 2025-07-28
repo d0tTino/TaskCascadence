@@ -370,8 +370,17 @@ def pointer_sync_cmd() -> None:
     """Start the pointer synchronization service."""
 
     from .. import pointer_sync
+    import asyncio
 
-    pointer_sync.run()
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        loop.create_task(pointer_sync.run_async())
+    else:
+        pointer_sync.run()
 
 
 @app.command("capability-planner")
