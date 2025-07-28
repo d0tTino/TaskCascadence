@@ -116,6 +116,33 @@ def test_env_parsed(monkeypatch):
     assert cfg["hash_secret"] == "s"
 
 
+def test_create_scheduler_env_timezone(monkeypatch):
+    monkeypatch.setenv("CASCADENCE_TIMEZONE", "Asia/Kolkata")
+    cfg = load_config()
+    from task_cascadence.scheduler import create_scheduler
+
+    sched = create_scheduler(cfg["backend"], timezone=cfg["timezone"])
+    from zoneinfo import ZoneInfo
+
+    assert str(sched.scheduler.timezone) == "Asia/Kolkata"
+    assert isinstance(sched.scheduler.timezone, ZoneInfo)
+
+
+def test_create_scheduler_yaml_timezone(monkeypatch, tmp_path):
+    cfg_file = tmp_path / "cfg.yml"
+    cfg_file.write_text("timezone: Australia/Sydney")
+    monkeypatch.setenv("CASCADENCE_CONFIG", str(cfg_file))
+    monkeypatch.delenv("CASCADENCE_TIMEZONE", raising=False)
+    cfg = load_config()
+    from task_cascadence.scheduler import create_scheduler
+
+    sched = create_scheduler(cfg["backend"], timezone=cfg["timezone"])
+    from zoneinfo import ZoneInfo
+
+    assert str(sched.scheduler.timezone) == "Australia/Sydney"
+    assert isinstance(sched.scheduler.timezone, ZoneInfo)
+
+
 def test_initialize_unknown_scheduler(monkeypatch):
     """Providing an invalid scheduler should raise a ValueError."""
 
