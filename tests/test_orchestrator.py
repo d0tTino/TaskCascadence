@@ -1,3 +1,4 @@
+import pytest
 from task_cascadence.orchestrator import TaskPipeline
 from task_cascadence.ume import _hash_user_id
 from task_cascadence.scheduler import BaseScheduler
@@ -190,3 +191,26 @@ def test_nested_tasks_parent_run(monkeypatch):
 
     assert result == ["x", "y"]
     assert steps == ["run-x", "run-y", "parent-run-['x', 'y']"]
+
+
+def test_precheck_failure_stops_pipeline(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    steps: list[str] = []
+
+    class PrecheckTask:
+        def precheck(self) -> bool:
+            steps.append("precheck")
+            return False
+
+        def run(self) -> str:
+            steps.append("run")
+            return "ok"
+
+    pipeline = TaskPipeline(PrecheckTask())
+
+    with pytest.raises(RuntimeError):
+        pipeline.run()
+
+    assert steps == ["precheck"]
