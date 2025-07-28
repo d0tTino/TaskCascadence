@@ -3,7 +3,8 @@ import importlib
 from typer.testing import CliRunner
 
 from task_cascadence import pointer_sync
-from task_cascadence.cli import app
+from task_cascadence.cli import app, pointer_sync_cmd
+import asyncio
 
 
 def test_pointer_sync_grpc(monkeypatch, tmp_path):
@@ -164,5 +165,81 @@ class Stub:
 
     data = yaml.safe_load(store_b.read_text())
     assert data["demo"] == [{"run_id": "r1", "user_hash": "u"}]
+
+
+def test_pointer_sync_async_grpc(monkeypatch, tmp_path):
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+    monkeypatch.setenv("UME_TRANSPORT", "grpc")
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe")
+
+    module = tmp_path / "astub.py"
+    module.write_text(
+        """
+import asyncio
+from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+class Stub:
+    @staticmethod
+    async def Subscribe():
+        yield PointerUpdate(task_name='demo', run_id='ra1', user_hash='u')
+"""
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("UME_GRPC_STUB", "astub:Stub")
+
+    importlib.invalidate_caches()
+    asyncio.run(pointer_sync.run_async())
+
+    data = yaml.safe_load(store.read_text())
+    assert data["demo"] == [{"run_id": "ra1", "user_hash": "u"}]
+
+
+def test_pointer_sync_async_nats(monkeypatch, tmp_path):
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+    monkeypatch.setenv("UME_TRANSPORT", "nats")
+
+    module = tmp_path / "aconn.py"
+    module.write_text(
+        """
+import asyncio
+from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+class Conn:
+    async def subscribe(self, subject):
+        update = PointerUpdate(task_name='demo', run_id='ra2', user_hash='x')
+        yield update.SerializeToString()
+conn = Conn()
+"""
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("UME_NATS_CONN", "aconn:conn")
+    monkeypatch.setenv("UME_NATS_SUBJECT", "events")
+
+    importlib.invalidate_caches()
+    asyncio.run(pointer_sync.run_async())
+
+    data = yaml.safe_load(store.read_text())
+    assert data["demo"] == [{"run_id": "ra2", "user_hash": "x"}]
+
+
+def test_cli_pointer_sync_async(monkeypatch):
+    called = {}
+
+    async def fake_run_async():
+        called["async"] = True
+
+    def fake_run():
+        called["sync"] = True
+
+    monkeypatch.setattr(pointer_sync, "run_async", fake_run_async)
+    monkeypatch.setattr(pointer_sync, "run", fake_run)
+
+    async def runner():
+        pointer_sync_cmd()
+        await asyncio.sleep(0)
+
+    asyncio.run(runner())
+
+    assert called == {"async": True}
 
 
