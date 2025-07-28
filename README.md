@@ -78,7 +78,10 @@ httpx.post(
 
 The return value of ``plan`` may include a list of tasks or ``TaskPipeline``
 objects. When present, the pipeline runs each subtask in sequence and passes the
-list of results to the parent ``run`` or ``verify`` stage.
+list of results to the parent ``run`` or ``verify`` stage. Subtasks can also be
+executed in parallel by returning ``{"execution": "parallel", "tasks": [...]}``
+or a :class:`~task_cascadence.orchestrator.ParallelPlan` instance. Results from
+parallel execution are aggregated in the same way.
 
 ```python
 class Parent:
@@ -87,6 +90,21 @@ class Parent:
 
     def verify(self, results):
         assert results == ["a", "b"]
+```
+
+Parallel execution is similar:
+
+```python
+from task_cascadence.orchestrator import ParallelPlan
+
+class Parent:
+    def plan(self):
+        return {"execution": "parallel", "tasks": [Child("a"), Child("b")]}
+
+    # or equivalently
+class Parent:
+    def plan(self):
+        return ParallelPlan([Child("a"), Child("b")])
 ```
 
 This allows tasks to be decomposed into smaller reusable units without defining
