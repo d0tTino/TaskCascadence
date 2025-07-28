@@ -53,6 +53,12 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
         cfg["ume_nats_conn"] = os.environ["UME_NATS_CONN"]
     if "UME_NATS_SUBJECT" in os.environ:
         cfg["ume_nats_subject"] = os.environ["UME_NATS_SUBJECT"]
+    if "UME_BROADCAST_POINTERS" in os.environ:
+        cfg["ume_broadcast_pointers"] = os.environ["UME_BROADCAST_POINTERS"].lower() not in (
+            "0",
+            "false",
+            "no",
+        )
 
     if "CASCADENCE_HASH_SECRET" in os.environ:
         cfg["hash_secret"] = os.environ["CASCADENCE_HASH_SECRET"]
@@ -68,6 +74,9 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
         cfg["pointers_path"] = os.environ["CASCADENCE_POINTERS_PATH"]
     elif "pointers_path" in cfg:
         cfg["pointers_path"] = cfg["pointers_path"]
+
+    if "ume_broadcast_pointers" in cfg:
+        cfg["ume_broadcast_pointers"] = bool(cfg["ume_broadcast_pointers"])
 
     return cfg
 
