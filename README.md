@@ -68,6 +68,24 @@ httpx.post(
 )
 ```
 
+## Nested Pipelines
+
+The return value of ``plan`` may include a list of tasks or ``TaskPipeline``
+objects. When present, the pipeline runs each subtask in sequence and passes the
+list of results to the parent ``run`` or ``verify`` stage.
+
+```python
+class Parent:
+    def plan(self):
+        return [Child("a"), Child("b")]
+
+    def verify(self, results):
+        assert results == ["a", "b"]
+```
+
+This allows tasks to be decomposed into smaller reusable units without defining
+separate schedules.
+
 ## Command Line Usage
 
 After installing the package in an environment with ``typer`` available, the

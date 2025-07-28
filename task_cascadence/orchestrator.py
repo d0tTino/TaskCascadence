@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
+from typing import Any, Coroutine, cast
 from uuid import uuid4
 import asyncio
 import inspect
@@ -85,6 +85,8 @@ class TaskPipeline:
         return result
 
     def plan(self, *, user_id: str | None = None) -> Any:
+        """Return a plan which may include subtasks."""
+
         plan_result = None
         if hasattr(self.task, "plan"):
             plan_result = self.task.plan()
@@ -94,11 +96,39 @@ class TaskPipeline:
         return plan_result
 
     def execute(self, plan_result: Any = None, *, user_id: str | None = None) -> Any:
+        """Run the task or any planned subtasks."""
+
         start_ts = Timestamp()
         start_ts.FromDatetime(datetime.now())
         status = "success"
+
         try:
-            result = self._call_run(plan_result)
+            if isinstance(plan_result, list):
+                results = []
+                for sub in plan_result:
+                    pipeline = sub if isinstance(sub, TaskPipeline) else TaskPipeline(sub)
+                    sub_result = pipeline.run(user_id=user_id)
+                    if inspect.isawaitable(sub_result):
+                        try:
+                            asyncio.get_running_loop()
+                        except RuntimeError:
+                            sub_result = asyncio.run(
+                                cast(Coroutine[Any, Any, Any], sub_result)
+                            )
+                        else:
+                            _res = sub_result
+
+                            async def _await_result(res=_res) -> Any:
+                                return await res
+
+                            sub_result = _await_result()
+                    results.append(sub_result)
+                result = results
+                if hasattr(self.task, "run"):
+                    result = self._call_run(results)
+            else:
+                result = self._call_run(plan_result)
+
             emit_stage_update(self.task.__class__.__name__, "run", user_id=user_id)
         except Exception:
             status = "error"
