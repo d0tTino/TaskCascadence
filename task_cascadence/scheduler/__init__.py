@@ -376,6 +376,18 @@ class CronScheduler(BaseScheduler):
     def list_jobs(self):
         return self.scheduler.get_jobs()
 
+    def unschedule(self, name: str) -> None:
+        """Remove the cron schedule for ``name``."""
+
+        if name not in self.schedules:
+            raise ValueError(f"Unknown schedule: {name}")
+        try:
+            self.scheduler.remove_job(name)
+        except Exception:  # pragma: no cover - passthrough
+            pass
+        self.schedules.pop(name, None)
+        self._save_schedules()
+
     def pause_task(self, name: str) -> None:
         """Pause ``name`` and emit a stage event."""
 

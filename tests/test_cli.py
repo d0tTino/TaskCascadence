@@ -457,4 +457,36 @@ def test_cli_watch_plugins(monkeypatch, tmp_path):
     assert events == [("init", str(tmp_path)), "start", "stop"]
 
 
+def test_cli_unschedule(monkeypatch, tmp_path):
+    from task_cascadence.scheduler import CronScheduler
+    from task_cascadence.plugins import ExampleTask
+    import yaml
+
+    sched = CronScheduler(storage_path=tmp_path / "sched.yml")
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+    sched.register_task(name_or_task="example", task_or_expr=ExampleTask())
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["schedule", "example", "0 12 * * *"])
+    assert result.exit_code == 0
+
+    result = runner.invoke(app, ["unschedule", "example"])
+    assert result.exit_code == 0
+
+    assert sched.scheduler.get_job("ExampleTask") is None
+    data = yaml.safe_load((tmp_path / "sched.yml").read_text()) or {}
+    assert "ExampleTask" not in data
+
+
+def test_cli_unschedule_unknown(monkeypatch):
+    from task_cascadence.scheduler import CronScheduler
+
+    sched = CronScheduler(storage_path="/tmp/sched.yml")
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["unschedule", "missing"])
+    assert result.exit_code == 1
+
+
 
