@@ -27,6 +27,13 @@ class PrecheckError(RuntimeError):
 
 
 @dataclass
+class ParallelPlan:
+    """Container for a group of subtasks that should run concurrently."""
+
+    tasks: list[Any]
+
+
+@dataclass
 class TaskPipeline:
     """Orchestrate a task through multiple stages.
 
@@ -126,7 +133,39 @@ class TaskPipeline:
                     raise PrecheckError("precheck failed")
                 self._emit_stage("precheck", user_id)
 
-            if isinstance(plan_result, list):
+            parallel_tasks: list[Any] | None = None
+            if isinstance(plan_result, dict) and plan_result.get("execution") == "parallel":
+                parallel_tasks = cast(list[Any], plan_result.get("tasks", []))
+            elif isinstance(plan_result, ParallelPlan):
+                parallel_tasks = plan_result.tasks
+
+            if parallel_tasks is not None:
+                pipelines = [p if isinstance(p, TaskPipeline) else TaskPipeline(p) for p in parallel_tasks]
+
+                async def _run_all() -> list[Any]:
+                    async def _one(p: TaskPipeline) -> Any:
+                        r = p.run(user_id=user_id)
+                        if inspect.isawaitable(r):
+                            return await r
+                        return r
+
+                    return await asyncio.gather(*[_one(pl) for pl in pipelines])
+
+                results: Any
+                try:
+                    asyncio.get_running_loop()
+                except RuntimeError:
+                    results = asyncio.run(_run_all())
+                else:
+                    async def _await_all() -> list[Any]:
+                        return await _run_all()
+
+                    results = _await_all()
+
+                result = results
+                if hasattr(self.task, "run"):
+                    result = self._call_run(results)
+            elif isinstance(plan_result, list):
                 results = []
                 for sub in plan_result:
                     pipeline = sub if isinstance(sub, TaskPipeline) else TaskPipeline(sub)

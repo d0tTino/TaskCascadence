@@ -1,5 +1,6 @@
+import asyncio
 import pytest
-from task_cascadence.orchestrator import TaskPipeline
+from task_cascadence.orchestrator import TaskPipeline, ParallelPlan
 from task_cascadence.ume import _hash_user_id
 from task_cascadence.scheduler import BaseScheduler
 
@@ -214,3 +215,50 @@ def test_precheck_failure_stops_pipeline(monkeypatch):
         pipeline.run()
 
     assert steps == ["precheck"]
+
+
+async def _delay(value: str) -> str:
+    await asyncio.sleep(0.05)
+    return value
+
+
+def test_parallel_execution_dict(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    class Child:
+        def __init__(self, name: str):
+            self.name = name
+
+        async def run(self) -> str:
+            return await _delay(self.name)
+
+    class Parent:
+        def plan(self):
+            return {"execution": "parallel", "tasks": [Child("a"), Child("b")]} 
+
+    pipeline = TaskPipeline(Parent())
+    result = pipeline.run()
+
+    assert sorted(result) == ["a", "b"]
+
+
+def test_parallel_execution_object(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    class Child:
+        def __init__(self, name: str):
+            self.name = name
+
+        async def run(self) -> str:
+            return await _delay(self.name)
+
+    class Parent:
+        def plan(self):
+            return ParallelPlan([Child("x"), Child("y")])
+
+    pipeline = TaskPipeline(Parent())
+    result = pipeline.run()
+
+    assert sorted(result) == ["x", "y"]
