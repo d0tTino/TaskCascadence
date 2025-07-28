@@ -18,4 +18,8 @@ TaskPointer = tasks_pb2.TaskPointer  # type: ignore[attr-defined]
 PointerUpdate = tasks_pb2.PointerUpdate  # type: ignore[attr-defined]
 """Pointer synchronization message."""
 
-__all__ = ["TaskSpec", "TaskRun", "TaskPointer", "PointerUpdate"]
+
+TaskNote = tasks_pb2.TaskNote  # type: ignore[attr-defined]
+"""Generic task note or outcome message."""
+
+__all__ = ["TaskSpec", "TaskRun", "TaskPointer", "PointerUpdate", "TaskNote"]
