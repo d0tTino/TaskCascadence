@@ -22,4 +22,15 @@ PointerUpdate = tasks_pb2.PointerUpdate  # type: ignore[attr-defined]
 TaskNote = tasks_pb2.TaskNote  # type: ignore[attr-defined]
 """Generic task note or outcome message."""
 
-__all__ = ["TaskSpec", "TaskRun", "TaskPointer", "PointerUpdate", "TaskNote"]
+
+IdeaSeed = tasks_pb2.IdeaSeed  # type: ignore[attr-defined]
+"""Freeform idea prompt from a user."""
+
+__all__ = [
+    "TaskSpec",
+    "TaskRun",
+    "TaskPointer",
+    "PointerUpdate",
+    "TaskNote",
+    "IdeaSeed",
+]

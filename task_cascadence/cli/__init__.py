@@ -352,6 +352,18 @@ def pointer_sync_cmd() -> None:
     pointer_sync.run()
 
 
+@app.command("ai-idea")
+def ai_idea(text: str, user_id: str | None = typer.Option(None, "--user-id")) -> None:
+    """Send a freeform idea seed via UME."""
+
+    from ..ume import emit_idea_seed
+    from ..ume.models import IdeaSeed
+
+    seed = IdeaSeed(text=text)
+    emit_idea_seed(seed, user_id=user_id)
+    typer.echo("idea sent")
+
+
 @app.command("watch-plugins")  # type: ignore[no-redef]
 def watch_plugins(directory: str = typer.Argument(".")) -> None:  # type: ignore[no-redef]  # noqa: F811
     """Reload plugins when files in ``DIRECTORY`` change."""
@@ -400,5 +412,6 @@ __all__ = [
     "pointer_send",
     "pointer_receive",
     "pointer_sync_cmd",
+    "ai_idea",
 ]
 

@@ -36,3 +36,8 @@ message TaskNote {
   string note = 3;
   string user_hash = 4;
 }
+
+message IdeaSeed {
+  string text = 1;
+  string user_hash = 2;
+}
