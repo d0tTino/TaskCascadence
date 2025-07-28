@@ -1,5 +1,7 @@
 """Example demonstrating staged mod installation with pause/resume."""
 
+import asyncio
+
 from task_cascadence.scheduler.dag import DagCronScheduler
 from task_cascadence.plugins import CronTask
 from task_cascadence.ume import emit_stage_update
@@ -25,10 +27,11 @@ class ModSetup(CronTask):
         self._plan = plan_mod_setup()
         return self._plan
 
-    def run(self) -> None:
+    async def run(self) -> None:
         for step in self._plan:
             if step == "download":
                 print("Downloading mod archive")
+                await asyncio.sleep(0.1)
             elif step == "install":
                 print("Installing mod")
             elif step == "enable":
