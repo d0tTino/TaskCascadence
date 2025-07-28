@@ -106,6 +106,7 @@ $ task pause NAME      # pause a task
 $ task resume NAME     # resume a paused task
 $ task schedule NAME CRON  # register a cron schedule
 $ task schedules       # list configured schedules
+$ task ai-idea TEXT    # emit an idea seed via UME
 $ task export-n8n FILE # dump tasks as n8n workflow
 $ task webhook [--host HOST] [--port PORT]  # start webhook server
 $ task watch-plugins DIR # reload plugins on changes in DIR

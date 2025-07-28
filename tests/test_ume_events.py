@@ -5,8 +5,8 @@ from task_cascadence.orchestrator import TaskPipeline
 from task_cascadence.cli import app
 from task_cascadence.scheduler import BaseScheduler
 from task_cascadence.plugins import ExampleTask
-from task_cascadence.ume import _hash_user_id, emit_task_note
-from task_cascadence.ume.models import TaskNote
+from task_cascadence.ume import _hash_user_id, emit_task_note, emit_idea_seed
+from task_cascadence.ume.models import TaskNote, IdeaSeed
 
 
 class DemoTask:
@@ -92,4 +92,25 @@ def test_emit_task_note(monkeypatch):
     assert client.events[0].user_hash == _hash_user_id("alice")
     serialized = client.events[0].SerializeToString()
     again = TaskNote.FromString(serialized)
+    assert again == client.events[0]
+
+
+def test_emit_idea_seed(monkeypatch):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+
+    class Client:
+        def __init__(self):
+            self.events = []
+
+        def enqueue(self, obj):
+            self.events.append(obj)
+
+    client = Client()
+    seed = IdeaSeed(text="an idea")
+    emit_idea_seed(seed, client, user_id="bob")
+
+    assert isinstance(client.events[0], IdeaSeed)
+    assert client.events[0].user_hash == _hash_user_id("bob")
+    serialized = client.events[0].SerializeToString()
+    again = IdeaSeed.FromString(serialized)
     assert again == client.events[0]

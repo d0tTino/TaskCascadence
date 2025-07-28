@@ -10,7 +10,7 @@ import hashlib
 from ..config import load_config
 
 from ..transport import BaseTransport, AsyncBaseTransport, get_client
-from .models import TaskRun, TaskSpec, PointerUpdate, TaskNote
+from .models import TaskRun, TaskSpec, PointerUpdate, TaskNote, IdeaSeed
 from ..stage_store import StageStore
 
 
@@ -178,3 +178,24 @@ def emit_task_note(
             _async_queue_within_deadline(note, target)
         )
     return _queue_within_deadline(note, target)
+
+
+def emit_idea_seed(
+    seed: IdeaSeed,
+    client: Any | None = None,
+    user_id: str | None = None,
+    *,
+    use_asyncio: bool = False,
+) -> asyncio.Task | threading.Thread | None:
+    """Emit ``IdeaSeed`` using the configured transport."""
+
+    target = client or _default_client
+    if target is None:
+        raise ValueError("No transport client configured")
+    if user_id is not None:
+        seed.user_hash = _hash_user_id(user_id)
+    if use_asyncio:
+        return asyncio.get_running_loop().create_task(
+            _async_queue_within_deadline(seed, target)
+        )
+    return _queue_within_deadline(seed, target)

@@ -1,8 +1,13 @@
 from datetime import datetime
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from task_cascadence.ume import emit_task_spec, emit_task_run, _hash_user_id
-from task_cascadence.ume.protos.tasks_pb2 import TaskSpec, TaskRun
+from task_cascadence.ume import (
+    emit_task_spec,
+    emit_task_run,
+    emit_idea_seed,
+    _hash_user_id,
+)
+from task_cascadence.ume.protos.tasks_pb2 import TaskSpec, TaskRun, IdeaSeed
 
 
 class Collector:
@@ -40,6 +45,26 @@ def test_run_user_hash_not_raw():
     )
     emit_task_run(run, client, user_id="alice")
     assert client.events[0].user_hash != "alice"
+
+
+def test_idea_seed_user_hash_not_raw():
+    client = Collector()
+    seed = IdeaSeed(text="foo")
+    emit_idea_seed(seed, client, user_id="charlie")
+    assert client.events[0].user_hash != "charlie"
+
+
+def test_idea_seed_hashes_unique():
+    client = Collector()
+    seed1 = IdeaSeed(text="foo")
+    seed2 = IdeaSeed(text="bar")
+    emit_idea_seed(seed1, client, user_id="dave")
+    emit_idea_seed(seed2, client, user_id="eve")
+    h1 = client.events[0].user_hash
+    h2 = client.events[1].user_hash
+    assert h1 != h2
+    assert h1 != "dave"
+    assert h2 != "eve"
 
 
 def test_hash_user_id_secret(monkeypatch):
