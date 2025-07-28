@@ -464,7 +464,8 @@ $ pip install -e .[dev]
 ```
 
 The ``dev`` extras also install stub packages for ``requests`` and ``PyYAML`` so
-that ``mypy`` can perform complete type checking.
+that ``mypy`` can perform complete type checking. Install these extras before
+running ``ruff``, ``mypy`` or ``pytest``.
 
 This will install tools like ``ruff``, ``pytest`` and ``mypy``. Run them from
 the project root to lint, type-check and test the codebase:
@@ -474,4 +475,6 @@ $ ruff .
 $ mypy .
 $ pytest
 ```
+
+The test suite requires ``protobuf>=6``.
 
