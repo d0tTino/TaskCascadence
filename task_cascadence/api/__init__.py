@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, Body
 import inspect
 
 from ..scheduler import get_default_scheduler, CronScheduler
@@ -9,6 +9,7 @@ from ..cli import _pointer_add, _pointer_list, _pointer_receive
 from ..pipeline_registry import get_pipeline
 from ..plugins import load_plugin
 from ..task_store import TaskStore
+from ..idea_store import IdeaStore
 
 app = FastAPI()
 
@@ -149,6 +150,26 @@ def pipeline_status(name: str):
     return store.get_events(name)
 
 
+@app.post("/ideas")
+def submit_idea(idea: str = Body(..., embed=True)):
+    """Store a raw idea and return its identifier."""
+    if not isinstance(idea, str) or not idea.strip():
+        raise HTTPException(400, "invalid idea")
+    store = IdeaStore()
+    idea_id = store.add_idea(idea)
+    return {"id": idea_id}
+
+
+@app.get("/ideas/{idea_id}")
+def get_idea(idea_id: str):
+    """Return the previously stored idea."""
+    store = IdeaStore()
+    idea = store.get_idea(idea_id)
+    if idea is None:
+        raise HTTPException(404, "unknown idea")
+    return {"id": idea_id, "idea": idea}
+
+
 @app.post("/pointers/{name}")
 def pointer_add(name: str, user_id: str, run_id: str):
     """Add a pointer for ``name``."""
@@ -191,6 +212,8 @@ __all__ = [
     "pause_task",
     "resume_task",
     "pipeline_status",
+    "submit_idea",
+    "get_idea",
     "pointer_add",
     "pointer_list",
     "pointer_receive",

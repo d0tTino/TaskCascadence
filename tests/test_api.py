@@ -127,3 +127,25 @@ def test_register_task_with_schedule(monkeypatch, tmp_path):
     job = sched.scheduler.get_job("DynamicTask")
     assert job is not None
 
+
+def test_idea_submit_and_get(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_IDEAS_PATH", str(tmp_path / "ideas.yml"))
+    client = TestClient(app)
+
+    resp = client.post("/ideas", json={"idea": "hello"})
+    assert resp.status_code == 200
+    idea_id = resp.json()["id"]
+    assert isinstance(idea_id, str)
+
+    resp = client.get(f"/ideas/{idea_id}")
+    assert resp.status_code == 200
+    assert resp.json() == {"id": idea_id, "idea": "hello"}
+
+
+def test_idea_validation(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_IDEAS_PATH", str(tmp_path / "ideas.yml"))
+    client = TestClient(app)
+
+    resp = client.post("/ideas", json={"idea": " "})
+    assert resp.status_code == 400
+
