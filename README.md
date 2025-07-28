@@ -459,6 +459,19 @@ The service reads the same ``UME_*`` environment variables used for event
 emission and persists incoming :class:`PointerUpdate` messages via
 ``PointerStore.apply_update``.
 
+## Capability Planner
+
+The :mod:`task_cascadence.capability_planner` module watches UME for
+``TaskRun`` events with ``status='error'``. When a failure is detected a
+placeholder follow-up task is scheduled via the default scheduler.
+
+Start the service directly or via the CLI:
+
+```bash
+$ python -m task_cascadence.capability_planner
+$ task capability-planner
+```
+
 ## n8n Export
 
 Tasks registered with Cascadence can be exported as an n8n workflow using the

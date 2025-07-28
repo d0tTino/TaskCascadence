@@ -352,6 +352,15 @@ def pointer_sync_cmd() -> None:
     pointer_sync.run()
 
 
+@app.command("capability-planner")
+def capability_planner_cmd() -> None:
+    """Start the capability planner service."""
+
+    from .. import capability_planner
+
+    capability_planner.run()
+
+
 @app.command("ai-idea")
 def ai_idea(text: str, user_id: str | None = typer.Option(None, "--user-id")) -> None:
     """Send a freeform idea seed via UME."""
@@ -412,6 +421,7 @@ __all__ = [
     "pointer_send",
     "pointer_receive",
     "pointer_sync_cmd",
+    "capability_planner_cmd",
     "ai_idea",
 ]
 
