@@ -219,6 +219,18 @@ class TaskPipeline:
         verify_result = exec_result
         if hasattr(self.task, "verify"):
             verify_result = self.task.verify(exec_result)
+            if inspect.isawaitable(verify_result):
+                try:
+                    asyncio.get_running_loop()
+                except RuntimeError:
+                    verify_result = asyncio.run(cast(Coroutine[Any, Any, Any], verify_result))
+                else:
+                    _res = verify_result
+
+                    async def _await_verify(res=_res) -> Any:
+                        return await res
+
+                    verify_result = _await_verify()
         self._emit_stage("verification", user_id)
         return verify_result
 
