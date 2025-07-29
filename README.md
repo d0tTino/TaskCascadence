@@ -440,10 +440,12 @@ method.
 
 ## Hashing User IDs
 
-User identifiers passed to emission helpers are hashed before transport.
-Provide a secret via the ``CASCADENCE_HASH_SECRET`` environment variable to
-salt these hashes, e.g. ``CASCADENCE_HASH_SECRET=abc123``. Omitting the
-variable hashes the plain ID.
+User identifiers passed to emission helpers are hashed before transport using
+``_hash_user_id`` from ``task_cascadence/ume/__init__.py``. The function salts
+each ID with ``CASCADENCE_HASH_SECRET`` and is used throughout the API, CLI and
+dashboard so the same input maps to a consistent hash. Salting allows
+deployments to generate unique hashes while avoiding exposure of the raw ID,
+helping preserve privacy when events are stored or forwarded.
 
 ## Pointer Sync Service
 
