@@ -3,6 +3,7 @@ import pytest
 from task_cascadence.orchestrator import TaskPipeline, ParallelPlan
 from task_cascadence.ume import _hash_user_id
 from task_cascadence.scheduler import BaseScheduler
+from task_cascadence.stage_store import StageStore
 
 
 class DemoTask:
@@ -262,3 +263,39 @@ def test_parallel_execution_object(monkeypatch):
     result = pipeline.run()
 
     assert sorted(result) == ["x", "y"]
+
+
+def test_async_verify(monkeypatch, tmp_path):
+    """An async ``verify`` method is awaited and its result returned."""
+
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+
+    stages: list[str] = []
+
+    def fake_spec(spec, user_id=None):
+        stages.append(spec.description)
+
+    def fake_run(run, user_id=None):
+        stages.append("run")
+
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", fake_spec)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", fake_run)
+
+    class AsyncTask:
+        async def run(self):
+            return "done"
+
+        async def verify(self, result):
+            await asyncio.sleep(0.01)
+            return f"verified:{result}"
+
+    pipeline = TaskPipeline(AsyncTask())
+    result = pipeline.run()
+
+    assert result == "verified:done"
+    assert stages == ["intake", "planning", "run", "verification"]
+
+    events = StageStore(path=tmp_path / "stages.yml").get_events("AsyncTask")
+    assert [e["stage"] for e in events] == ["intake", "planning", "run", "verification"]
