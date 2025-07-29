@@ -243,3 +243,75 @@ def test_cli_pointer_sync_async(monkeypatch):
     assert called == {"async": True}
 
 
+def test_pointer_sync_async_grpc_broadcast(monkeypatch, tmp_path):
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+    monkeypatch.setenv("UME_TRANSPORT", "grpc")
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe")
+    monkeypatch.setenv("UME_BROADCAST_POINTERS", "1")
+
+    module = tmp_path / "bcast_stub.py"
+    module.write_text(
+        """
+import asyncio
+from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+class Stub:
+    @staticmethod
+    async def Subscribe():
+        yield PointerUpdate(task_name='demo', run_id='rab1', user_hash='u')
+"""
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("UME_GRPC_STUB", "bcast_stub:Stub")
+
+    captured = {}
+
+    def fake_emit(update, **_: str):
+        captured["update"] = update
+
+    monkeypatch.setattr(pointer_sync, "emit_pointer_update", fake_emit)
+
+    importlib.invalidate_caches()
+    asyncio.run(pointer_sync.run_async())
+
+    data = yaml.safe_load(store.read_text())
+    assert data["demo"] == [{"run_id": "rab1", "user_hash": "u"}]
+    assert captured["update"].run_id == "rab1"
+
+
+def test_pointer_sync_async_grpc_no_broadcast(monkeypatch, tmp_path):
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+    monkeypatch.setenv("UME_TRANSPORT", "grpc")
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe")
+    monkeypatch.setenv("UME_BROADCAST_POINTERS", "0")
+
+    module = tmp_path / "nobcast_stub.py"
+    module.write_text(
+        """
+import asyncio
+from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+class Stub:
+    @staticmethod
+    async def Subscribe():
+        yield PointerUpdate(task_name='demo', run_id='rab2', user_hash='u')
+"""
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("UME_GRPC_STUB", "nobcast_stub:Stub")
+
+    captured = {}
+
+    def fake_emit(update, **_: str):
+        captured["update"] = update
+
+    monkeypatch.setattr(pointer_sync, "emit_pointer_update", fake_emit)
+
+    importlib.invalidate_caches()
+    asyncio.run(pointer_sync.run_async())
+
+    data = yaml.safe_load(store.read_text())
+    assert data["demo"] == [{"run_id": "rab2", "user_hash": "u"}]
+    assert captured == {}
+
+
