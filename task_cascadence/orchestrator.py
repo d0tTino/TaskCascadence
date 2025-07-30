@@ -253,6 +253,11 @@ class TaskPipeline:
         while self._paused:
             time.sleep(0.1)
 
+    async def _wait_if_paused_async(self) -> None:
+        """Async variant of :meth:`_wait_if_paused`."""
+        while self._paused:
+            await asyncio.sleep(0.1)
+
     # ------------------------------------------------------------------
     def run(self, *, user_id: str | None = None) -> Any:
         self.intake(user_id=user_id)
@@ -264,6 +269,32 @@ class TaskPipeline:
         exec_result = self.execute(plan_result, user_id=user_id)
         self._wait_if_paused()
         return self.verify(exec_result, user_id=user_id)
+
+    async def run_async(self, *, user_id: str | None = None) -> Any:
+        """Asynchronously execute this pipeline."""
+
+        self.intake(user_id=user_id)
+        await self._wait_if_paused_async()
+
+        research_result = self.research(user_id=user_id)
+        if inspect.isawaitable(research_result):
+            research_result = await research_result
+        await self._wait_if_paused_async()
+
+        plan_result = self.plan(user_id=user_id)
+        if inspect.isawaitable(plan_result):
+            plan_result = await plan_result
+        await self._wait_if_paused_async()
+
+        exec_result = self.execute(plan_result, user_id=user_id)
+        if inspect.isawaitable(exec_result):
+            exec_result = await exec_result
+        await self._wait_if_paused_async()
+
+        verify_result = self.verify(exec_result, user_id=user_id)
+        if inspect.isawaitable(verify_result):
+            verify_result = await verify_result
+        return verify_result
 
     def _call_run(self, plan_result: Any) -> Any:
         """Execute the task's ``run`` method."""

@@ -120,6 +120,31 @@ def run_task(
         raise typer.Exit(code=1) from exc
 
 
+@app.command("run-async")
+def run_task_async(
+    name: str,
+    temporal: bool = typer.Option(False, "--temporal", help="Execute via Temporal"),
+    user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+) -> None:
+    """Run ``NAME`` asynchronously if it exists and is enabled."""
+
+    from ..ume import emit_stage_update
+    import inspect
+    import asyncio
+    from typing import Coroutine, Any, cast
+
+    try:
+        emit_stage_update(name, "start", user_id=user_id)
+        result = get_default_scheduler().run_task(name, use_temporal=temporal, user_id=user_id)
+        if inspect.isawaitable(result):
+            result = asyncio.run(cast(Coroutine[Any, Any, Any], result))
+        emit_stage_update(name, "finish", user_id=user_id)
+    except Exception as exc:  # pragma: no cover - simple error propagation
+        emit_stage_update(name, "error", user_id=user_id)
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
 @app.command("trigger")
 def manual_trigger(
     name: str,

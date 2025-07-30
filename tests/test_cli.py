@@ -1,6 +1,7 @@
 from click.exceptions import UsageError
 import pytest
 import time
+import asyncio
 from typer.testing import CliRunner
 
 from task_cascadence.cli import app, main
@@ -487,6 +488,33 @@ def test_cli_unschedule_unknown(monkeypatch):
     runner = CliRunner()
     result = runner.invoke(app, ["unschedule", "missing"])
     assert result.exit_code == 1
+
+
+def test_cli_run_async(monkeypatch):
+    steps = []
+
+    class AsyncDemo:
+        name = "async_demo"
+
+        async def run(self):
+            await asyncio.sleep(0)
+            steps.append("run")
+            return "ok"
+
+    sched = BaseScheduler()
+    sched.register_task("async_demo", AsyncDemo())
+
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+    monkeypatch.setattr("task_cascadence.ume.emit_stage_update", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda *a, **k: None)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["run-async", "async_demo"])
+
+    assert result.exit_code == 0
+    assert steps == ["run"]
 
 
 

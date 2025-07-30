@@ -299,3 +299,17 @@ def test_async_verify(monkeypatch, tmp_path):
 
     events = StageStore(path=tmp_path / "stages.yml").get_events("AsyncTask")
     assert [e["stage"] for e in events] == ["intake", "planning", "run", "verification"]
+
+
+def test_pipeline_run_async(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    class AsyncTask:
+        async def run(self):
+            await asyncio.sleep(0)
+            return "ok"
+
+    pipeline = TaskPipeline(AsyncTask())
+    result = asyncio.run(pipeline.run_async())
+    assert result == "ok"
