@@ -465,6 +465,39 @@ The service reads the same ``UME_*`` environment variables used for event
 emission and persists incoming :class:`PointerUpdate` messages via
 ``PointerStore.apply_update``.
 
+### Running ``task pointer-sync``
+
+The service can also be started through the CLI which wraps the module entry
+point:
+
+```bash
+$ task pointer-sync
+```
+
+With the service running on each instance, pointer updates sent via UME are
+applied locally so every ``PointerStore`` stays in sync.
+
+### Propagation Example
+
+1. On **instance A** add a pointer to a ``PointerTask``:
+
+   ```bash
+   $ task pointer-add demo_pointer alice run42
+   $ task pointer-list demo_pointer
+   run42    HASHED_USER
+   ```
+
+2. On **instance B** store the update using the hashed value from the previous
+   step:
+
+   ```bash
+   $ task pointer-receive demo_pointer run42 HASHED_USER
+   pointer stored
+   ```
+
+3. If both instances run ``task pointer-sync`` the update would have propagated
+   automatically without calling ``pointer-receive`` manually.
+
 ## Capability Planner
 
 The :mod:`task_cascadence.capability_planner` module watches UME for
