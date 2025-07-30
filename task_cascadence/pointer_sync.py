@@ -9,7 +9,7 @@ import asyncio
 import importlib
 import inspect
 import logging
-from typing import Iterable, Any
+from typing import Iterable, Any, AsyncIterator
 
 from .config import load_config
 from .pointer_store import PointerStore
@@ -61,7 +61,7 @@ async def run_async() -> None:
         if hasattr(listener, "__aiter__"):
             async_iter = listener
         else:
-            async def _gen():
+            async def _gen() -> AsyncIterator[Any]:
                 for item in listener:
                     yield item
             async_iter = _gen()
@@ -88,7 +88,7 @@ async def run_async() -> None:
         if hasattr(subscription, "__aiter__"):
             async_iter = subscription
         else:
-            async def _gen():
+            async def _gen() -> AsyncIterator[Any]:
                 for item in subscription:
                     yield item
             async_iter = _gen()
