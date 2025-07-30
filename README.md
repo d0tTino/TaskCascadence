@@ -310,8 +310,9 @@ in-memory scheduler instead. ``backend: cronyx`` configures a
 ### Cronyx Backend
 
 Selecting ``backend: cronyx`` or setting ``CASCADENCE_SCHEDULER=cronyx`` makes
-Cascadence retrieve tasks from a running CronyxServer. Use the following
-environment variables to configure the integration:
+Cascadence retrieve tasks from a running CronyxServer. Configure the
+connection by setting the following environment variables before starting
+Cascadence:
 
 ``CRONYX_BASE_URL``
     Base URL of the CronyxServer instance.
@@ -327,8 +328,11 @@ Example workflow::
         -d '{"id":"demo","path":"examples.python_plugin.demo:DemoTask"}' \
         http://localhost:8000/tasks
     export CRONYX_BASE_URL=http://localhost:8000
+    export CRONYX_TIMEOUT=5
+    export CASCADENCE_CRONYX_REFRESH=1
     export CASCADENCE_SCHEDULER=cronyx
     task list
+    task schedule demo "*/5 * * * *"
 
 
 ## Plugin Discovery
