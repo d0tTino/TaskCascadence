@@ -5,6 +5,9 @@ from task_cascadence.scheduler import CronScheduler
 from task_cascadence.plugins import ExampleTask, CronTask
 from task_cascadence.stage_store import StageStore
 from task_cascadence.pipeline_registry import get_pipeline
+from task_cascadence.orchestrator import TaskPipeline
+import asyncio
+import inspect
 import threading
 import time
 
@@ -93,3 +96,42 @@ def test_paused_job_does_not_run(monkeypatch, tmp_path):
     job.func()
 
     assert task.count == 0
+
+
+def test_pipeline_pause_non_blocking(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda *a, **k: None)
+
+    class SimpleTask(CronTask):
+        name = "simple"
+
+        def run(self):
+            return "ok"
+
+    pipeline = TaskPipeline(SimpleTask())
+    pipeline.pause()
+
+    ran = {"flag": False}
+
+    async def other() -> None:
+        await asyncio.sleep(0.01)
+        ran["flag"] = True
+
+    async def resume_later() -> None:
+        await asyncio.sleep(0.05)
+        pipeline.resume()
+
+    async def runner() -> str:
+        result = pipeline.run()
+        if inspect.isawaitable(result):
+            result = await result
+        return result
+
+    async def main() -> None:
+        result = await asyncio.gather(runner(), other(), resume_later())
+        assert result[0] == "ok"
+        assert ran["flag"] is True
+
+    asyncio.run(main())
+
