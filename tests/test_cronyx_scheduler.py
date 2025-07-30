@@ -1,6 +1,7 @@
 import importlib
 import os
 import requests
+import pytest
 
 import task_cascadence
 from task_cascadence.scheduler.cronyx import CronyxScheduler
@@ -69,4 +70,40 @@ def test_env_selects_cronyx(monkeypatch):
     from task_cascadence.scheduler import get_default_scheduler
 
     assert isinstance(get_default_scheduler(), CronyxScheduler)
+
+
+def test_request_retries_on_unreachable(monkeypatch):
+    calls = 0
+
+    def fail_request(method, url, timeout=0, **kwargs):
+        nonlocal calls
+        calls += 1
+        raise requests.Timeout("unreachable")
+
+    monkeypatch.setattr(requests, "request", fail_request)
+    monkeypatch.setattr("task_cascadence.http_utils.time.sleep", lambda s: None)
+    sched = CronyxScheduler(base_url="http://server", retries=2, backoff_factor=0)
+    with pytest.raises(requests.Timeout):
+        sched._request("GET", "/jobs")
+    assert calls == 2
+
+
+def test_request_propagates_timeout(monkeypatch):
+    captured = {}
+
+    def fake_rwr(method, url, *, timeout, retries, backoff_factor, json=None):
+        captured["timeout"] = timeout
+        captured["retries"] = retries
+        captured["backoff_factor"] = backoff_factor
+        raise requests.Timeout("boom")
+
+    monkeypatch.setattr(
+        "task_cascadence.scheduler.cronyx.request_with_retry",
+        fake_rwr,
+    )
+    sched = CronyxScheduler(base_url="http://server", timeout=3.5, retries=4, backoff_factor=0.2)
+    with pytest.raises(requests.Timeout):
+        sched._request("POST", "/jobs", json={"a": 1})
+    assert captured["retries"] == 4
+    assert captured["timeout"] == 3.5
 
