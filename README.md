@@ -491,15 +491,16 @@ file.
 
 Install Cascadence with its optional development dependencies in editable mode.
 The package pins ``httpx`` to ``<0.28`` for compatibility, so make sure this
-version constraint is respected:
+version constraint is respected. You can do this with:
 
 ```bash
 $ pip install -e .[dev]
 ```
 
-The ``dev`` extras also install stub packages for ``requests`` and ``PyYAML`` so
-that ``mypy`` can perform complete type checking. Install these extras before
-running ``ruff``, ``mypy`` or ``pytest``.
+The ``dev`` extras include ``mypy`` as well as the ``types-requests`` and
+``types-PyYAML`` stub packages. These are required for ``test_mypy_runs`` to
+pass, so ensure they are installed before running ``ruff``, ``mypy`` or
+``pytest``.
 
 This will install tools like ``ruff``, ``pytest`` and ``mypy``. Run them from
 the project root to lint, type-check and test the codebase:
