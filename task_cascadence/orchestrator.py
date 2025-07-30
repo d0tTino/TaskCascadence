@@ -249,12 +249,74 @@ class TaskPipeline:
             self.task.__class__.__name__, "resumed", user_id=user_id
         )
 
-    def _wait_if_paused(self) -> None:
+    def _wait_if_paused(self) -> Any:
+        """Block until the pipeline is resumed."""
+
+        loop_running = True
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            loop_running = False
+
+        if loop_running:
+            async def _async_wait() -> None:
+                while self._paused:
+                    await asyncio.sleep(0.1)
+
+            return _async_wait()
+
         while self._paused:
             time.sleep(0.1)
+        return None
 
     # ------------------------------------------------------------------
     def run(self, *, user_id: str | None = None) -> Any:
+        loop_running = True
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            loop_running = False
+
+        if loop_running:
+            async def _async_run() -> Any:
+                self.intake(user_id=user_id)
+                wait = self._wait_if_paused()
+                if inspect.isawaitable(wait):
+                    await wait
+                else:
+                    assert wait is None
+
+                result = self.research(user_id=user_id)
+                if inspect.isawaitable(result):
+                    await result
+
+                wait = self._wait_if_paused()
+                if inspect.isawaitable(wait):
+                    await wait
+
+                plan_result = self.plan(user_id=user_id)
+                if inspect.isawaitable(plan_result):
+                    plan_result = await plan_result
+
+                wait = self._wait_if_paused()
+                if inspect.isawaitable(wait):
+                    await wait
+
+                exec_result = self.execute(plan_result, user_id=user_id)
+                if inspect.isawaitable(exec_result):
+                    exec_result = await exec_result
+
+                wait = self._wait_if_paused()
+                if inspect.isawaitable(wait):
+                    await wait
+
+                verify_result = self.verify(exec_result, user_id=user_id)
+                if inspect.isawaitable(verify_result):
+                    verify_result = await verify_result
+                return verify_result
+
+            return _async_run()
+
         self.intake(user_id=user_id)
         self._wait_if_paused()
         self.research(user_id=user_id)
