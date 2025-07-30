@@ -128,6 +128,34 @@ def test_plugin_watcher_triggers_reload_once(tmp_path, monkeypatch):
     assert call_count == 1
 
 
+def test_plugin_watcher_temp_file_triggers_reload(tmp_path, monkeypatch):
+    """File modifications in the watched directory trigger a reload."""
+
+    call_count = 0
+
+    def _reload():
+        nonlocal call_count
+        call_count += 1
+
+    monkeypatch.setattr(pl, "reload_plugins", _reload)
+    monkeypatch.setattr("task_cascadence.plugins.watcher.reload_plugins", _reload)
+
+    temp_file = tmp_path / "temp.txt"
+    temp_file.write_text("initial")
+
+    watcher = PluginWatcher(tmp_path)
+    watcher.start()
+    try:
+        time.sleep(1)
+        temp_file.write_text("updated")
+        time.sleep(2)
+    finally:
+        watcher.stop()
+
+    assert call_count >= 1
+    assert not watcher._observer.is_alive()
+
+
 def test_plugin_watcher_stop_stops_thread(tmp_path):
     watcher = PluginWatcher(tmp_path)
     watcher.start()
