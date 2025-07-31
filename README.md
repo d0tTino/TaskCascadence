@@ -437,6 +437,25 @@ tasks_path: /tmp/tasks.yml
 broadcast_pointers: true
 ```
 
+### Configuring UME Transports
+
+Use :func:`ume.configure_transport` to set the default transport in code. The
+function accepts the transport name and initialization parameters.
+
+```python
+from task_cascadence import ume
+from myproject.rpc import Stub
+
+stub = Stub()
+ume.configure_transport("grpc", stub=stub, method="Send")
+
+from nats.aio.client import Client as NATS
+
+conn = NATS()
+ume.configure_transport("nats", connection=conn, subject="events")
+```
+
+
 Install ``tino_storm`` to allow tasks to perform research queries during the
 ``research`` pipeline stage.
 Install ``ai_plan`` if you want automatic planning for tasks missing a ``plan``
@@ -476,6 +495,10 @@ $ task pointer-sync
 
 With the service running on each instance, pointer updates sent via UME are
 applied locally so every ``PointerStore`` stays in sync.
+
+Set ``UME_BROADCAST_POINTERS=1`` to have ``pointer_sync`` re-emit each update it
+processes. This allows other listeners on the same transport to receive the
+changes and keeps instances synchronized.
 
 ### Propagation Example
 
