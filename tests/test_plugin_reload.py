@@ -270,3 +270,56 @@ def test_watch_plugins_invokes_watcher(tmp_path, monkeypatch):
     assert result.exit_code == 0
     assert calls["start"] == 1
     assert calls["stop"] == 1
+
+
+def test_reload_recreates_jobs_without_duplicates(tmp_path, monkeypatch):
+    """Scheduled jobs should be restored once after reloading plugins."""
+
+    monkeypatch.setenv("CASCADENCE_SCHEDULER", "cron")
+    monkeypatch.setenv("CASCADENCE_CRONYX_REFRESH", "0")
+
+    from task_cascadence import scheduler
+    from task_cascadence.plugins import CronTask, reload_plugins
+
+    class DummyTask(CronTask):
+        name = "DummyTask"
+
+        def run(self):
+            return "ok"
+
+    storage = tmp_path / "sched.yml"
+
+    def fake_create_scheduler(backend, tasks=None, *, timezone="UTC"):
+        return scheduler.CronScheduler(
+            timezone=timezone, storage_path=storage, tasks=tasks
+        )
+
+    monkeypatch.setattr(scheduler, "create_scheduler", fake_create_scheduler)
+    monkeypatch.setattr(
+        "task_cascadence.task_store.TaskStore.load_tasks",
+        lambda self: {"DummyTask": DummyTask()},
+    )
+    monkeypatch.setattr(scheduler.CronScheduler, "start", lambda self: None)
+    monkeypatch.setattr(pl, "initialize", lambda: None)
+    monkeypatch.setattr(pl, "load_entrypoint_plugins", lambda: None)
+    monkeypatch.setattr(pl, "load_cronyx_plugins", lambda url: None)
+    monkeypatch.setattr(pl, "load_cronyx_tasks", lambda: None)
+
+    import importlib
+    import task_cascadence
+
+    importlib.reload(task_cascadence)
+    task_cascadence.initialize()
+
+    sched = scheduler.get_default_scheduler()
+    sched.register_task(name_or_task=DummyTask(), task_or_expr="* * * * *")
+    before = [job.id for job in sched.scheduler.get_jobs()]
+    assert before == ["DummyTask"]
+
+    reload_plugins()
+
+    sched2 = scheduler.get_default_scheduler()
+    after = [job.id for job in sched2.scheduler.get_jobs()]
+
+    assert after == before
+
