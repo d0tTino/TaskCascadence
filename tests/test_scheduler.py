@@ -206,6 +206,7 @@ def test_wrap_task_user_id(monkeypatch):
 
     sched = CronScheduler(timezone="UTC", storage_path="dummy.yml")
     task = DummyTask()
+    sched.register_task("DummyTask", task)
     wrapped = sched._wrap_task(task, user_id="alice")
     wrapped()
 
@@ -306,4 +307,49 @@ def test_unschedule_unknown_job(tmp_path):
     sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
     with pytest.raises(ValueError):
         sched.unschedule("MissingTask")
+
+
+def test_scheduled_job_runs_pipeline(monkeypatch, tmp_path):
+    path = tmp_path / "stages.yml"
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(path))
+
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_task_spec",
+        lambda *a, **k: None,
+    )
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_task_run",
+        lambda *a, **k: None,
+    )
+    monkeypatch.setattr(
+        "task_cascadence.ume.emit_task_run",
+        lambda *a, **k: None,
+    )
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+
+    class DemoTask(CronTask):
+        def intake(self):
+            pass
+
+        def plan(self):
+            return None
+
+        def run(self):
+            return "ok"
+
+        def verify(self, result):
+            return result
+
+    sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
+    task = DemoTask()
+    sched.register_task(name_or_task=task, task_or_expr="* * * * *")
+
+    job = sched.scheduler.get_job("DemoTask")
+    assert job is not None
+    job.func()
+
+    data = yaml.safe_load(path.read_text())
+    stages = [e["stage"] for e in data["DemoTask"]]
+    assert stages == ["intake", "planning", "run", "verification"]
 
