@@ -37,6 +37,45 @@ def test_cli_pause_resume(monkeypatch, tmp_path):
     assert events[-1]["stage"] == "resumed"
 
 
+def test_cli_pause(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+
+    sched = CronScheduler(storage_path=tmp_path / "sched_pause.yml")
+    task = ExampleTask()
+    sched.register_task("example", task)
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["pause", "example"])
+
+    assert result.exit_code == 0
+    assert sched._tasks["example"]["paused"] is True
+    events = StageStore(path=tmp_path / "stages.yml").get_events("example")
+    assert events[-1]["stage"] == "paused"
+
+
+def test_cli_resume(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+
+    sched = CronScheduler(storage_path=tmp_path / "sched_resume.yml")
+    task = ExampleTask()
+    sched.register_task("example", task)
+    sched.pause_task("example")
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["resume", "example"])
+
+    assert result.exit_code == 0
+    assert sched._tasks["example"]["paused"] is False
+    events = StageStore(path=tmp_path / "stages.yml").get_events("example")
+    assert events[-1]["stage"] == "resumed"
+
+
 class SlowTask(CronTask):
     name = "slow"
 

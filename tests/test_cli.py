@@ -517,4 +517,44 @@ def test_cli_run_async(monkeypatch):
     assert steps == ["run"]
 
 
+def test_cli_run_async_user_id(monkeypatch):
+    steps = []
+
+    class AsyncDemo:
+        name = "async_demo"
+
+        async def run(self):
+            await asyncio.sleep(0)
+            steps.append("run")
+            return "ok"
+
+    sched = BaseScheduler()
+    sched.register_task("async_demo", AsyncDemo())
+
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+    monkeypatch.setattr("task_cascadence.ume.emit_stage_update", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    captured = {}
+    from task_cascadence import ume
+    from task_cascadence.ume import _hash_user_id
+
+    def fake_emit(run, user_id=None):
+        if user_id is not None:
+            run.user_hash = _hash_user_id(user_id)
+        captured["run"] = run
+
+    monkeypatch.setattr(ume, "emit_task_run", fake_emit)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["run-async", "async_demo", "--user-id", "bob"])
+
+    assert result.exit_code == 0
+    assert steps == ["run"]
+    assert "run" in captured
+    assert captured["run"].user_hash is not None
+    assert captured["run"].user_hash != "bob"
+
+
 
