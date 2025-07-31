@@ -270,40 +270,11 @@ class CronScheduler(BaseScheduler):
             self._yaml.safe_dump(self.schedules, fh)
 
     def _wrap_task(self, task, user_id: str | None = None):
-        @metrics.track_task(name=task.__class__.__name__)
         def runner():
             info = self._tasks.get(task.__class__.__name__)
             if info and info.get("paused"):
                 return
-            from datetime import datetime
-            from uuid import uuid4
-
-            from ..ume import emit_task_run
-            from ..ume.models import TaskRun, TaskSpec
-
-            spec = TaskSpec(
-                id=task.__class__.__name__, name=task.__class__.__name__
-            )
-            run_id = str(uuid4())
-            started = Timestamp()
-            started.FromDatetime(datetime.now())
-            status = "success"
-            try:
-                task.run()
-            except Exception:  # pragma: no cover - passthrough
-                status = "error"
-                raise
-            finally:
-                finished = Timestamp()
-                finished.FromDatetime(datetime.now())
-                run = TaskRun(
-                    spec=spec,
-                    run_id=run_id,
-                    status=status,
-                    started_at=started,
-                    finished_at=finished,
-                )
-                emit_task_run(run, user_id=user_id)
+            self.run_task(task.__class__.__name__, user_id=user_id)
 
         return runner
 
