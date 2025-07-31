@@ -213,6 +213,13 @@ def reload_plugins() -> None:
     from ..config import load_config
     from ..task_store import TaskStore
 
+    old_sched = getattr(_scheduler, "_default_scheduler", None)
+    if old_sched and hasattr(old_sched, "shutdown"):
+        try:  # pragma: no cover - best effort cleanup
+            old_sched.shutdown(wait=False)
+        except Exception:
+            pass
+
     for task in registered_tasks.values():
         mod = task.__class__.__module__
         if mod != __name__ and mod in sys.modules:
