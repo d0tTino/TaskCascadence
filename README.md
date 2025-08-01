@@ -503,39 +503,48 @@ emission and persists incoming :class:`PointerUpdate` messages via
 ### Running ``task pointer-sync``
 
 The service can also be started through the CLI which wraps the module entry
-point:
+point.
 
-```bash
-$ task pointer-sync
-```
+1. **Configure UME transport** using environment variables. For example with
+   NATS:
 
-With the service running on each instance, pointer updates sent via UME are
-applied locally so every ``PointerStore`` stays in sync.
+   ```bash
+   export UME_TRANSPORT=nats
+   export UME_NATS_CONN=myproject.nats:conn
+   export UME_NATS_SUBJECT=events
+   ```
 
-Set ``UME_BROADCAST_POINTERS=1`` to have ``pointer_sync`` re-emit each update it
-processes. This allows other listeners on the same transport to receive the
-changes and keeps instances synchronized.
+   Or with gRPC:
+
+   ```bash
+   export UME_TRANSPORT=grpc
+   export UME_GRPC_STUB=myproject.rpc:Stub
+   export UME_GRPC_METHOD=Subscribe
+   ```
+
+2. **Start the service** on each instance:
+
+   ```bash
+   $ task pointer-sync
+   ```
+
+3. *(Optional)* Set ``UME_BROADCAST_POINTERS=1`` so each instance re-emits
+   updates it receives. This allows other listeners on the same transport to
+   apply the changes and keeps the ``PointerStore`` files in sync.
 
 ### Propagation Example
 
-1. On **instance A** add a pointer to a ``PointerTask``:
+Start ``task pointer-sync`` on both instances. Adding a pointer on **instance
+A** automatically appears on **instance B**:
 
-   ```bash
-   $ task pointer-add demo_pointer alice run42
-   $ task pointer-list demo_pointer
-   run42    HASHED_USER
-   ```
+```bash
+# Instance A
+$ task pointer-add demo_pointer alice run42
 
-2. On **instance B** store the update using the hashed value from the previous
-   step:
-
-   ```bash
-   $ task pointer-receive demo_pointer run42 HASHED_USER
-   pointer stored
-   ```
-
-3. If both instances run ``task pointer-sync`` the update would have propagated
-   automatically without calling ``pointer-receive`` manually.
+# Instance B
+$ task pointer-list demo_pointer
+run42    HASHED_USER
+```
 
 ## Capability Planner
 
