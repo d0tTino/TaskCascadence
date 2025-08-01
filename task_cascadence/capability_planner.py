@@ -37,7 +37,7 @@ def run() -> None:
     sched = get_default_scheduler()
 
     if not transport:
-        print("UME transport not configured. Exiting.")
+        logger.warning("UME transport not configured. Exiting.")
         return
 
     def _schedule_follow_up() -> None:
@@ -82,7 +82,7 @@ def run() -> None:
                 continue
         return
 
-    print(f"Unknown UME transport: {transport}. Exiting.")
+    logger.warning("Unknown UME transport: %s. Exiting.", transport)
     return
 
 

@@ -6,6 +6,7 @@ complex projects could load plugins dynamically using entry points.
 """
 
 import importlib
+import logging
 import sys
 from importlib import metadata
 from typing import Dict
@@ -16,6 +17,8 @@ from ..pointer_store import PointerStore
 
 from ..scheduler import get_default_scheduler
 
+logger = logging.getLogger(__name__)
+
 
 class BaseTask:
     """Base class for all tasks."""
@@ -25,7 +28,7 @@ class BaseTask:
     def run(self):  # pragma: no cover - trivial demo function
         """Run the task."""
 
-        print(f"running task {self.name}")
+        logger.info("running task %s", self.name)
 
 
 class CronTask(BaseTask):
@@ -90,7 +93,7 @@ class ExampleTask(CronTask):
     name = "example"
 
     def run(self):  # pragma: no cover - illustrative
-        print("Example task executed")
+        logger.info("Example task executed")
 
 
 @register_webhook_task
