@@ -430,8 +430,11 @@ with the variables below. When set, they override values from the YAML file:
     Location of the ``pointers.yml`` file used by :class:`PointerStore`.
 ``CASCADENCE_TASKS_PATH``
     Location of the ``tasks.yml`` file used by :class:`TaskStore`.
+``CASCADENCE_IDEAS_PATH``
+    Location of the ``ideas.yml`` file used by :class:`IdeaStore`.
+    This can also be set via ``ideas_path`` in ``cascadence.yml``.
 
-The YAML configuration may also define ``stages_path``, ``pointers_path`` and ``tasks_path`` to override these defaults.
+The YAML configuration may also define ``stages_path``, ``pointers_path``, ``tasks_path`` and ``ideas_path`` to override these defaults.
 
 Example ``cascadence.yml`` enabling gRPC transport and research support:
 
