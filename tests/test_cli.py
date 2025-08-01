@@ -557,4 +557,25 @@ def test_cli_run_async_user_id(monkeypatch):
     assert captured["run"].user_hash != "bob"
 
 
+def test_cli_disable_prevents_run(monkeypatch):
+    class Demo:
+        name = "demo"
+
+        def run(self):
+            return "ok"
+
+    sched = BaseScheduler()
+    sched.register_task("demo", Demo())
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["disable", "demo"])
+    assert result.exit_code == 0
+    assert "demo disabled" in result.output
+
+    result = runner.invoke(app, ["run", "demo"])
+    assert result.exit_code != 0
+    assert "disabled" in (result.stderr or result.output)
+
+
 
