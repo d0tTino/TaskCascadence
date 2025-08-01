@@ -34,7 +34,9 @@ def test_run_task_posts_job(monkeypatch):
     assert result == "ok"
     assert captured["method"] == "POST"
     assert captured["url"] == "http://server/jobs"
-    assert captured["json"] == {"task": "demo", "user_id": "bob"}
+    from task_cascadence.ume import _hash_user_id
+
+    assert captured["json"] == {"task": "demo", "user_id": _hash_user_id("bob")}
 
 
 def test_schedule_task_posts_job(monkeypatch):
@@ -50,7 +52,13 @@ def test_schedule_task_posts_job(monkeypatch):
     sched = CronyxScheduler(base_url="http://server")
     resp = sched.schedule_task("demo", "* * * * *", user_id="alice")
     assert resp == {"scheduled": True}
-    assert captured["json"] == {"task": "demo", "cron": "* * * * *", "user_id": "alice"}
+    from task_cascadence.ume import _hash_user_id
+
+    assert captured["json"] == {
+        "task": "demo",
+        "cron": "* * * * *",
+        "user_id": _hash_user_id("alice"),
+    }
 
 
 def test_create_scheduler_factory():
