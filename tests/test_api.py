@@ -127,3 +127,11 @@ def test_register_task_with_schedule(monkeypatch, tmp_path):
     job = sched.scheduler.get_job("DynamicTask")
     assert job is not None
 
+
+def test_register_task_invalid_path(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.post("/tasks", params={"path": "no.module:Missing"})
+    assert resp.status_code == 400
+    assert "no" in resp.json()["detail"]
+
