@@ -1,5 +1,6 @@
 import yaml
 import pytest
+import requests
 from task_cascadence.scheduler import CronScheduler, BaseScheduler
 from task_cascadence.plugins import CronTask
 
@@ -352,4 +353,49 @@ def test_scheduled_job_runs_pipeline(monkeypatch, tmp_path):
     data = yaml.safe_load(path.read_text())
     stages = [e["stage"] for e in data["DemoTask"]]
     assert stages == ["intake", "planning", "run", "verification"]
+
+
+class DummyResp:
+    def __init__(self, data: dict[str, str]) -> None:
+        self._data = data
+
+    def raise_for_status(self) -> None:  # pragma: no cover - compat
+        pass
+
+    def json(self) -> dict[str, str]:
+        return self._data
+
+
+def test_cronyx_run_task_hash(monkeypatch):
+    captured = {}
+
+    def fake_request(method, url, timeout=0, **kwargs):
+        captured["json"] = kwargs.get("json")
+        return DummyResp({"result": "ok"})
+
+    monkeypatch.setattr(requests, "request", fake_request)
+    from task_cascadence.scheduler.cronyx import CronyxScheduler
+    from task_cascadence.ume import _hash_user_id
+
+    sched = CronyxScheduler(base_url="http://server")
+    sched.run_task("demo", user_id="alice")
+
+    assert captured["json"]["user_id"] == _hash_user_id("alice")
+
+
+def test_cronyx_schedule_task_hash(monkeypatch):
+    captured = {}
+
+    def fake_request(method, url, timeout=0, **kwargs):
+        captured["json"] = kwargs.get("json")
+        return DummyResp({"scheduled": True})
+
+    monkeypatch.setattr(requests, "request", fake_request)
+    from task_cascadence.scheduler.cronyx import CronyxScheduler
+    from task_cascadence.ume import _hash_user_id
+
+    sched = CronyxScheduler(base_url="http://server")
+    sched.schedule_task("demo", "* * * * *", user_id="bob")
+
+    assert captured["json"]["user_id"] == _hash_user_id("bob")
 

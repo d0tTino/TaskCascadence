@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..http_utils import request_with_retry
+from ..ume import _hash_user_id
 from . import BaseScheduler
 
 
@@ -60,7 +61,7 @@ class CronyxScheduler(BaseScheduler):
             return super().run_task(name, use_temporal=use_temporal, user_id=user_id)
         payload = {"task": name}
         if user_id is not None:
-            payload["user_id"] = user_id
+            payload["user_id"] = _hash_user_id(user_id)
         data = self._request("POST", "/jobs", json=payload)
         return data.get("result")
 
@@ -69,5 +70,5 @@ class CronyxScheduler(BaseScheduler):
     ) -> Any:
         payload = {"task": name, "cron": cron_expression}
         if user_id is not None:
-            payload["user_id"] = user_id
+            payload["user_id"] = _hash_user_id(user_id)
         return self._request("POST", "/jobs", json=payload)
