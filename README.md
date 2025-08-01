@@ -123,6 +123,7 @@ $ task disable NAME    # disable a task
 $ task pause NAME      # pause a task
 $ task resume NAME     # resume a paused task
 $ task schedule NAME CRON  # register a cron schedule
+$ task unschedule NAME   # remove a cron schedule
 $ task schedules       # list configured schedules
 $ task ai-idea TEXT    # emit an idea seed via UME
 $ task export-n8n FILE # dump tasks as n8n workflow
@@ -258,6 +259,7 @@ creating schedulers with non-UTC timezones.
 When a new ``CronScheduler`` instance starts it reads this file and re-creates
 any jobs for which task objects are supplied via the ``tasks`` argument.  This
 allows scheduled tasks to survive process restarts.
+Removing a schedule triggers an ``unschedule`` stage event for that task.
 
 ## Task DAGs
 
