@@ -358,6 +358,9 @@ class CronScheduler(BaseScheduler):
             pass
         self.schedules.pop(name, None)
         self._save_schedules()
+        from ..ume import emit_stage_update
+
+        emit_stage_update(name, "unschedule")
 
     def pause_task(self, name: str) -> None:
         """Pause ``name`` and emit a stage event."""
