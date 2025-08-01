@@ -77,7 +77,11 @@ class TaskPipeline:
                 q = await query
                 if inspect.isawaitable(q):
                     q = await q
-                result = await research.async_gather(q)
+                try:
+                    result = await research.async_gather(q)
+                except RuntimeError:
+                    self._emit_stage("research", user_id)
+                    return None
                 self._emit_stage("research", user_id)
                 return result
 
@@ -87,13 +91,21 @@ class TaskPipeline:
 
         if loop_running:
             async def _async_call() -> Any:
-                result = await research.async_gather(query)
+                try:
+                    result = await research.async_gather(query)
+                except RuntimeError:
+                    self._emit_stage("research", user_id)
+                    return None
                 self._emit_stage("research", user_id)
                 return result
 
             return _async_call()
 
-        result = research.gather(query)
+        try:
+            result = research.gather(query)
+        except RuntimeError:
+            self._emit_stage("research", user_id)
+            return None
         self._emit_stage("research", user_id)
         return result
 
