@@ -1,5 +1,6 @@
 import yaml
 import importlib
+import logging
 from typer.testing import CliRunner
 
 from task_cascadence import pointer_sync
@@ -313,5 +314,33 @@ class Stub:
     data = yaml.safe_load(store.read_text())
     assert data["demo"] == [{"run_id": "rab2", "user_hash": "u"}]
     assert captured == {}
+
+
+def test_pointer_sync_no_transport(monkeypatch, tmp_path, caplog):
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+    monkeypatch.delenv("UME_TRANSPORT", raising=False)
+
+    with caplog.at_level(logging.WARNING):
+        pointer_sync.run()
+
+    assert any(
+        "UME transport not configured. Exiting." in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_pointer_sync_unknown_transport(monkeypatch, tmp_path, caplog):
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+    monkeypatch.setenv("UME_TRANSPORT", "foo")
+
+    with caplog.at_level(logging.WARNING):
+        pointer_sync.run()
+
+    assert any(
+        "Unknown UME transport: foo" in r.getMessage()
+        for r in caplog.records
+    )
 
 

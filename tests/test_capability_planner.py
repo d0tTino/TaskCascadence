@@ -1,5 +1,6 @@
 from typer.testing import CliRunner
 import importlib
+import logging
 
 from task_cascadence.cli import app
 from task_cascadence import capability_planner
@@ -91,3 +92,33 @@ class Stub:
     result = runner.invoke(app, ["capability-planner"])
     assert result.exit_code == 0
     assert sched.tasks == ["capability_follow_up"]
+
+
+def test_capability_planner_no_transport(monkeypatch, caplog):
+    sched = DummyScheduler()
+    monkeypatch.setattr(capability_planner, "get_default_scheduler", lambda: sched)
+    monkeypatch.delenv("UME_TRANSPORT", raising=False)
+
+    with caplog.at_level(logging.WARNING):
+        capability_planner.run()
+
+    assert sched.tasks == []
+    assert any(
+        "UME transport not configured. Exiting." in r.getMessage()
+        for r in caplog.records
+    )
+
+
+def test_capability_planner_unknown_transport(monkeypatch, caplog):
+    sched = DummyScheduler()
+    monkeypatch.setattr(capability_planner, "get_default_scheduler", lambda: sched)
+    monkeypatch.setenv("UME_TRANSPORT", "foo")
+
+    with caplog.at_level(logging.WARNING):
+        capability_planner.run()
+
+    assert sched.tasks == []
+    assert any(
+        "Unknown UME transport: foo" in r.getMessage()
+        for r in caplog.records
+    )

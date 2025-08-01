@@ -34,7 +34,7 @@ async def run_async() -> None:
     broadcast = bool(cfg.get("ume_broadcast_pointers"))
 
     if not transport:
-        print("UME transport not configured. Exiting.")
+        logger.warning("UME transport not configured. Exiting.")
         return
 
     async def _maybe_broadcast(update: PointerUpdate) -> None:
@@ -107,7 +107,7 @@ async def run_async() -> None:
                 continue
         return
 
-    print(f"Unknown UME transport: {transport}. Exiting.")
+    logger.warning("Unknown UME transport: %s. Exiting.", transport)
     return
 
 
