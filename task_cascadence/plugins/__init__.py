@@ -140,6 +140,8 @@ except Exception:  # pragma: no cover - optional plugin may fail to import
 def load_plugin(path: str) -> BaseTask:
     """Load ``path`` of the form ``module:Class`` and return an instance."""
 
+    if path.count(":") != 1:
+        raise ValueError("path must be 'module:Class'")
     module_path, class_name = path.split(":")
     module = importlib.import_module(module_path)
     cls = getattr(module, class_name)
