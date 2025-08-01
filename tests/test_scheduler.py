@@ -289,7 +289,7 @@ def test_register_task_twice_running(tmp_path):
     assert data["DummyTask"] == "*/2 * * * *"
 
 
-def test_unschedule_removes_job(tmp_path):
+def test_unschedule_removes_job(tmp_path, monkeypatch):
     storage = tmp_path / "sched.yml"
     sched = CronScheduler(timezone="UTC", storage_path=storage)
     task = DummyTask()
@@ -297,11 +297,18 @@ def test_unschedule_removes_job(tmp_path):
 
     assert sched.scheduler.get_job("DummyTask") is not None
 
+    path = tmp_path / "stages.yml"
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(path))
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+
     sched.unschedule("DummyTask")
 
     assert sched.scheduler.get_job("DummyTask") is None
     data = yaml.safe_load(storage.read_text()) or {}
     assert "DummyTask" not in data
+    events = yaml.safe_load(path.read_text())
+    assert events["DummyTask"][-1]["stage"] == "unschedule"
 
 
 def test_unschedule_unknown_job(tmp_path):
