@@ -421,7 +421,8 @@ with the variables below. When set, they override values from the YAML file:
 ``UME_NATS_SUBJECT``
     NATS subject for event publishing.
 ``UME_BROADCAST_POINTERS``
-    Re-emit pointer updates received by ``pointer_sync`` when ``true``.
+    When ``true``, ``pointer_sync`` re-emits every pointer update so other listeners
+    stay synchronized.
 ``CASCADENCE_HASH_SECRET``
     Salt used when hashing user identifiers.
 ``CASCADENCE_STAGES_PATH``
