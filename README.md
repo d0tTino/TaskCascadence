@@ -321,6 +321,16 @@ Cascadence:
 ``CASCADENCE_CRONYX_REFRESH``
     Disable periodic refreshes when ``0`` or ``false``.
 
+Ensure a CronyxServer is running (for instance ``CronyxServer --listen :8000``) before starting Cascadence.
+
+A minimal ``cascadence.yml`` enabling this backend:
+
+```yaml
+backend: cronyx
+cronyx_base_url: http://localhost:8000
+# cronyx_timeout: 5
+```
+
 Example workflow::
 
     CronyxServer --listen :8000 &
