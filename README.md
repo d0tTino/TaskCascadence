@@ -432,7 +432,6 @@ with the variables below. When set, they override values from the YAML file:
     Location of the ``tasks.yml`` file used by :class:`TaskStore`.
 ``CASCADENCE_IDEAS_PATH``
     Location of the ``ideas.yml`` file used by :class:`IdeaStore`.
-    This can also be set via ``ideas_path`` in ``cascadence.yml``.
 
 The YAML configuration may also define ``stages_path``, ``pointers_path``, ``tasks_path`` and ``ideas_path`` to override these defaults.
 
@@ -447,6 +446,7 @@ hash_secret: supersecret
 stages_path: /tmp/stages.yml
 pointers_path: /tmp/pointers.yml
 tasks_path: /tmp/tasks.yml
+ideas_path: /tmp/ideas.yml
 broadcast_pointers: true
 ```
 

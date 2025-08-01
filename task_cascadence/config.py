@@ -78,6 +78,11 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
     elif "pointers_path" in cfg:
         cfg["pointers_path"] = cfg["pointers_path"]
 
+    if "CASCADENCE_IDEAS_PATH" in os.environ:
+        cfg["ideas_path"] = os.environ["CASCADENCE_IDEAS_PATH"]
+    elif "ideas_path" in cfg:
+        cfg["ideas_path"] = cfg["ideas_path"]
+
     if "ume_broadcast_pointers" in cfg:
         cfg["ume_broadcast_pointers"] = bool(cfg["ume_broadcast_pointers"])
 
