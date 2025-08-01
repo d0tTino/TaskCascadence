@@ -313,3 +313,43 @@ def test_pipeline_run_async(monkeypatch):
     pipeline = TaskPipeline(AsyncTask())
     result = asyncio.run(pipeline.run_async())
     assert result == "ok"
+
+
+def test_run_async_parallel_plan(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+
+    stages: list[str] = []
+
+    def fake_spec(spec, user_id=None):
+        if spec.name == "Parent":
+            stages.append(spec.description)
+
+    def fake_run(run, user_id=None):
+        if run.spec.name == "Parent":
+            stages.append("run")
+
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", fake_spec)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", fake_run)
+
+    class Child:
+        def __init__(self, name: str):
+            self.name = name
+
+        async def run(self) -> str:
+            await asyncio.sleep(0)
+            return self.name
+
+    class Parent:
+        def plan(self):
+            return ParallelPlan([Child("a"), Child("b")])
+
+    pipeline = TaskPipeline(Parent())
+    result = asyncio.run(pipeline.run_async())
+
+    assert sorted(result) == ["a", "b"]
+    assert stages == ["intake", "planning", "run", "verification"]
+
+    events = StageStore(path=tmp_path / "stages.yml").get_events("Parent")
+    assert [e["stage"] for e in events] == ["intake", "planning", "run", "verification"]
