@@ -1,4 +1,5 @@
 import yaml
+import pytest
 
 from task_cascadence.scheduler.dag import DagCronScheduler
 from task_cascadence.plugins import CronTask
@@ -39,11 +40,26 @@ def test_run_respects_dependencies(tmp_path, monkeypatch):
 
     sched.register_task(c, "* * * * *")
     sched.register_task(b, "* * * * *", dependencies=["TaskC"])
-    sched.register_task(a, "* * * * *", dependencies=["TaskB"])
+    sched.register_task(a, "* * * * *", dependencies=["TaskB", "TaskC"])
 
     sched.run_task("TaskA")
 
     assert log == ["C", "B", "A"]
+
+
+def test_cycle_detection(tmp_path, monkeypatch):
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run, user_id=None: None)
+    log: list[str] = []
+    sched = DagCronScheduler(timezone="UTC", storage_path=tmp_path / "s.yml")
+
+    a = TaskA(log)
+    b = TaskB(log)
+
+    sched.register_task(a, "* * * * *", dependencies=["TaskB"])
+    sched.register_task(b, "* * * * *", dependencies=["TaskA"])
+
+    with pytest.raises(ValueError):
+        sched.run_task("TaskA")
 
 
 def test_restore_dag_from_file(tmp_path, monkeypatch):
