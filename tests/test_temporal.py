@@ -2,6 +2,7 @@ from task_cascadence.scheduler import BaseScheduler
 from task_cascadence.plugins import CronTask
 from task_cascadence.temporal import TemporalBackend
 import task_cascadence.temporal as temporal
+import inspect
 from unittest.mock import AsyncMock, Mock
 import asyncio
 
@@ -65,7 +66,13 @@ def test_run_workflow_sync_executes_via_asyncio(monkeypatch):
 
     assert result == "ok"
     assert run_called.get("called") is True
-    connect_mock.assert_awaited_once_with("localhost:7233")
+    connect_mock.assert_awaited_once()
+    args, kwargs = connect_mock.call_args
+    assert args == ("localhost:7233",)
+    if "runtime" in inspect.signature(temporal.Client.connect).parameters:
+        assert "runtime" in kwargs
+    else:
+        assert kwargs == {}
     client.execute_workflow.assert_awaited_once_with("DemoWorkflow", 1, foo="bar")
 
 
