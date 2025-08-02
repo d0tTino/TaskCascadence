@@ -154,3 +154,38 @@ def test_initialize_unknown_scheduler(monkeypatch):
         importlib.reload(task_cascadence)
         task_cascadence.initialize()
 
+
+def test_suggestions_defaults(monkeypatch):
+    monkeypatch.delenv("CASCADENCE_SUGGESTIONS_ENABLED", raising=False)
+    monkeypatch.delenv("CASCADENCE_SUGGESTIONS_CATEGORIES", raising=False)
+    monkeypatch.delenv("CASCADENCE_CONFIG", raising=False)
+    cfg = load_config()
+    assert cfg["suggestions"]["enabled"] is True
+    assert cfg["suggestions"]["categories"] == []
+
+
+def test_suggestions_yaml(monkeypatch, tmp_path):
+    cfg_file = tmp_path / "cfg.yml"
+    cfg_file.write_text(
+        "suggestions:\n  enabled: false\n  categories:\n    - personal\n    - finance\n"
+    )
+    monkeypatch.setenv("CASCADENCE_CONFIG", str(cfg_file))
+    monkeypatch.delenv("CASCADENCE_SUGGESTIONS_ENABLED", raising=False)
+    monkeypatch.delenv("CASCADENCE_SUGGESTIONS_CATEGORIES", raising=False)
+    cfg = load_config()
+    assert cfg["suggestions"]["enabled"] is False
+    assert cfg["suggestions"]["categories"] == ["personal", "finance"]
+
+
+def test_suggestions_env_overrides(monkeypatch, tmp_path):
+    cfg_file = tmp_path / "cfg.yml"
+    cfg_file.write_text(
+        "suggestions:\n  enabled: true\n  categories:\n    - personal\n"
+    )
+    monkeypatch.setenv("CASCADENCE_CONFIG", str(cfg_file))
+    monkeypatch.setenv("CASCADENCE_SUGGESTIONS_ENABLED", "0")
+    monkeypatch.setenv("CASCADENCE_SUGGESTIONS_CATEGORIES", "finance,work")
+    cfg = load_config()
+    assert cfg["suggestions"]["enabled"] is False
+    assert cfg["suggestions"]["categories"] == ["finance", "work"]
+

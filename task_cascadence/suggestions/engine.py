@@ -9,6 +9,7 @@ from ..scheduler import get_default_scheduler
 from ..research import gather
 from ..ume import emit_task_note
 from ..ume.models import TaskNote
+from ..config import load_config
 
 
 @dataclass
@@ -43,9 +44,29 @@ class SuggestionEngine:
 
     async def generate(self) -> None:
         """Query UME and create suggestions once."""
+        cfg = load_config().get("suggestions", {})
+        if not cfg.get("enabled", True):
+            return
+        disabled_categories = set(cfg.get("categories", []))
 
         patterns = await self._query_ume()
         for pattern in patterns:
+            pattern_categories: set[str] = set()
+            category = pattern.get("category")
+            if category:
+                if isinstance(category, (list, tuple, set)):
+                    pattern_categories.update(category)
+                else:
+                    pattern_categories.add(category)
+            categories = pattern.get("categories")
+            if categories:
+                if isinstance(categories, str):
+                    pattern_categories.add(categories)
+                else:
+                    pattern_categories.update(categories)
+            if disabled_categories & pattern_categories:
+                continue
+
             estimation = gather(pattern.get("description", ""))
             if isinstance(estimation, dict):
                 confidence = float(estimation.get("confidence", 0.0))

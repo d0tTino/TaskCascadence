@@ -86,5 +86,22 @@ def load_config(path: str | None = None) -> Dict[str, Any]:
     if "ume_broadcast_pointers" in cfg:
         cfg["ume_broadcast_pointers"] = bool(cfg["ume_broadcast_pointers"])
 
+    suggestions_cfg = cfg.get("suggestions") or {}
+    enabled_env = os.getenv("CASCADENCE_SUGGESTIONS_ENABLED")
+    if enabled_env is not None:
+        suggestions_cfg["enabled"] = enabled_env.lower() not in ("0", "false", "no")
+    else:
+        suggestions_cfg["enabled"] = bool(suggestions_cfg.get("enabled", True))
+
+    categories_env = os.getenv("CASCADENCE_SUGGESTIONS_CATEGORIES")
+    if categories_env is not None:
+        suggestions_cfg["categories"] = [
+            c.strip() for c in categories_env.split(",") if c.strip()
+        ]
+    else:
+        suggestions_cfg["categories"] = list(suggestions_cfg.get("categories", []))
+
+    cfg["suggestions"] = suggestions_cfg
+
     return cfg
 
