@@ -1,9 +1,23 @@
 from fastapi import FastAPI, Request
 import uvicorn
 
-from .plugins import webhook_task_registry
+from .plugins import WebhookTask, webhook_task_registry
 
 app = FastAPI()
+
+
+# Store a singleton instance of each registered webhook task.
+webhook_task_instances: dict[type[WebhookTask], WebhookTask] = {}
+
+
+def _get_task_instance(task_cls: type[WebhookTask]) -> WebhookTask:
+    """Return the singleton instance for ``task_cls``."""
+
+    task = webhook_task_instances.get(task_cls)
+    if task is None:
+        task = task_cls()
+        webhook_task_instances[task_cls] = task
+    return task
 
 
 @app.post("/webhook/github")
@@ -11,7 +25,7 @@ async def github_webhook(request: Request):
     payload = await request.json()
     event_type = request.headers.get("X-GitHub-Event", "")
     for task_cls in webhook_task_registry:
-        task = task_cls()
+        task = _get_task_instance(task_cls)
         if hasattr(task, "handle_event"):
             task.handle_event("github", event_type, payload)
     return {"status": "received"}
@@ -22,7 +36,7 @@ async def calcom_webhook(request: Request):
     payload = await request.json()
     event_type = request.headers.get("Cal-Event-Type", "")
     for task_cls in webhook_task_registry:
-        task = task_cls()
+        task = _get_task_instance(task_cls)
         if hasattr(task, "handle_event"):
             task.handle_event("calcom", event_type, payload)
     return {"status": "received"}
