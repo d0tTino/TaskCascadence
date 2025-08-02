@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import pytest
 from task_cascadence.orchestrator import TaskPipeline, ParallelPlan
 from task_cascadence.ume import _hash_user_id
@@ -193,6 +194,73 @@ def test_nested_tasks_parent_run(monkeypatch):
 
     assert result == ["x", "y"]
     assert steps == ["run-x", "run-y", "parent-run-['x', 'y']"]
+
+
+def test_subtask_results_resolved_sync(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    class SyncChild:
+        def run(self) -> str:
+            return "sync"
+
+    class AsyncChild:
+        async def run(self) -> str:
+            await asyncio.sleep(0)
+            return "async"
+
+    class Parent:
+        def __init__(self) -> None:
+            self.received: list[str] | None = None
+
+        def plan(self):
+            return [SyncChild(), AsyncChild()]
+
+        def run(self, results: list[str]):
+            self.received = results
+            return results
+
+    parent = Parent()
+    pipeline = TaskPipeline(parent)
+    result = pipeline.run()
+
+    assert result == ["sync", "async"]
+    assert parent.received == ["sync", "async"]
+    assert all(not inspect.isawaitable(r) for r in result)
+
+
+@pytest.mark.asyncio
+async def test_subtask_results_resolved_async(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    class SyncChild:
+        def run(self) -> str:
+            return "sync"
+
+    class AsyncChild:
+        async def run(self) -> str:
+            await asyncio.sleep(0)
+            return "async"
+
+    class Parent:
+        def __init__(self) -> None:
+            self.received: list[str] | None = None
+
+        def plan(self):
+            return [SyncChild(), AsyncChild()]
+
+        def run(self, results: list[str]):
+            self.received = results
+            return results
+
+    parent = Parent()
+    pipeline = TaskPipeline(parent)
+    result = await pipeline.run()
+
+    assert result == ["sync", "async"]
+    assert parent.received == ["sync", "async"]
+    assert all(not inspect.isawaitable(r) for r in result)
 
 
 def test_precheck_failure_stops_pipeline(monkeypatch):
