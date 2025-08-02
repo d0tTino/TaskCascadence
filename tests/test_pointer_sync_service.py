@@ -244,6 +244,47 @@ def test_cli_pointer_sync_async(monkeypatch):
     assert called == {"async": True}
 
 
+def test_cli_pointer_sync_async_grpc(monkeypatch, tmp_path):
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+    monkeypatch.setenv("UME_TRANSPORT", "grpc")
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe")
+
+    module = tmp_path / "astub_cli.py"
+    module.write_text(
+        """
+import asyncio
+from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+class Stub:
+    @staticmethod
+    async def Subscribe():
+        yield PointerUpdate(task_name='demo', run_id='cli_a1', user_hash='u')
+"""
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("UME_GRPC_STUB", "astub_cli:Stub")
+
+    importlib.invalidate_caches()
+
+    finished = asyncio.Event()
+    original = pointer_sync.run_async
+
+    async def wrapper() -> None:
+        await original()
+        finished.set()
+
+    monkeypatch.setattr(pointer_sync, "run_async", wrapper)
+
+    async def runner() -> None:
+        pointer_sync_cmd()
+        await finished.wait()
+
+    asyncio.run(runner())
+
+    data = yaml.safe_load(store.read_text())
+    assert data["demo"] == [{"run_id": "cli_a1", "user_hash": "u"}]
+
+
 def test_pointer_sync_async_grpc_broadcast(monkeypatch, tmp_path):
     store = tmp_path / "pointers.yml"
     monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
