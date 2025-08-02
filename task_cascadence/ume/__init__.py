@@ -46,6 +46,28 @@ def _get_idea_store() -> IdeaStore:
     return _idea_store
 
 
+def is_private_event(metadata: dict) -> bool:
+    """Return ``True`` if *metadata* marks the event as private or sensitive."""
+
+    flags = metadata.get("flags") or []
+    if isinstance(flags, str):
+        flags = [flags]
+    flags = set(flags)
+
+    privacy = metadata.get("privacy")
+    if isinstance(privacy, str):
+        flags.add(privacy)
+    elif isinstance(privacy, (list, tuple, set)):
+        flags.update(privacy)
+
+    if metadata.get("private"):
+        flags.add("private")
+    if metadata.get("sensitive"):
+        flags.add("sensitive")
+
+    return any(f in {"private", "sensitive"} for f in flags)
+
+
 def emit_stage_update(task_name: str, stage: str, user_id: str | None = None) -> None:
     """Persist a pipeline stage event via :class:`StageStore`."""
 
@@ -240,3 +262,18 @@ def emit_idea_seed(
             _async_queue_within_deadline(seed, target)
         )
     return _queue_within_deadline(seed, target)
+
+
+def emit_acceptance_event(
+    title: str | None = None,
+    client: Any | None = None,
+    user_id: str | None = None,
+    *,
+    use_asyncio: bool = False,
+) -> asyncio.Task | threading.Thread | None:
+    """Emit a sanitized acceptance ``TaskNote`` using the configured transport."""
+
+    note = TaskNote(note="accepted suggestion")
+    return emit_task_note(
+        note, client=client, user_id=user_id, use_asyncio=use_asyncio
+    )

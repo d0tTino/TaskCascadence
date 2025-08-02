@@ -7,8 +7,7 @@ from uuid import uuid4
 
 from ..scheduler import get_default_scheduler
 from ..research import gather
-from ..ume import emit_task_note
-from ..ume.models import TaskNote
+from ..ume import emit_acceptance_event, is_private_event
 from ..config import load_config
 
 
@@ -51,6 +50,8 @@ class SuggestionEngine:
 
         patterns = await self._query_ume()
         for pattern in patterns:
+            if is_private_event(pattern):
+                continue
             pattern_categories: set[str] = set()
             category = pattern.get("category")
             if category:
@@ -106,8 +107,7 @@ class SuggestionEngine:
         if suggestion.task_name:
             scheduler = get_default_scheduler()
             scheduler.run_task(suggestion.task_name)
-        note = TaskNote(note=f"accepted: {suggestion.title}")
-        emit_task_note(note, user_id=user_id)
+        emit_acceptance_event(suggestion.title, user_id=user_id)
 
     def snooze(self, suggestion_id: str) -> None:
         self.get(suggestion_id).state = "snoozed"
