@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass, field
+from typing import Dict, List
+from uuid import uuid4
+
+from ..scheduler import get_default_scheduler
+from ..research import gather
+from ..ume import emit_task_note
+from ..ume.models import TaskNote
+
+
+@dataclass
+class Suggestion:
+    """Representation of a generated suggestion."""
+
+    id: str
+    title: str
+    description: str
+    confidence: float
+    related_entities: List[str] = field(default_factory=list)
+    task_name: str | None = None
+    state: str = "pending"  # pending, snoozed, dismissed, accepted
+
+
+class SuggestionEngine:
+    """Generate and manage task suggestions."""
+
+    def __init__(self, interval: float = 60.0) -> None:
+        self.interval = interval
+        self._suggestions: Dict[str, Suggestion] = {}
+        self._task: asyncio.Task | None = None
+
+    async def _query_ume(self) -> List[dict]:
+        """Return user-event patterns from UME.
+
+        The default implementation returns an empty list and is expected to be
+        overridden or monkeypatched in tests.
+        """
+
+        return []
+
+    async def generate(self) -> None:
+        """Query UME and create suggestions once."""
+
+        patterns = await self._query_ume()
+        for pattern in patterns:
+            estimation = gather(pattern.get("description", ""))
+            if isinstance(estimation, dict):
+                confidence = float(estimation.get("confidence", 0.0))
+            else:
+                confidence = 0.0
+            suggestion = Suggestion(
+                id=str(uuid4()),
+                title=pattern.get("title", ""),
+                description=pattern.get("description", ""),
+                confidence=confidence,
+                related_entities=pattern.get("related", []),
+                task_name=pattern.get("task_name"),
+            )
+            self._suggestions[suggestion.id] = suggestion
+
+    async def _loop(self) -> None:
+        while True:
+            await self.generate()
+            await asyncio.sleep(self.interval)
+
+    def start(self) -> None:
+        """Start the background suggestion job."""
+
+        if self._task is None:
+            loop = asyncio.get_running_loop()
+            self._task = loop.create_task(self._loop())
+
+    def list(self) -> List[Suggestion]:
+        return list(self._suggestions.values())
+
+    def get(self, suggestion_id: str) -> Suggestion:
+        return self._suggestions[suggestion_id]
+
+    def accept(self, suggestion_id: str, user_id: str | None = None) -> None:
+        suggestion = self.get(suggestion_id)
+        suggestion.state = "accepted"
+        if suggestion.task_name:
+            scheduler = get_default_scheduler()
+            scheduler.run_task(suggestion.task_name)
+        note = TaskNote(note=f"accepted: {suggestion.title}")
+        emit_task_note(note, user_id=user_id)
+
+    def snooze(self, suggestion_id: str) -> None:
+        self.get(suggestion_id).state = "snoozed"
+
+    def dismiss(self, suggestion_id: str) -> None:
+        self.get(suggestion_id).state = "dismissed"
+
+
+_default_engine: SuggestionEngine | None = None
+
+
+def get_default_engine() -> SuggestionEngine:
+    """Return the singleton :class:`SuggestionEngine` instance."""
+
+    global _default_engine
+    if _default_engine is None:
+        _default_engine = SuggestionEngine()
+    return _default_engine
