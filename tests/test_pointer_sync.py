@@ -2,6 +2,7 @@ import yaml
 from typer.testing import CliRunner
 
 import pytest
+import asyncio
 
 from task_cascadence import pointer_sync
 from task_cascadence.pointer_store import PointerStore
@@ -101,3 +102,58 @@ def test_pointer_sync_incomplete_config(monkeypatch, tmp_path):
 
     with pytest.raises(ValueError):
         pointer_sync.run()
+
+
+def test_pointer_sync_async_two_listeners(monkeypatch, tmp_path):
+    store_a = tmp_path / "a.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store_a))
+    monkeypatch.setenv("UME_TRANSPORT", "grpc")
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe_initial")
+    monkeypatch.setenv("UME_BROADCAST_POINTERS", "1")
+
+    module = tmp_path / "astub_broadcast.py"
+    module.write_text(
+        """
+import asyncio
+from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+messages = []
+
+class Stub:
+    @staticmethod
+    async def Subscribe_initial():
+        yield PointerUpdate(task_name='demo', run_id='ab1', user_hash='u')
+
+    @staticmethod
+    async def Subscribe_queue():
+        while messages:
+            yield messages.pop(0)
+        await asyncio.sleep(0)
+
+    @staticmethod
+    def Send(update, timeout=None):
+        messages.append(update)
+"""
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("UME_GRPC_STUB", "astub_broadcast:Stub")
+
+    import importlib
+
+    importlib.invalidate_caches()
+    stub_module = __import__("astub_broadcast")
+    monkeypatch.setattr(pointer_sync, "emit_pointer_update", stub_module.Stub.Send)
+
+    asyncio.run(pointer_sync.run_async())
+
+    data = yaml.safe_load(store_a.read_text())
+    assert data["demo"] == [{"run_id": "ab1", "user_hash": "u"}]
+
+    store_b = tmp_path / "b.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store_b))
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe_queue")
+    monkeypatch.setenv("UME_BROADCAST_POINTERS", "0")
+
+    asyncio.run(pointer_sync.run_async())
+
+    data = yaml.safe_load(store_b.read_text())
+    assert data["demo"] == [{"run_id": "ab1", "user_hash": "u"}]
