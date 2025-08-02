@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Depends, HTTPException, Header
 import inspect
+from pydantic import BaseModel, Field
+from typing import Any, Dict
 
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
@@ -10,8 +12,25 @@ from ..pipeline_registry import get_pipeline
 from ..plugins import load_plugin
 from ..task_store import TaskStore
 from ..suggestions.engine import get_default_engine
+from ..intent import resolve_intent
 
 app = FastAPI()
+
+
+class IntentRequest(BaseModel):
+    """Schema for intent analysis requests."""
+
+    message: str
+    context: list[str] = Field(default_factory=list)
+
+
+class IntentResponse(BaseModel):
+    """Schema for responses returned by the intent endpoint."""
+
+    task: str | None = None
+    arguments: Dict[str, Any] = Field(default_factory=dict)
+    confidence: float
+    clarification: bool
 
 
 def get_user_id(x_user_id: str | None = Header(default=None)) -> str | None:
@@ -218,6 +237,19 @@ def suggestion_dismiss(suggestion_id: str):
     return {"status": "dismissed"}
 
 
+@app.post("/intent", response_model=IntentResponse)
+def intent_route(req: IntentRequest):
+    """Return intent analysis for the provided message."""
+
+    result = resolve_intent(req.message, req.context)
+    return IntentResponse(
+        task=result.task,
+        arguments=result.arguments,
+        confidence=result.confidence,
+        clarification=result.requires_clarification,
+    )
+
+
 __all__ = [
     "app",
     "list_tasks",
@@ -236,4 +268,5 @@ __all__ = [
     "suggestion_accept",
     "suggestion_snooze",
     "suggestion_dismiss",
+    "intent_route",
 ]
