@@ -180,28 +180,31 @@ class TaskPipeline:
                 if hasattr(self.task, "run"):
                     result = self._call_run(results)
             elif isinstance(plan_result, list):
-                results = []
-                for sub in plan_result:
-                    pipeline = sub if isinstance(sub, TaskPipeline) else TaskPipeline(sub)
-                    sub_result = pipeline.run(user_id=user_id)
-                    if inspect.isawaitable(sub_result):
-                        try:
-                            asyncio.get_running_loop()
-                        except RuntimeError:
-                            sub_result = asyncio.run(
-                                cast(Coroutine[Any, Any, Any], sub_result)
-                            )
-                        else:
-                            _res = sub_result
+                async def _run_all() -> list[Any]:
+                    res: list[Any] = []
+                    for sub in plan_result:
+                        pipeline = sub if isinstance(sub, TaskPipeline) else TaskPipeline(sub)
+                        sub_result = pipeline.run(user_id=user_id)
+                        if inspect.isawaitable(sub_result):
+                            sub_result = await cast(Coroutine[Any, Any, Any], sub_result)
+                        res.append(sub_result)
+                    return res
 
-                            async def _await_result(res=_res) -> Any:
-                                return await res
+                async def _resolve_and_run() -> Any:
+                    res = await _run_all()
+                    if hasattr(self.task, "run"):
+                        parent_res = self._call_run(res)
+                        if inspect.isawaitable(parent_res):
+                            parent_res = await cast(Coroutine[Any, Any, Any], parent_res)
+                        return parent_res
+                    return res
 
-                            sub_result = _await_result()
-                    results.append(sub_result)
-                result = results
-                if hasattr(self.task, "run"):
-                    result = self._call_run(results)
+                try:
+                    asyncio.get_running_loop()
+                except RuntimeError:
+                    result = asyncio.run(_resolve_and_run())
+                else:
+                    result = _resolve_and_run()
             else:
                 result = self._call_run(plan_result)
 
