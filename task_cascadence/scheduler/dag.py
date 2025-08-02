@@ -94,16 +94,27 @@ class DagCronScheduler(CronScheduler):
         *,
         use_temporal: bool | None,
         user_id: str | None,
+        stack: list[str] | None = None,
     ) -> Any:
+        if stack is None:
+            stack = []
         if name in executed:
             return None
-        for dep in self.dependencies.get(name, []):
-            self._run_with_dependencies(
-                dep,
-                executed,
-                use_temporal=use_temporal,
-                user_id=user_id,
-            )
+        if name in stack:
+            cycle = " -> ".join(stack + [name])
+            raise ValueError(f"Cyclic dependency detected: {cycle}")
+        stack.append(name)
+        try:
+            for dep in self.dependencies.get(name, []):
+                self._run_with_dependencies(
+                    dep,
+                    executed,
+                    use_temporal=use_temporal,
+                    user_id=user_id,
+                    stack=stack,
+                )
+        finally:
+            stack.pop()
         executed.add(name)
         return super().run_task(
             name, use_temporal=use_temporal, user_id=user_id
