@@ -9,6 +9,7 @@ from ..cli import _pointer_add, _pointer_list, _pointer_receive
 from ..pipeline_registry import get_pipeline
 from ..plugins import load_plugin
 from ..task_store import TaskStore
+from ..suggestions.engine import get_default_engine
 
 app = FastAPI()
 
@@ -180,6 +181,43 @@ def pointer_receive(name: str, run_id: str, user_hash: str):
     return {"status": "stored"}
 
 
+@app.get("/suggestions")
+def suggestion_list():
+    """Return all generated suggestions."""
+
+    engine = get_default_engine()
+    return [s.__dict__ for s in engine.list()]
+
+
+@app.post("/suggestions/{suggestion_id}/accept")
+def suggestion_accept(
+    suggestion_id: str, user_id: str | None = Depends(get_user_id)
+):
+    """Accept a suggestion and enqueue its task."""
+
+    engine = get_default_engine()
+    engine.accept(suggestion_id, user_id=user_id)
+    return {"status": "accepted"}
+
+
+@app.post("/suggestions/{suggestion_id}/snooze")
+def suggestion_snooze(suggestion_id: str):
+    """Snooze a suggestion."""
+
+    engine = get_default_engine()
+    engine.snooze(suggestion_id)
+    return {"status": "snoozed"}
+
+
+@app.post("/suggestions/{suggestion_id}/dismiss")
+def suggestion_dismiss(suggestion_id: str):
+    """Dismiss a suggestion."""
+
+    engine = get_default_engine()
+    engine.dismiss(suggestion_id)
+    return {"status": "dismissed"}
+
+
 __all__ = [
     "app",
     "list_tasks",
@@ -194,4 +232,8 @@ __all__ = [
     "pointer_add",
     "pointer_list",
     "pointer_receive",
+    "suggestion_list",
+    "suggestion_accept",
+    "suggestion_snooze",
+    "suggestion_dismiss",
 ]
