@@ -3,11 +3,11 @@ import asyncio
 from task_cascadence.suggestions.engine import SuggestionEngine
 
 
-async def _prepare_engine(monkeypatch):
+async def _prepare_engine(monkeypatch, events=None):
     engine = SuggestionEngine()
 
     async def fake_query():
-        return [
+        return events or [
             {
                 "title": "Example",
                 "description": "test description",
@@ -62,16 +62,42 @@ def test_accept_enqueues_task(monkeypatch):
 
     emitted = {}
 
-    def fake_emit(note, user_id=None):
+    def fake_emit(note, client=None, user_id=None, use_asyncio=False):
         emitted["text"] = note.note
         emitted["user_id"] = user_id
 
     monkeypatch.setattr(
-        "task_cascadence.suggestions.engine.emit_task_note", fake_emit
+        "task_cascadence.ume.emit_task_note", fake_emit
     )
 
     engine.accept(sid, user_id="alice")
     assert scheduler.ran == ["dummy"]
     assert emitted["user_id"] == "alice"
-    assert "accepted" in emitted["text"]
+    assert emitted["text"] == "accepted suggestion"
     assert engine.get(sid).state == "accepted"
+
+
+def test_private_events_excluded(monkeypatch):
+    events = [
+        {
+            "title": "Public",
+            "description": "ok",
+            "task_name": "dummy",
+        },
+        {
+            "title": "Secret",
+            "description": "hidden",
+            "task_name": "dummy",
+            "privacy": "private",
+        },
+        {
+            "title": "Sensitive",
+            "description": "hidden",
+            "task_name": "dummy",
+            "flags": ["sensitive"],
+        },
+    ]
+    engine = asyncio.run(_prepare_engine(monkeypatch, events=events))
+    suggestions = engine.list()
+    assert len(suggestions) == 1
+    assert suggestions[0].title == "Public"
