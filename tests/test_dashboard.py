@@ -116,3 +116,33 @@ def test_dashboard_idea_seeds(monkeypatch, tmp_path):
     assert "bright" in resp.text
     assert "Promote" in resp.text
 
+
+def test_dashboard_html_escaping(monkeypatch, tmp_path):
+    special_name = "<task&>"
+    sched = BaseScheduler()
+    task = ExampleTask()
+    sched.register_task(special_name, task)
+    monkeypatch.setattr(
+        "task_cascadence.dashboard.get_default_scheduler", lambda: sched
+    )
+    stage_store = StageStore(path=tmp_path / "stages.yml")
+    stage_store.add_event(special_name, "<start&>", None)
+    pointer_store = PointerStore(path=tmp_path / "pointers.yml")
+    idea_store = IdeaStore(path=tmp_path / "ideas.yml")
+    idea_store.add_seed(IdeaSeed(text="<idea&text>"))
+    monkeypatch.setattr("task_cascadence.dashboard.StageStore", lambda: stage_store)
+    monkeypatch.setattr("task_cascadence.dashboard.PointerStore", lambda: pointer_store)
+    monkeypatch.setattr("task_cascadence.dashboard.IdeaStore", lambda: idea_store)
+
+    client = TestClient(app)
+    resp = client.get("/")
+
+    assert resp.status_code == 200
+    assert "<task&>" not in resp.text
+    assert "&lt;task&amp;&gt;" in resp.text
+    assert "<start&>" not in resp.text
+    assert "&lt;start&amp;&gt;" in resp.text
+    assert "<idea&text>" not in resp.text
+    assert "&lt;idea&amp;text&gt;" in resp.text
+    assert "/pause/%3Ctask%26%3E" in resp.text
+

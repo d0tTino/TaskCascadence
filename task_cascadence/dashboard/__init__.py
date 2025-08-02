@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
+from html import escape
+from urllib.parse import quote
 
 from ..scheduler import get_default_scheduler
 from ..stage_store import StageStore
@@ -43,37 +45,38 @@ def dashboard(request: Request) -> HTMLResponse:
             queued.append(name)
         paused = info.get("paused", False)
         mode = "async" if sched.is_async(name) else "sync"
+        quoted_name = quote(name)
         button = (
-            f"<form method='post' action='/resume/{name}'>"
+            f"<form method='post' action='/resume/{quoted_name}'>"
             "<button type='submit'>Resume</button></form>"
             if paused
             else (
-                f"<form method='post' action='/pause/{name}'>"
+                f"<form method='post' action='/pause/{quoted_name}'>"
                 "<button type='submit'>Pause</button></form>"
             )
         )
         status = "paused" if paused else "running"
         last_status = _get_last_status(store, name) or ""
-        rows.append(
+        row = (
             "<tr>"
-            f"<td>{name}</td>"
-            f"<td>{stage or ''}</td>"
-            f"<td>{ts or ''}</td>"
+            f"<td>{escape(name)}</td>"
+            f"<td>{escape(stage) if stage else ''}</td>"
+            f"<td>{escape(ts) if ts else ''}</td>"
             f"<td>{status}</td>"
             f"<td>{mode}</td>"
             f"<td>{pointer_count or ''}</td>"
-            f"<td>{last_status}</td>"
+            f"<td>{escape(last_status)}</td>"
             f"<td>{button}</td>"
             "</tr>"
-            ""
         )
+        rows.append(row)
 
-    queued_items = "\n".join(f"<li>{q}</li>" for q in queued) or "<li>None</li>"
+    queued_items = "\n".join(f"<li>{escape(q)}</li>" for q in queued) or "<li>None</li>"
     seed_items = (
         "\n".join(
-            f"<li>{s['text']}" \
-            f"<form method='post' action='/promote'>" \
-            f"<input type='hidden' name='text' value='{s['text']}'>" \
+            f"<li>{escape(s['text'])}"
+            f"<form method='post' action='/promote'>"
+            f"<input type='hidden' name='text' value='{escape(s['text'], quote=True)}'>"
             "<button type='submit'>Promote</button></form></li>"
             for s in ideas.get_seeds()
         )
@@ -117,3 +120,4 @@ def promote(text: str = Form(...)) -> RedirectResponse:
 
 
 __all__ = ["app", "dashboard", "pause", "resume", "promote"]
+
