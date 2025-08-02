@@ -31,7 +31,7 @@ dependencies = [
     "temporalio",
     "httpx<0.28",  # pinned for compatibility with temporalio
     "watchdog",
-    "protobuf>=6.31.1,<7",
+    "protobuf>=5.31,<6",
     "filelock",
 ]
 
