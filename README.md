@@ -333,18 +333,40 @@ cronyx_base_url: http://localhost:8000
 # cronyx_timeout: 5
 ```
 
-Example workflow::
+## CronyxServer Setup
 
-    CronyxServer --listen :8000 &
-    curl -X POST -H 'Content-Type: application/json' \
+Cascadence can fetch tasks from a running CronyxServer. Start the server,
+register tasks, and configure the scheduler with environment variables.
+
+1. **Launch the server**:
+
+   ```bash
+   CronyxServer --listen :8000
+   ```
+
+2. **Register a task**:
+
+   ```bash
+   curl -X POST -H 'Content-Type: application/json' \
         -d '{"id":"demo","path":"examples.python_plugin.demo:DemoTask"}' \
         http://localhost:8000/tasks
-    export CRONYX_BASE_URL=http://localhost:8000
-    export CRONYX_TIMEOUT=5
-    export CASCADENCE_CRONYX_REFRESH=1
-    export CASCADENCE_SCHEDULER=cronyx
-    task list
-    task schedule demo "*/5 * * * *"
+   ```
+
+3. **Configure Cascadence**:
+
+   ```bash
+   export CRONYX_BASE_URL=http://localhost:8000
+   export CRONYX_TIMEOUT=5
+   export CASCADENCE_CRONYX_REFRESH=1
+   export CASCADENCE_SCHEDULER=cronyx
+   ```
+
+4. **Schedule the remote task**:
+
+   ```bash
+   task list
+   task schedule demo "*/5 * * * *"
+   ```
 
 
 ## Plugin Discovery
