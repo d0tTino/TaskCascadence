@@ -138,6 +138,26 @@ $ task --metrics-port 9000 --transport grpc \
       --grpc-stub module:Stub run example
 ```
 
+### Plugin Watcher
+
+Follow these steps to reload plugins while you develop:
+
+1. **Start the watcher** with the directory containing your plugin files:
+
+   ```bash
+   $ task watch-plugins myplugins/
+   ```
+
+2. **Edit your plugin** files and save them. The watcher recursively monitors
+   the directory and reloads any modules that change.
+
+3. **Platform considerations** – Cascadence uses a polling observer so changes
+   on network filesystems or uncommon platforms are still detected. This may
+   introduce a small delay between saving a file and the reload.
+
+4. **Stop watching** at any time by pressing ``Ctrl+C`` in the terminal. The
+   command exits gracefully and closes the observer.
+
 ### Metrics Endpoint
 Start the CLI with ``--metrics-port`` to serve Prometheus metrics:
 
