@@ -12,6 +12,7 @@ def financial_decision_support(
     payload: Dict[str, Any],
     *,
     user_id: str,
+    group_id: str | None = None,
     ume_base: str = "http://ume",
     engine_base: str = "http://finance-engine",
 ) -> Dict[str, Any]:
@@ -37,6 +38,7 @@ def financial_decision_support(
     total_balance = sum(a.get("balance", 0) for a in accounts)
 
     engine_payload = {"balance": total_balance, "goals": goals, "analyses": analyses}
+
     if "budget" in payload:
         engine_payload["budget"] = payload["budget"]
     if "max_options" in payload:
@@ -96,6 +98,7 @@ def financial_decision_support(
         dispatch(
             "finance.explain.request",
             {**context, "actions": actions},
+
             user_id=user_id,
             group_id=group_id,
         )
@@ -105,3 +108,4 @@ def financial_decision_support(
     )
 
     return {**context, "actions": actions}
+

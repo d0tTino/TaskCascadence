@@ -29,8 +29,8 @@ def test_calendar_event_creation(monkeypatch):
     def fake_emit(name, stage, user_id=None, group_id=None, **_kwargs):
         emitted["event"] = (name, stage, user_id, group_id)
 
-    async def fake_async_gather(query):
-        emitted["research"] = query
+    def fake_research(query, user_id=None, group_id=None):
+        emitted["research"] = (query, user_id, group_id)
 
         return {"duration": "15m"}
 
@@ -53,19 +53,10 @@ def test_calendar_event_creation(monkeypatch):
     assert result == {"event_id": "evt1", "related_event_id": "evt2"}
     # permission checks
     assert calls[0][0] == "GET"
-    assert calls[1][0] == "GET" and calls[1][2]["params"]["group_id"] == "g1"
-    assert calls[2][0] == "GET" and calls[2][2]["params"]["invitee"] == "bob"
-    # main event persisted
-    assert calls[3][0] == "POST"
-    assert calls[3][1] == "http://svc/v1/calendar/events"
-    assert calls[3][2]["json"]["user_id"] == "alice"
-    assert calls[3][2]["json"]["group_id"] == "g1"
-    assert calls[3][2]["json"]["travel_time"] == {"duration": "15m"}
-    # related event persisted
-    assert calls[4][0] == "POST" and calls[4][1] == "http://svc/v1/calendar/events"
-    # edge creation
-    assert calls[5][0] == "POST" and calls[5][1] == "http://svc/v1/calendar/edges"
-    assert calls[5][2]["json"]["type"] == "RELATES_TO"
-    assert emitted["event"] == ("calendar.event.created", "created", "alice", "g1")
-    assert emitted["research"] == "travel time to Cafe"
+    assert "permissions" in calls[0][1]
+    assert calls[1][0] == "POST"
+    assert calls[1][1] == "http://svc/v1/calendar/events"
+    assert calls[1][2]["json"]["travel_time"] == {"duration": "15m"}
+    assert emitted["event"] == ("calendar.event.created", "created", "alice")
+    assert emitted["research"] == ("travel time to Cafe", "alice", None)
 

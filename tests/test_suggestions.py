@@ -23,9 +23,9 @@ async def _prepare_engine(monkeypatch, events=None, tmp_path=None):
     monkeypatch.setattr(engine, "_query_ume", fake_query)
     monkeypatch.setattr(
         "task_cascadence.suggestions.engine.gather",
-        lambda q: {"confidence": 0.9},
+        lambda q, user_id, group_id=None: {"confidence": 0.9},
     )
-    await engine.generate()
+    await engine.generate(user_id="alice")
     return engine
 
 

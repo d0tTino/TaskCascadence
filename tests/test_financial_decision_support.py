@@ -1,4 +1,3 @@
-from task_cascadence.workflows import dispatch
 from task_cascadence.workflows import financial_decision_support as fds
 
 
@@ -64,6 +63,7 @@ def test_financial_decision_support(monkeypatch):
         "finance.decision.request",
         {"explain": True, "group_id": "g1", "budget": 100, "max_options": 3},
         user_id="alice",
+
     )
 
     # ensure UME query
@@ -97,5 +97,6 @@ def test_financial_decision_support(monkeypatch):
     assert dispatched[0][3] == "g1"
     assert dispatched[1][0] == "finance.explain.request"
     assert dispatched[1][1]["actions"][0]["id"] == "act1"
+
     assert result["analysis"] == "da1"
     assert result["summary"]["cost_of_deviation"] == 50
