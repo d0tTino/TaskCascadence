@@ -261,25 +261,26 @@ Navigate to ``http://localhost:8000`` to see task statuses and pause or resume
 individual tasks. The table also lists the number of pointers stored for each
 task via ``PointerStore``.
 
-## Schedule Persistence
+## YAML-Based Recurrence
 
-``CronScheduler`` stores cron expressions in ``schedules.yml`` by default.  The
-file is created next to the running application unless ``storage_path`` is
-overridden.  It contains a simple YAML mapping of task class names to their
-crontab schedules:
+``CronScheduler`` persists recurrence rules in ``schedules.yml``.  The file is
+created next to the running application unless ``storage_path`` is overridden
+and maps task names to cron expressions and optional context:
 
 ```yaml
-ExampleTask: "0 12 * * *"
+ExampleTask:
+  expr: "0 12 * * *"
+  group_id: ops
 ```
 
 Timezone-aware scheduling requires access to the IANA timezone database
 provided by the `tzdata` package. Ensure this package is installed when
 creating schedulers with non-UTC timezones.
 
-When a new ``CronScheduler`` instance starts it reads this file and re-creates
-any jobs for which task objects are supplied via the ``tasks`` argument.  This
-allows scheduled tasks to survive process restarts.
-Removing a schedule triggers an ``unschedule`` stage event for that task.
+When a ``CronScheduler`` starts it reads this YAML and re-creates any jobs for
+which task objects are supplied via the ``tasks`` argument.  Editing the file
+lets you adjust recurrence without changing code.  Removing a schedule triggers
+an ``unschedule`` stage event for that task.
 
 ## Task DAGs
 
@@ -528,6 +529,33 @@ dashboard so the same input maps to a consistent hash. Salting allows
 deployments to generate unique hashes while avoiding exposure of the raw ID,
 helping preserve privacy when events are stored or forwarded.
 
+## User and Group Context
+
+Most orchestration helpers accept optional ``user_id`` and ``group_id``
+arguments so activity can be attributed to individuals or teams.  These
+identifiers flow through to emitted events and dashboards.
+
+The HTTP API reads them from ``X-User-ID`` and ``X-Group-ID`` headers:
+
+```bash
+curl -X POST http://localhost:8000/tasks/dummy/run \
+     -H "X-Group-ID: team1" -H "X-User-ID: alice"
+```
+
+They can also be supplied directly when running pipelines:
+
+```python
+pipeline = TaskPipeline(Demo())
+pipeline.run(user_id="alice", group_id="team1")
+```
+
+## Audit Logs
+
+Cascadence records an audit trail for each task in ``StageStore``.  Entries
+include stage transitions, success or error status, and any failure reasons.
+Logs are persisted to YAML so they survive process restarts and can be
+inspected later for debugging or compliance.
+
 ## Pointer Sync Service
 
 When tasks emit pointer updates they can be synchronized across multiple
@@ -599,6 +627,36 @@ Start the service directly or via the CLI:
 ```bash
 $ python -m task_cascadence.capability_planner
 $ task capability-planner
+```
+
+## Event-Driven Workflows
+
+Cascadence includes sample workflows that react to events published on the UME
+bus.  Use :func:`task_cascadence.workflows.dispatch` to trigger them from your
+code or services.
+
+### Calendar Event Creation
+
+This workflow listens for ``calendar.event.create`` and persists a validated
+event to an external calendar service after optional research:
+
+```python
+from task_cascadence.workflows import dispatch
+
+payload = {"title": "Team Sync", "start": "2024-04-01T09:00Z", "end": "2024-04-01T10:00Z"}
+dispatch("calendar.event.create", payload, user_id="alice")
+```
+
+### Financial Decision Support
+
+``financial_decision_support`` aggregates accounts and goals, calls an external
+engine, and stores the resulting analysis when ``finance.decision.request`` is
+dispatched:
+
+```python
+from task_cascadence.workflows import dispatch
+
+dispatch("finance.decision.request", {"explain": True}, user_id="bob")
 ```
 
 ## n8n Export
