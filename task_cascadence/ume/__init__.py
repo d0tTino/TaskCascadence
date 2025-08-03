@@ -110,7 +110,10 @@ def emit_stage_update_event(
         return None
     update = StageUpdate(task_name=task_name, stage=stage)
     if user_id is not None:
+        update.user_id = user_id
         update.user_hash = _hash_user_id(user_id)
+    if group_id is not None:
+        update.group_id = group_id
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
             _async_queue_within_deadline(update, target)
@@ -183,6 +186,7 @@ def emit_task_spec(
     spec: TaskSpec,
     client: Any | None = None,
     user_id: str | None = None,
+    group_id: str | None = None,
     *,
     use_asyncio: bool = False,
 ) -> asyncio.Task | threading.Thread | None:
@@ -192,7 +196,10 @@ def emit_task_spec(
     if target is None:
         raise ValueError("No transport client configured")
     if user_id is not None:
+        spec.user_id = user_id
         spec.user_hash = _hash_user_id(user_id)
+    if group_id is not None:
+        spec.group_id = group_id
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
             _async_queue_within_deadline(spec, target)
@@ -204,6 +211,7 @@ def emit_task_run(
     run: TaskRun,
     client: Any | None = None,
     user_id: str | None = None,
+    group_id: str | None = None,
     *,
     use_asyncio: bool = False,
 ) -> asyncio.Task | threading.Thread | None:
@@ -213,7 +221,10 @@ def emit_task_run(
     if target is None:
         raise ValueError("No transport client configured")
     if user_id is not None:
+        run.user_id = user_id
         run.user_hash = _hash_user_id(user_id)
+    if group_id is not None:
+        run.group_id = group_id
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
             _async_queue_within_deadline(run, target)
@@ -224,6 +235,8 @@ def emit_task_run(
 def emit_pointer_update(
     update: PointerUpdate,
     client: Any | None = None,
+    user_id: str | None = None,
+    group_id: str | None = None,
     *,
     use_asyncio: bool = False,
 ) -> asyncio.Task | threading.Thread | None:
@@ -232,6 +245,11 @@ def emit_pointer_update(
     target = client or _default_client
     if target is None:
         raise ValueError("No transport client configured")
+    if user_id is not None:
+        update.user_id = user_id
+        update.user_hash = _hash_user_id(user_id)
+    if group_id is not None:
+        update.group_id = group_id
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
             _async_queue_within_deadline(update, target)
@@ -243,6 +261,7 @@ def emit_task_note(
     note: TaskNote,
     client: Any | None = None,
     user_id: str | None = None,
+    group_id: str | None = None,
     *,
     use_asyncio: bool = False,
 ) -> asyncio.Task | threading.Thread | None:
@@ -252,7 +271,10 @@ def emit_task_note(
     if target is None:
         raise ValueError("No transport client configured")
     if user_id is not None:
+        note.user_id = user_id
         note.user_hash = _hash_user_id(user_id)
+    if group_id is not None:
+        note.group_id = group_id
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
             _async_queue_within_deadline(note, target)
@@ -274,8 +296,10 @@ def emit_idea_seed(
     if target is None:
         raise ValueError("No transport client configured")
     if user_id is not None:
+        seed.user_id = user_id
         seed.user_hash = _hash_user_id(user_id)
     _get_idea_store().add_seed(seed, group_id=group_id)
+
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
             _async_queue_within_deadline(seed, target)
@@ -287,6 +311,7 @@ def emit_acceptance_event(
     title: str | None = None,
     client: Any | None = None,
     user_id: str | None = None,
+    group_id: str | None = None,
     *,
     use_asyncio: bool = False,
 ) -> asyncio.Task | threading.Thread | None:
@@ -294,7 +319,11 @@ def emit_acceptance_event(
 
     note = TaskNote(note="accepted suggestion")
     return emit_task_note(
-        note, client=client, user_id=user_id, use_asyncio=use_asyncio
+        note,
+        client=client,
+        user_id=user_id,
+        group_id=group_id,
+        use_asyncio=use_asyncio,
     )
 
 

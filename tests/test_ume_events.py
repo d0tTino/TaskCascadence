@@ -86,10 +86,12 @@ def test_emit_task_note(monkeypatch):
 
     client = Client()
     note = TaskNote(task_name="demo", run_id="r1", note="all good")
-    emit_task_note(note, client, user_id="alice")
+    emit_task_note(note, client, user_id="alice", group_id="devs")
 
     assert isinstance(client.events[0], TaskNote)
     assert client.events[0].user_hash == _hash_user_id("alice")
+    assert client.events[0].user_id == "alice"
+    assert client.events[0].group_id == "devs"
     serialized = client.events[0].SerializeToString()
     again = TaskNote.FromString(serialized)
     assert again == client.events[0]
@@ -107,10 +109,12 @@ def test_emit_idea_seed(monkeypatch):
 
     client = Client()
     seed = IdeaSeed(text="an idea")
-    emit_idea_seed(seed, client, user_id="bob")
+    emit_idea_seed(seed, client, user_id="bob", group_id="devs")
 
     assert isinstance(client.events[0], IdeaSeed)
     assert client.events[0].user_hash == _hash_user_id("bob")
+    assert client.events[0].user_id == "bob"
+    assert client.events[0].group_id == "devs"
     serialized = client.events[0].SerializeToString()
     again = IdeaSeed.FromString(serialized)
     assert again == client.events[0]
@@ -132,10 +136,12 @@ def test_emit_stage_update_event(monkeypatch, tmp_path):
     import task_cascadence.ume as ume
     ume._stage_store = None
 
-    ume.emit_stage_update_event("demo", "start", client, user_id="alice")
+    ume.emit_stage_update_event("demo", "start", client, user_id="alice", group_id="devs")
 
     assert isinstance(client.events[0], StageUpdate)
     assert client.events[0].user_hash == _hash_user_id("alice")
+    assert client.events[0].user_id == "alice"
+    assert client.events[0].group_id == "devs"
     serialized = client.events[0].SerializeToString()
     again = StageUpdate.FromString(serialized)
     assert again == client.events[0]
@@ -161,9 +167,11 @@ def test_emit_stage_update_event_default_client(monkeypatch, tmp_path):
     client = Client()
     monkeypatch.setattr(ume, "_default_client", client)
 
-    ume.emit_stage_update_event("demo", "planning", user_id="bob")
+    ume.emit_stage_update_event("demo", "planning", user_id="bob", group_id="devs")
 
     assert isinstance(client.events[0], StageUpdate)
     assert client.events[0].user_hash == _hash_user_id("bob")
+    assert client.events[0].user_id == "bob"
+    assert client.events[0].group_id == "devs"
     data = yaml.safe_load((tmp_path / "events.yml").read_text())
     assert data["demo"][0]["user_id"] == _hash_user_id("bob")

@@ -87,6 +87,7 @@ class PointerTask(BaseTask):
         )
         self.store.add_pointer(self.name, user_id, run_id, group_id=group_id)
 
+
     def get_pointers(self) -> list[TaskPointer]:
         return list(self.pointers)
 
