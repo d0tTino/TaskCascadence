@@ -12,7 +12,7 @@ from ..pipeline_registry import get_pipeline
 from ..plugins import load_plugin
 from ..task_store import TaskStore
 from ..suggestions.engine import get_default_engine
-from ..intent import resolve_intent
+from ..intent import resolve_intent, sanitize_input
 
 app = FastAPI()
 
@@ -240,8 +240,9 @@ def suggestion_dismiss(suggestion_id: str):
 @app.post("/intent", response_model=IntentResponse)
 def intent_route(req: IntentRequest):
     """Return intent analysis for the provided message."""
-
-    result = resolve_intent(req.message, req.context)
+    message = sanitize_input(req.message)
+    ctx = [sanitize_input(c) for c in req.context]
+    result = resolve_intent(message, ctx)
     return IntentResponse(
         task=result.task,
         arguments=result.arguments,

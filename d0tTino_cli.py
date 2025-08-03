@@ -3,6 +3,8 @@ from __future__ import annotations
 import requests
 import typer
 
+from task_cascadence.intent import sanitize_input
+
 app = typer.Typer(help="Interact with TaskCascadence intent API")
 
 
@@ -17,14 +19,14 @@ def _post(base_url: str, payload: dict) -> dict:
 def intent(text: str, base_url: str = "http://localhost:8000") -> None:
     """Submit ``TEXT`` and interactively resolve intent."""
 
-    payload: dict = {"text": text}
+    payload: dict = {"message": sanitize_input(text), "context": []}
 
     while True:
         data = _post(base_url, payload)
         clarification = data.get("clarification")
         if clarification:
             typer.echo(clarification)
-            answer = input("")
+            answer = sanitize_input(input(""))
             payload["clarification"] = answer
             continue
         tasks = data.get("tasks", [])

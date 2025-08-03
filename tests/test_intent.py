@@ -25,7 +25,7 @@ def test_disambiguation_with_context(monkeypatch):
     assert data['task'] == 'send_email'
     assert data['confidence'] == 0.9
     assert not data['clarification']
-    assert 'send email to bob@example.com' in captured['prompt']
+    assert 'send email to [REDACTED]' in captured['prompt']
 
 
 def test_clarification_triggered(monkeypatch):
@@ -39,3 +39,34 @@ def test_clarification_triggered(monkeypatch):
     data = resp.json()
     assert data['clarification']
     assert data['confidence'] == 0.2
+
+
+def test_sanitization_prevents_injection(monkeypatch):
+    captured = {}
+
+    def fake_gather(prompt: str):
+        captured['prompt'] = prompt
+        return {'task': 'noop', 'arguments': {}, 'confidence': 1.0}
+
+    monkeypatch.setattr('task_cascadence.intent.gather', fake_gather)
+    client = TestClient(app)
+    malicious = "<script>alert('x')</script>; rm -rf / 4111111111111111 bob@example.com"
+    resp = client.post('/intent', json={'message': malicious, 'context': []})
+    assert resp.status_code == 200
+    prompt = captured['prompt']
+    assert '<script>' not in prompt
+    assert 'rm -rf' not in prompt
+    assert 'bob@example.com' not in prompt
+    assert '4111111111111111' not in prompt
+    assert '[REDACTED]' in prompt
+
+
+def test_sanitize_input_function():
+    from task_cascadence.intent import sanitize_input
+
+    text = "Contact me at alice@example.com using card 4242-4242-4242-4242 <script>bad()</script>"
+    sanitized = sanitize_input(text)
+    assert 'alice@example.com' not in sanitized
+    assert '4242-4242-4242-4242' not in sanitized
+    assert 'bad()' not in sanitized
+    assert '[REDACTED]' in sanitized
