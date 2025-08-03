@@ -83,9 +83,12 @@ def run_task(
     """Execute ``name`` and return its result."""
     sched = get_default_scheduler()
     try:
-        result = sched.run_task(
-            name, use_temporal=temporal, user_id=user_id, group_id=group_id
-        )
+        kwargs: dict[str, Any] = {"use_temporal": temporal}
+        if user_id is not None:
+            kwargs["user_id"] = user_id
+        if group_id is not None:
+            kwargs["group_id"] = group_id
+        result = sched.run_task(name, **kwargs)
         return {"result": result}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -101,9 +104,12 @@ async def run_task_async(
     """Execute ``name`` asynchronously and return its result."""
     sched = get_default_scheduler()
     try:
-        result = sched.run_task(
-            name, use_temporal=temporal, user_id=user_id, group_id=group_id
-        )
+        kwargs: dict[str, Any] = {"use_temporal": temporal}
+        if user_id is not None:
+            kwargs["user_id"] = user_id
+        if group_id is not None:
+            kwargs["group_id"] = group_id
+        result = sched.run_task(name, **kwargs)
         if inspect.isawaitable(result):
             result = await result
         return {"result": result}

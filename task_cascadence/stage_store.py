@@ -75,16 +75,28 @@ class StageStore:
         stage: str,
         user_id: str | None,
         group_id: str | None = None,
+        *,
+        status: str | None = None,
+        reason: str | None = None,
+        output: str | None = None,
+        category: str = "stage",
     ) -> None:
         entry: Dict[str, Any] = {
             "stage": stage,
             "time": datetime.now(timezone.utc).isoformat(),
         }
+        if status is not None:
+            entry["status"] = status
+        if reason is not None:
+            entry["reason"] = reason
+        if output is not None:
+            entry["output"] = output
         if user_id is not None:
             entry["user_id"] = user_id
         if group_id is not None:
             entry["group_id"] = group_id
-        events = self._data.setdefault(task_name, [])
+        key = task_name if category == "stage" else f"{task_name}:{category}"
+        events = self._data.setdefault(key, [])
         events.append(entry)
         self._save()
 
@@ -93,8 +105,11 @@ class StageStore:
         task_name: str,
         user_id: str | None = None,
         group_id: str | None = None,
+        *,
+        category: str = "stage",
     ) -> List[Dict[str, Any]]:
-        events = self._data.get(task_name, [])
+        key = task_name if category == "stage" else f"{task_name}:{category}"
+        events = self._data.get(key, [])
         return [
             e
             for e in events

@@ -154,7 +154,14 @@ class BaseScheduler:
                         started_at=started,
                         finished_at=finished,
                     )
-                    emit_task_run(run, user_id=user_id, group_id=group_id)
+                    if user_id is None and group_id is None:
+                        emit_task_run(run)
+                    elif group_id is None:
+                        emit_task_run(run, user_id=user_id)
+                    elif user_id is None:
+                        emit_task_run(run, group_id=group_id)
+                    else:
+                        emit_task_run(run, user_id=user_id, group_id=group_id)
                 return result
 
             return runner()
