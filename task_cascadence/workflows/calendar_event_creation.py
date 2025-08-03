@@ -38,7 +38,7 @@ def create_calendar_event(
     payload: Dict[str, Any], *, user_id: str, base_url: str = "http://localhost", ume_base: str = "http://ume"
 
 ) -> Dict[str, Any]:
-    """Persist calendar events after validation and permission checks.
+    """Persist calendar events after validation and permission checks."""
 
     for field in ("title", "start_time"):
         if field not in payload or not payload[field]:

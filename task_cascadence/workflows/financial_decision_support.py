@@ -12,15 +12,20 @@ def financial_decision_support(
     payload: Dict[str, Any],
     *,
     user_id: str,
+    group_id: str | None = None,
     ume_base: str = "http://ume",
     engine_base: str = "http://finance-engine",
 ) -> Dict[str, Any]:
     """Aggregate financial data, run a debt simulation, and persist results."""
 
     url = f"{ume_base.rstrip('/')}/v1/nodes"
-    resp = request_with_retry(
-        "GET", url, params={"types": "FinancialAccount,FinancialGoal,DecisionAnalysis"}, timeout=5
-    )
+    params: Dict[str, Any] = {
+        "types": "FinancialAccount,FinancialGoal,DecisionAnalysis",
+        "user_id": user_id,
+    }
+    if group_id is not None:
+        params["group_id"] = group_id
+    resp = request_with_retry("GET", url, params=params, timeout=5)
     data = resp.json()
     nodes: List[Dict[str, Any]] = data.get("nodes", [])
 
@@ -30,7 +35,15 @@ def financial_decision_support(
 
     total_balance = sum(a.get("balance", 0) for a in accounts)
 
-    engine_payload = {"balance": total_balance, "goals": goals, "analyses": analyses}
+    engine_payload: Dict[str, Any] = {
+        "balance": total_balance,
+        "goals": goals,
+        "analyses": analyses,
+    }
+    if "budget" in payload:
+        engine_payload["budget"] = payload["budget"]
+    if "max_options" in payload:
+        engine_payload["max_options"] = payload["max_options"]
     eng_resp = request_with_retry(
         "POST", f"{engine_base.rstrip('/')}/v1/simulations/debt", json=engine_payload, timeout=5
     )
@@ -63,8 +76,19 @@ def financial_decision_support(
     request_with_retry("POST", url, json={"nodes": nodes_to_persist, "edges": edges}, timeout=5)
 
     if payload.get("explain"):
-        dispatch("finance.explain.request", {"analysis": analysis_id, "actions": actions}, user_id=user_id)
+        dispatch(
+            "finance.explain.request",
+            {"analysis": analysis_id, "actions": actions},
+            user_id=user_id,
+            group_id=group_id,
+        )
 
-    emit_stage_update_event("finance.decision.result", "completed", user_id=user_id)
+    emit_stage_update_event(
+        "finance.decision.result", "completed", user_id=user_id, group_id=group_id
+    )
 
-    return {"analysis": analysis_id, "actions": actions}
+    return {
+        "analysis": analysis_id,
+        "summary": {"cost_of_deviation": eng_result.get("cost_of_deviation", 0)},
+        "actions": actions,
+    }

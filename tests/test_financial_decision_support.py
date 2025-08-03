@@ -1,4 +1,3 @@
-from task_cascadence.workflows import dispatch
 from task_cascadence.workflows import financial_decision_support as fds
 
 
@@ -16,6 +15,8 @@ def test_financial_decision_support(monkeypatch):
     def fake_request(method, url, timeout, **kwargs):
         calls.append((method, url, kwargs))
         if method == "GET":
+            assert kwargs["params"]["user_id"] == "alice"
+            assert kwargs["params"]["group_id"] == "g1"
             return DummyResponse(
                 {
                     "nodes": [
@@ -30,6 +31,8 @@ def test_financial_decision_support(monkeypatch):
             assert kwargs["json"]["balance"] == 1500
             assert len(kwargs["json"]["goals"]) == 1
             assert len(kwargs["json"]["analyses"]) == 1
+            assert kwargs["json"]["budget"] == 100
+            assert kwargs["json"]["max_options"] == 3
             return DummyResponse(
                 {
                     "id": "da1",
@@ -44,19 +47,23 @@ def test_financial_decision_support(monkeypatch):
 
     emitted = {}
 
-    def fake_emit(name, stage, user_id=None, **_):
-        emitted["event"] = (name, stage, user_id)
+    def fake_emit(name, stage, user_id=None, group_id=None, **_):
+        emitted["event"] = (name, stage, user_id, group_id)
 
     explains = {}
 
-    def fake_dispatch(event, payload, user_id=None):
-        explains["called"] = (event, payload, user_id)
+    def fake_dispatch(event, payload, user_id=None, group_id=None):
+        explains["called"] = (event, payload, user_id, group_id)
 
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
 
-    result = dispatch("finance.decision.request", {"explain": True}, user_id="alice")
+    result = fds.financial_decision_support(
+        {"explain": True, "budget": 100, "max_options": 3},
+        user_id="alice",
+        group_id="g1",
+    )
 
     # ensure UME query
     assert calls[0][0] == "GET"
@@ -77,6 +84,9 @@ def test_financial_decision_support(monkeypatch):
         for n in persist["nodes"]
     )
     assert {"src": "da1", "dst": "act1", "type": "CONSIDERS"} in persist["edges"]
-    assert emitted["event"] == ("finance.decision.result", "completed", "alice")
+    assert {"src": "act1", "dst": "acct1", "type": "OWNED_BY"} in persist["edges"]
+    assert emitted["event"] == ("finance.decision.result", "completed", "alice", "g1")
     assert explains["called"][0] == "finance.explain.request"
+    assert explains["called"][3] == "g1"
     assert result["analysis"] == "da1"
+    assert result["summary"]["cost_of_deviation"] == 50
