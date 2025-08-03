@@ -62,14 +62,19 @@ def _build_prompt(message: str, context: List[str]) -> str:
 
 
 def resolve_intent(
-    message: str, context: Optional[List[str]] = None, *, threshold: float = CLARIFICATION_THRESHOLD
+    message: str,
+    context: Optional[List[str]] = None,
+    *,
+    threshold: float = CLARIFICATION_THRESHOLD,
+    user_id: str,
+    group_id: str | None = None,
 ) -> IntentResult:
     """Return the :class:`IntentResult` for *message* using *context* for disambiguation."""
 
     ctx = [sanitize_input(c) for c in (context or [])]
     message = sanitize_input(message)
     prompt = _build_prompt(message, ctx)
-    result = gather(prompt)
+    result = gather(prompt, user_id=user_id, group_id=group_id)
     task: Optional[str] = None
     args: Dict[str, Any] = {}
     confidence = 0.0

@@ -33,7 +33,7 @@ def create_calendar_event(
     if payload.get("location"):
         try:
             event_data["travel_time"] = research.gather(
-                f"travel time to {payload['location']}"
+                f"travel time to {payload['location']}", user_id=user_id
             )
         except RuntimeError:
             pass

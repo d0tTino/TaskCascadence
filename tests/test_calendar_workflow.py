@@ -25,8 +25,8 @@ def test_calendar_event_creation(monkeypatch):
     def fake_emit(name, stage, user_id=None, **_kwargs):
         emitted["event"] = (name, stage, user_id)
 
-    def fake_research(query):
-        emitted["research"] = query
+    def fake_research(query, user_id=None, group_id=None):
+        emitted["research"] = (query, user_id, group_id)
         return {"duration": "15m"}
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
@@ -49,4 +49,4 @@ def test_calendar_event_creation(monkeypatch):
     assert calls[1][1] == "http://svc/v1/calendar/events"
     assert calls[1][2]["json"]["travel_time"] == {"duration": "15m"}
     assert emitted["event"] == ("calendar.event.created", "created", "alice")
-    assert emitted["research"] == "travel time to Cafe"
+    assert emitted["research"] == ("travel time to Cafe", "alice", None)

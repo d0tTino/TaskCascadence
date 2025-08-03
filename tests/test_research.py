@@ -14,8 +14,8 @@ def test_pipeline_research(monkeypatch):
     def fake_run(run, user_id=None):
         emitted.append("run")
 
-    def fake_gather(query: str):
-        steps.append(f"research:{query}")
+    def fake_gather(query: str, user_id: str, group_id: str | None = None):
+        steps.append(f"research:{query}:{user_id}")
         return "info"
 
     monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", fake_spec)
@@ -39,10 +39,10 @@ def test_pipeline_research(monkeypatch):
             return "ok"
 
     pipeline = TaskPipeline(ResearchTask())
-    result = pipeline.run()
+    result = pipeline.run(user_id="u1")
 
     assert result == "ok"
-    assert steps == ["research:foo", "plan", "run", "verify:result"]
+    assert steps == ["research:foo:u1", "plan", "run", "verify:result"]
     assert emitted == ["intake", "research", "planning", "run", "verification"]
 
 
@@ -53,8 +53,8 @@ def test_async_pipeline_research(monkeypatch):
     def fake_spec(spec, user_id=None):
         emitted.append(spec.description)
 
-    async def fake_async_gather(query: str):
-        steps.append(f"research:{query}")
+    async def fake_async_gather(query: str, user_id: str, group_id: str | None = None):
+        steps.append(f"research:{query}:{user_id}")
         return "ainfo"
 
     monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", fake_spec)
@@ -67,13 +67,13 @@ def test_async_pipeline_research(monkeypatch):
     pipeline = TaskPipeline(ResearchTask())
 
     async def runner():
-        result = await pipeline.research()
+        result = await pipeline.research(user_id="u1")
         return result
 
     result = asyncio.run(runner())
 
     assert result == "ainfo"
-    assert steps == ["research:foo"]
+    assert steps == ["research:foo:u1"]
     assert emitted == ["research"]
 
 
@@ -89,8 +89,8 @@ def test_async_research_method(monkeypatch):
     def fake_spec(spec, user_id=None):
         emitted.append(spec.description)
 
-    async def fake_async_gather(query: str):
-        steps.append(f"research:{query}")
+    async def fake_async_gather(query: str, user_id: str, group_id: str | None = None):
+        steps.append(f"research:{query}:{user_id}")
         return "info2"
 
     monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", fake_spec)
@@ -103,12 +103,12 @@ def test_async_research_method(monkeypatch):
     pipeline = TaskPipeline(ResearchTask())
 
     async def runner():
-        return await pipeline.research()
+        return await pipeline.research(user_id="u1")
 
     result = asyncio.run(runner())
 
     assert result == "info2"
-    assert steps == ["research:bar"]
+    assert steps == ["research:bar:u1"]
     assert emitted == ["research"]
 
 
@@ -119,4 +119,4 @@ def test_gather_missing_tino_storm(monkeypatch):
     monkeypatch.setattr(research, "tino_storm", None)
 
     with pytest.raises(RuntimeError):
-        research.gather("query")
+        research.gather("query", user_id="u1")

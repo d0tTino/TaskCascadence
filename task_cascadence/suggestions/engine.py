@@ -38,14 +38,25 @@ class SuggestionEngine:
         self.interval = interval
         self._suggestions: Dict[str, Suggestion] = {}
         self._task: asyncio.Task | None = None
+        self._user_id: str | None = None
+        self._group_id: str | None = None
 
     async def _query_ume(self) -> List[dict]:
         """Return user-event patterns from UME."""
 
         return detect_event_patterns()
 
-    async def generate(self) -> None:
+    async def generate(
+        self, user_id: str | None = None, group_id: str | None = None
+    ) -> None:
         """Query UME and create suggestions once."""
+        if user_id is None:
+            user_id = self._user_id
+        if user_id is None:
+            raise RuntimeError("user_id required to generate suggestions")
+        if group_id is None:
+            group_id = self._group_id
+
         cfg = load_config().get("suggestions", {})
         if not cfg.get("enabled", True):
             return
@@ -71,7 +82,11 @@ class SuggestionEngine:
             if disabled_categories & pattern_categories:
                 continue
 
-            estimation = gather(pattern.get("description", ""))
+            estimation = gather(
+                pattern.get("description", ""),
+                user_id=user_id,
+                group_id=group_id,
+            )
             if isinstance(estimation, dict):
                 confidence = float(estimation.get("confidence", 0.0))
             else:
@@ -92,10 +107,14 @@ class SuggestionEngine:
             await self.generate()
             await asyncio.sleep(self.interval)
 
-    def start(self) -> None:
+    def start(
+        self, *, user_id: str, group_id: str | None = None
+    ) -> None:
         """Start the background suggestion job."""
 
         if self._task is None:
+            self._user_id = user_id
+            self._group_id = group_id
             loop = asyncio.get_running_loop()
             self._task = loop.create_task(self._loop())
 

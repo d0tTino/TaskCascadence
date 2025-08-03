@@ -109,7 +109,9 @@ class TaskPipeline:
                 if inspect.isawaitable(q):
                     q = await q
                 try:
-                    result = await research.async_gather(q)
+                    result = await research.async_gather(
+                        q, user_id=user_id or "", group_id=group_id
+                    )
                 except RuntimeError:
                     self._emit_stage("research", user_id, group_id)
                     return None
@@ -123,7 +125,9 @@ class TaskPipeline:
         if loop_running:
             async def _async_call() -> Any:
                 try:
-                    result = await research.async_gather(query)
+                    result = await research.async_gather(
+                        query, user_id=user_id or "", group_id=group_id
+                    )
                 except RuntimeError:
                     self._emit_stage("research", user_id, group_id)
                     return None
@@ -133,7 +137,9 @@ class TaskPipeline:
             return _async_call()
 
         try:
-            result = research.gather(query)
+            result = research.gather(
+                query, user_id=user_id or "", group_id=group_id
+            )
         except RuntimeError:
             self._emit_stage("research", user_id, group_id)
             return None
