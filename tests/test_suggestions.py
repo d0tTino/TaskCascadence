@@ -3,7 +3,11 @@ import asyncio
 from task_cascadence.suggestions.engine import SuggestionEngine
 
 
-async def _prepare_engine(monkeypatch, events=None):
+async def _prepare_engine(monkeypatch, events=None, tmp_path=None):
+    if tmp_path is not None:
+        monkeypatch.setenv(
+            "CASCADENCE_SUGGESTIONS_PATH", str(tmp_path / "decisions.yml")
+        )
     engine = SuggestionEngine()
 
     async def fake_query():
@@ -25,8 +29,8 @@ async def _prepare_engine(monkeypatch, events=None):
     return engine
 
 
-def test_generation(monkeypatch):
-    engine = asyncio.run(_prepare_engine(monkeypatch))
+def test_generation(monkeypatch, tmp_path):
+    engine = asyncio.run(_prepare_engine(monkeypatch, tmp_path=tmp_path))
     suggestions = engine.list()
     assert suggestions
     s = suggestions[0]
@@ -35,8 +39,8 @@ def test_generation(monkeypatch):
     assert s.related_entities == ["foo"]
 
 
-def test_snooze_and_dismiss(monkeypatch):
-    engine = asyncio.run(_prepare_engine(monkeypatch))
+def test_snooze_and_dismiss(monkeypatch, tmp_path):
+    engine = asyncio.run(_prepare_engine(monkeypatch, tmp_path=tmp_path))
     sid = engine.list()[0].id
     engine.snooze(sid)
     assert engine.get(sid).state == "snoozed"
@@ -44,8 +48,8 @@ def test_snooze_and_dismiss(monkeypatch):
     assert engine.get(sid).state == "dismissed"
 
 
-def test_accept_enqueues_task(monkeypatch):
-    engine = asyncio.run(_prepare_engine(monkeypatch))
+def test_accept_enqueues_task(monkeypatch, tmp_path):
+    engine = asyncio.run(_prepare_engine(monkeypatch, tmp_path=tmp_path))
     sid = engine.list()[0].id
 
     class DummyScheduler:
@@ -77,7 +81,7 @@ def test_accept_enqueues_task(monkeypatch):
     assert engine.get(sid).state == "accepted"
 
 
-def test_private_events_excluded(monkeypatch):
+def test_private_events_excluded(monkeypatch, tmp_path):
     events = [
         {
             "title": "Public",
@@ -97,7 +101,7 @@ def test_private_events_excluded(monkeypatch):
             "flags": ["sensitive"],
         },
     ]
-    engine = asyncio.run(_prepare_engine(monkeypatch, events=events))
+    engine = asyncio.run(_prepare_engine(monkeypatch, events=events, tmp_path=tmp_path))
     suggestions = engine.list()
     assert len(suggestions) == 1
     assert suggestions[0].title == "Public"

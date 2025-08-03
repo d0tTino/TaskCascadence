@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Any, Dict, List
 from uuid import uuid4
 
 from ..scheduler import get_default_scheduler
 from ..research import gather
-from ..ume import emit_acceptance_event, is_private_event
+from ..ume import (
+    emit_acceptance_event,
+    is_private_event,
+    detect_event_patterns,
+    record_suggestion_decision,
+)
 from ..config import load_config
 
 
@@ -21,6 +26,7 @@ class Suggestion:
     confidence: float
     related_entities: List[str] = field(default_factory=list)
     task_name: str | None = None
+    context: Dict[str, Any] = field(default_factory=dict)
     state: str = "pending"  # pending, snoozed, dismissed, accepted
 
 
@@ -33,13 +39,9 @@ class SuggestionEngine:
         self._task: asyncio.Task | None = None
 
     async def _query_ume(self) -> List[dict]:
-        """Return user-event patterns from UME.
+        """Return user-event patterns from UME."""
 
-        The default implementation returns an empty list and is expected to be
-        overridden or monkeypatched in tests.
-        """
-
-        return []
+        return detect_event_patterns()
 
     async def generate(self) -> None:
         """Query UME and create suggestions once."""
@@ -80,6 +82,7 @@ class SuggestionEngine:
                 confidence=confidence,
                 related_entities=pattern.get("related", []),
                 task_name=pattern.get("task_name"),
+                context=pattern.get("context", {}),
             )
             self._suggestions[suggestion.id] = suggestion
 
@@ -96,7 +99,7 @@ class SuggestionEngine:
             self._task = loop.create_task(self._loop())
 
     def list(self) -> List[Suggestion]:
-        return list(self._suggestions.values())
+        return [s for s in self._suggestions.values() if s.state != "dismissed"]
 
     def get(self, suggestion_id: str) -> Suggestion:
         return self._suggestions[suggestion_id]
@@ -108,12 +111,17 @@ class SuggestionEngine:
             scheduler = get_default_scheduler()
             scheduler.run_task(suggestion.task_name)
         emit_acceptance_event(suggestion.title, user_id=user_id)
+        record_suggestion_decision(suggestion.title, "accepted", user_id=user_id)
 
-    def snooze(self, suggestion_id: str) -> None:
-        self.get(suggestion_id).state = "snoozed"
+    def snooze(self, suggestion_id: str, user_id: str | None = None) -> None:
+        suggestion = self.get(suggestion_id)
+        suggestion.state = "snoozed"
+        record_suggestion_decision(suggestion.title, "snoozed", user_id=user_id)
 
-    def dismiss(self, suggestion_id: str) -> None:
-        self.get(suggestion_id).state = "dismissed"
+    def dismiss(self, suggestion_id: str, user_id: str | None = None) -> None:
+        suggestion = self.get(suggestion_id)
+        suggestion.state = "dismissed"
+        record_suggestion_decision(suggestion.title, "dismissed", user_id=user_id)
 
 
 _default_engine: SuggestionEngine | None = None

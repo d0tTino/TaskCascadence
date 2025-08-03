@@ -220,20 +220,24 @@ def suggestion_accept(
 
 
 @app.post("/suggestions/{suggestion_id}/snooze")
-def suggestion_snooze(suggestion_id: str):
+def suggestion_snooze(
+    suggestion_id: str, user_id: str | None = Depends(get_user_id)
+):
     """Snooze a suggestion."""
 
     engine = get_default_engine()
-    engine.snooze(suggestion_id)
+    engine.snooze(suggestion_id, user_id=user_id)
     return {"status": "snoozed"}
 
 
 @app.post("/suggestions/{suggestion_id}/dismiss")
-def suggestion_dismiss(suggestion_id: str):
+def suggestion_dismiss(
+    suggestion_id: str, user_id: str | None = Depends(get_user_id)
+):
     """Dismiss a suggestion."""
 
     engine = get_default_engine()
-    engine.dismiss(suggestion_id)
+    engine.dismiss(suggestion_id, user_id=user_id)
     return {"status": "dismissed"}
 
 
