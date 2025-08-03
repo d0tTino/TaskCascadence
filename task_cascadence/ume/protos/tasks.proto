@@ -8,6 +8,8 @@ message TaskSpec {
   string name = 2;
   string description = 3;
   string user_hash = 4;
+  string user_id = 5;
+  optional string group_id = 6;
 }
 
 message TaskRun {
@@ -17,17 +19,23 @@ message TaskRun {
   google.protobuf.Timestamp started_at = 4;
   google.protobuf.Timestamp finished_at = 5;
   string user_hash = 6;
+  string user_id = 7;
+  optional string group_id = 8;
 }
 
 message TaskPointer {
   string run_id = 1;
   string user_hash = 2;
+  string user_id = 3;
+  optional string group_id = 4;
 }
 
 message PointerUpdate {
   string task_name = 1;
   string run_id = 2;
   string user_hash = 3;
+  string user_id = 4;
+  optional string group_id = 5;
 }
 
 message TaskNote {
@@ -35,15 +43,21 @@ message TaskNote {
   string run_id = 2;
   string note = 3;
   string user_hash = 4;
+  string user_id = 5;
+  optional string group_id = 6;
 }
 
 message IdeaSeed {
   string text = 1;
   string user_hash = 2;
+  string user_id = 3;
+  optional string group_id = 4;
 }
 
 message StageUpdate {
   string task_name = 1;
   string stage = 2;
   string user_hash = 3;
+  string user_id = 4;
+  optional string group_id = 5;
 }

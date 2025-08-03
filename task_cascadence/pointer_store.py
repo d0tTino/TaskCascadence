@@ -62,7 +62,8 @@ class PointerStore:
         self._save()
         try:
             emit_pointer_update(
-                PointerUpdate(task_name=task_name, run_id=run_id, user_hash=user_hash)
+                PointerUpdate(task_name=task_name, run_id=run_id, user_hash=user_hash),
+                user_id=user_id,
             )
         except Exception:  # pragma: no cover - best effort transport
             pass
