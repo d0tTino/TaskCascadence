@@ -121,6 +121,32 @@ def emit_stage_update_event(
     return _queue_within_deadline(update, target)
 
 
+def emit_audit_log(
+    task_name: str,
+    stage: str,
+    status: str,
+    *,
+    reason: str | None = None,
+    output: str | None = None,
+    user_id: str | None = None,
+    group_id: str | None = None,
+) -> None:
+    """Record a state transition with optional details."""
+
+    store = _get_stage_store()
+    user_hash = _hash_user_id(user_id) if user_id is not None else None
+    store.add_event(
+        task_name,
+        stage,
+        user_hash,
+        group_id,
+        status=status,
+        reason=reason,
+        output=output,
+        category="audit",
+    )
+
+
 def configure_transport(transport: str, **kwargs: Any) -> None:
     """Configure the default transport client."""
 
@@ -320,13 +346,12 @@ def emit_acceptance_event(
     """Emit a sanitized acceptance ``TaskNote`` using the configured transport."""
 
     note = TaskNote(note="accepted suggestion")
-    return emit_task_note(
-        note,
-        client=client,
-        user_id=user_id,
-        group_id=group_id,
-        use_asyncio=use_asyncio,
-    )
+    kwargs: dict[str, Any] = {"client": client, "use_asyncio": use_asyncio}
+    if user_id is not None:
+        kwargs["user_id"] = user_id
+    if group_id is not None:
+        kwargs["group_id"] = group_id
+    return emit_task_note(note, **kwargs)
 
 
 def record_suggestion_decision(

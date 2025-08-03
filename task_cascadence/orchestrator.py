@@ -16,7 +16,12 @@ except Exception:  # pragma: no cover - optional dependency may be missing
 
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from .ume import emit_task_spec, emit_task_run, emit_stage_update_event
+from .ume import (
+    emit_task_spec,
+    emit_task_run,
+    emit_stage_update_event,
+    emit_audit_log,
+)
 from .ume.models import TaskRun, TaskSpec
 from . import research
 import time
@@ -54,10 +59,27 @@ class TaskPipeline:
             name=self.task.__class__.__name__,
             description=stage,
         )
-        emit_task_spec(spec, user_id=user_id, group_id=group_id)
-        emit_stage_update_event(
-            self.task.__class__.__name__, stage, user_id=user_id, group_id=group_id
-        )
+        if user_id is None and group_id is None:
+            emit_task_spec(spec)
+            emit_stage_update_event(self.task.__class__.__name__, stage)
+        elif group_id is None:
+            emit_task_spec(spec, user_id=user_id)
+            emit_stage_update_event(
+                self.task.__class__.__name__, stage, user_id=user_id
+            )
+        elif user_id is None:
+            emit_task_spec(spec, group_id=group_id)
+            emit_stage_update_event(
+                self.task.__class__.__name__, stage, group_id=group_id
+            )
+        else:
+            emit_task_spec(spec, user_id=user_id, group_id=group_id)
+            emit_stage_update_event(
+                self.task.__class__.__name__,
+                stage,
+                user_id=user_id,
+                group_id=group_id,
+            )
 
     def intake(
         self, *, user_id: str | None = None, group_id: str | None = None
@@ -143,6 +165,14 @@ class TaskPipeline:
         start_ts = Timestamp()
         start_ts.FromDatetime(datetime.now())
         status = "success"
+        result: Any | None = None
+        emit_audit_log(
+            self.task.__class__.__name__,
+            "run",
+            "started",
+            user_id=user_id,
+            group_id=group_id,
+        )
 
         try:
             if hasattr(self.task, "precheck"):
@@ -196,6 +226,23 @@ class TaskPipeline:
                 result = results
                 if hasattr(self.task, "run"):
                     result = self._call_run(results)
+                if user_id is None and group_id is None:
+                    emit_stage_update_event(self.task.__class__.__name__, "run")
+                elif group_id is None:
+                    emit_stage_update_event(
+                        self.task.__class__.__name__, "run", user_id=user_id
+                    )
+                elif user_id is None:
+                    emit_stage_update_event(
+                        self.task.__class__.__name__, "run", group_id=group_id
+                    )
+                else:
+                    emit_stage_update_event(
+                        self.task.__class__.__name__,
+                        "run",
+                        user_id=user_id,
+                        group_id=group_id,
+                    )
             elif isinstance(plan_result, list):
                 async def _run_all() -> list[Any]:
                     res: list[Any] = []
@@ -227,14 +274,34 @@ class TaskPipeline:
             else:
                 result = self._call_run(plan_result)
 
-                emit_stage_update_event(
-                    self.task.__class__.__name__,
-                    "run",
-                    user_id=user_id,
-                    group_id=group_id,
-                )
-        except Exception:
+                if user_id is None and group_id is None:
+                    emit_stage_update_event(self.task.__class__.__name__, "run")
+                elif group_id is None:
+                    emit_stage_update_event(
+                        self.task.__class__.__name__, "run", user_id=user_id
+                    )
+                elif user_id is None:
+                    emit_stage_update_event(
+                        self.task.__class__.__name__, "run", group_id=group_id
+                    )
+                else:
+                    emit_stage_update_event(
+                        self.task.__class__.__name__,
+                        "run",
+                        user_id=user_id,
+                        group_id=group_id,
+                    )
+        except Exception as exc:
             status = "error"
+            emit_audit_log(
+                self.task.__class__.__name__,
+                "run",
+                "error",
+                reason=str(exc),
+                output=repr(result) if result is not None else None,
+                user_id=user_id,
+                group_id=group_id,
+            )
             raise
         finally:
             end_ts = Timestamp()
@@ -249,7 +316,22 @@ class TaskPipeline:
                 started_at=start_ts,
                 finished_at=end_ts,
             )
-            emit_task_run(run, user_id=user_id, group_id=group_id)
+            if user_id is None and group_id is None:
+                emit_task_run(run)
+            elif group_id is None:
+                emit_task_run(run, user_id=user_id)
+            elif user_id is None:
+                emit_task_run(run, group_id=group_id)
+            else:
+                emit_task_run(run, user_id=user_id, group_id=group_id)
+        emit_audit_log(
+            self.task.__class__.__name__,
+            "run",
+            status,
+            output=repr(result) if status == "success" and result is not None else None,
+            user_id=user_id,
+            group_id=group_id,
+        )
         return result
 
     def verify(
