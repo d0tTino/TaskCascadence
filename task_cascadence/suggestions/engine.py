@@ -104,24 +104,47 @@ class SuggestionEngine:
     def get(self, suggestion_id: str) -> Suggestion:
         return self._suggestions[suggestion_id]
 
-    def accept(self, suggestion_id: str, user_id: str | None = None) -> None:
+    def accept(
+        self,
+        suggestion_id: str,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         suggestion = self.get(suggestion_id)
         suggestion.state = "accepted"
         if suggestion.task_name:
             scheduler = get_default_scheduler()
-            scheduler.run_task(suggestion.task_name)
-        emit_acceptance_event(suggestion.title, user_id=user_id)
-        record_suggestion_decision(suggestion.title, "accepted", user_id=user_id)
+            scheduler.run_task(
+                suggestion.task_name, user_id=user_id, group_id=group_id
+            )
+        emit_acceptance_event(suggestion.title, user_id=user_id, group_id=group_id)
+        record_suggestion_decision(
+            suggestion.title, "accepted", user_id=user_id, group_id=group_id
+        )
 
-    def snooze(self, suggestion_id: str, user_id: str | None = None) -> None:
+    def snooze(
+        self,
+        suggestion_id: str,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         suggestion = self.get(suggestion_id)
         suggestion.state = "snoozed"
-        record_suggestion_decision(suggestion.title, "snoozed", user_id=user_id)
+        record_suggestion_decision(
+            suggestion.title, "snoozed", user_id=user_id, group_id=group_id
+        )
 
-    def dismiss(self, suggestion_id: str, user_id: str | None = None) -> None:
+    def dismiss(
+        self,
+        suggestion_id: str,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         suggestion = self.get(suggestion_id)
         suggestion.state = "dismissed"
-        record_suggestion_decision(suggestion.title, "dismissed", user_id=user_id)
+        record_suggestion_decision(
+            suggestion.title, "dismissed", user_id=user_id, group_id=group_id
+        )
 
 
 _default_engine: SuggestionEngine | None = None

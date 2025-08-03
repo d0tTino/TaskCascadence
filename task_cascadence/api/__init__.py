@@ -38,6 +38,11 @@ def get_user_id(x_user_id: str | None = Header(default=None)) -> str | None:
     return x_user_id
 
 
+def get_group_id(x_group_id: str | None = Header(default=None)) -> str | None:
+    """Return the group identifier from ``X-Group-ID`` header if supplied."""
+    return x_group_id
+
+
 @app.get("/tasks")
 def list_tasks():
     """Return all registered tasks."""
@@ -73,11 +78,14 @@ def run_task(
     name: str,
     temporal: bool = False,
     user_id: str | None = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
 ):
     """Execute ``name`` and return its result."""
     sched = get_default_scheduler()
     try:
-        result = sched.run_task(name, use_temporal=temporal, user_id=user_id)
+        result = sched.run_task(
+            name, use_temporal=temporal, user_id=user_id, group_id=group_id
+        )
         return {"result": result}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -88,11 +96,14 @@ async def run_task_async(
     name: str,
     temporal: bool = False,
     user_id: str | None = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
 ):
     """Execute ``name`` asynchronously and return its result."""
     sched = get_default_scheduler()
     try:
-        result = sched.run_task(name, use_temporal=temporal, user_id=user_id)
+        result = sched.run_task(
+            name, use_temporal=temporal, user_id=user_id, group_id=group_id
+        )
         if inspect.isawaitable(result):
             result = await result
         return {"result": result}
@@ -105,6 +116,7 @@ def schedule_task(
     name: str,
     expression: str,
     user_id: str | None = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
 ):
     """Schedule ``name`` according to ``expression``."""
     sched = get_default_scheduler()
@@ -115,7 +127,12 @@ def schedule_task(
         raise HTTPException(404, "unknown task")
     task = task_info["task"]
     try:
-        sched.register_task(name_or_task=task, task_or_expr=expression, user_id=user_id)
+        sched.register_task(
+            name_or_task=task,
+            task_or_expr=expression,
+            user_id=user_id,
+            group_id=group_id,
+        )
         return {"status": "scheduled", "expression": expression}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -210,34 +227,40 @@ def suggestion_list():
 
 @app.post("/suggestions/{suggestion_id}/accept")
 def suggestion_accept(
-    suggestion_id: str, user_id: str | None = Depends(get_user_id)
+    suggestion_id: str,
+    user_id: str | None = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
 ):
     """Accept a suggestion and enqueue its task."""
 
     engine = get_default_engine()
-    engine.accept(suggestion_id, user_id=user_id)
+    engine.accept(suggestion_id, user_id=user_id, group_id=group_id)
     return {"status": "accepted"}
 
 
 @app.post("/suggestions/{suggestion_id}/snooze")
 def suggestion_snooze(
-    suggestion_id: str, user_id: str | None = Depends(get_user_id)
+    suggestion_id: str,
+    user_id: str | None = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
 ):
     """Snooze a suggestion."""
 
     engine = get_default_engine()
-    engine.snooze(suggestion_id, user_id=user_id)
+    engine.snooze(suggestion_id, user_id=user_id, group_id=group_id)
     return {"status": "snoozed"}
 
 
 @app.post("/suggestions/{suggestion_id}/dismiss")
 def suggestion_dismiss(
-    suggestion_id: str, user_id: str | None = Depends(get_user_id)
+    suggestion_id: str,
+    user_id: str | None = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
 ):
     """Dismiss a suggestion."""
 
     engine = get_default_engine()
-    engine.dismiss(suggestion_id, user_id=user_id)
+    engine.dismiss(suggestion_id, user_id=user_id, group_id=group_id)
     return {"status": "dismissed"}
 
 

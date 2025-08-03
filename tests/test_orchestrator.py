@@ -80,6 +80,35 @@ def test_pipeline_without_optional(monkeypatch):
     assert emitted == ["intake", "planning", "run", "verification"]
 
 
+def test_pipeline_group_id(monkeypatch):
+    emitted = []
+
+    def fake_spec(spec, user_id=None, group_id=None):
+        emitted.append(("spec", group_id))
+
+    def fake_run(run, user_id=None, group_id=None):
+        emitted.append(("run", group_id))
+
+    def fake_stage(task_name, stage, client=None, user_id=None, group_id=None, use_asyncio=False):
+        emitted.append((stage, group_id))
+
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", fake_spec)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", fake_run)
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_stage_update_event", fake_stage
+    )
+
+    class Simple:
+        def run(self):
+            return "ok"
+
+    pipeline = TaskPipeline(Simple())
+    pipeline.run(group_id="team1")
+
+    gids = [g for _, g in emitted]
+    assert gids and all(g == "team1" for g in gids)
+
+
 def test_scheduler_runs_pipeline(monkeypatch):
     steps: list[str] = []
 

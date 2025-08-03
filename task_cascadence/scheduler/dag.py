@@ -30,10 +30,12 @@ class DagCronScheduler(CronScheduler):
             if isinstance(data, dict):
                 expr = data.get("expr")
                 user_id = data.get("user_id")
+                group_id = data.get("group_id")
                 deps = data.get("deps", [])
             else:
                 expr = data
                 user_id = None
+                group_id = None
                 deps = []
             if deps:
                 self.dependencies[job_id] = list(deps)
@@ -42,7 +44,7 @@ class DagCronScheduler(CronScheduler):
                 expr, timezone=self.scheduler.timezone
             )
             self.scheduler.add_job(
-                self._wrap_task(task, user_id=user_id),
+                self._wrap_task(task, user_id=user_id, group_id=group_id),
                 trigger=trigger,
                 id=job_id,
                 replace_existing=True,
@@ -56,6 +58,7 @@ class DagCronScheduler(CronScheduler):
         *,
         dependencies: Iterable[str] | None = None,
         user_id: str | None = None,
+        group_id: str | None = None,
     ) -> None:
         if isinstance(name_or_task, str):
             name, task = name_or_task, task_or_expr
@@ -72,6 +75,8 @@ class DagCronScheduler(CronScheduler):
         entry: Dict[str, Any] = {"expr": cron_expression}
         if user_id is not None:
             entry["user_id"] = user_id
+        if group_id is not None:
+            entry["group_id"] = group_id
         if dependencies:
             entry["deps"] = list(dependencies)
         self.schedules[job_id] = entry
@@ -80,7 +85,7 @@ class DagCronScheduler(CronScheduler):
             cron_expression, timezone=self.scheduler.timezone
         )
         self.scheduler.add_job(
-            self._wrap_task(task, user_id=user_id),
+            self._wrap_task(task, user_id=user_id, group_id=group_id),
             trigger=trigger,
             id=job_id,
             replace_existing=True,
@@ -94,6 +99,7 @@ class DagCronScheduler(CronScheduler):
         *,
         use_temporal: bool | None,
         user_id: str | None,
+        group_id: str | None,
         stack: list[str] | None = None,
     ) -> Any:
         if stack is None:
@@ -111,13 +117,14 @@ class DagCronScheduler(CronScheduler):
                     executed,
                     use_temporal=use_temporal,
                     user_id=user_id,
+                    group_id=group_id,
                     stack=stack,
                 )
         finally:
             stack.pop()
         executed.add(name)
         return super().run_task(
-            name, use_temporal=use_temporal, user_id=user_id
+            name, use_temporal=use_temporal, user_id=user_id, group_id=group_id
         )
 
     def run_task(
@@ -126,6 +133,7 @@ class DagCronScheduler(CronScheduler):
         *,
         use_temporal: bool | None = None,
         user_id: str | None = None,
+        group_id: str | None = None,
     ) -> Any:
         executed: set[str] = set()
         return self._run_with_dependencies(
@@ -133,14 +141,19 @@ class DagCronScheduler(CronScheduler):
             executed,
             use_temporal=use_temporal,
             user_id=user_id,
+            group_id=group_id,
         )
 
-    def _wrap_task(self, task: Any, user_id: str | None = None):
+    def _wrap_task(
+        self, task: Any, user_id: str | None = None, group_id: str | None = None
+    ):
         def runner():
             info = self._tasks.get(task.__class__.__name__)
             if info and info.get("paused"):
                 return
-            self.run_task(task.__class__.__name__, user_id=user_id)
+            self.run_task(
+                task.__class__.__name__, user_id=user_id, group_id=group_id
+            )
 
         return runner
 
