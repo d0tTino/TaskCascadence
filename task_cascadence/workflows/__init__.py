@@ -26,3 +26,4 @@ def dispatch(event: str, *args: Any, **kwargs: Any) -> Any:
 
 # Import built-in workflows so they register themselves
 from . import calendar_event_creation  # noqa: F401,E402
+from . import financial_decision_support  # noqa: F401,E402
