@@ -18,15 +18,17 @@ def test_calendar_event_creation(monkeypatch):
         if method == "GET":
             return DummyResponse({"allowed": True})
         assert method == "POST"
-        return DummyResponse({"id": "evt1"})
+        return DummyResponse({"ok": True})
 
     emitted = {}
 
-    def fake_emit(name, stage, user_id=None, **_kwargs):
-        emitted["event"] = (name, stage, user_id)
+    def fake_emit(name, stage, user_id=None, group_id=None, **_kwargs):
+        emitted["event"] = (name, stage, user_id, group_id)
 
-    def fake_research(query):
-        emitted["research"] = query
+    research_ctx = {}
+
+    def fake_research(query, *, user_id=None, group_id=None):
+        research_ctx["called"] = (query, user_id, group_id)
         return {"duration": "15m"}
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
@@ -40,13 +42,46 @@ def test_calendar_event_creation(monkeypatch):
         "location": "Cafe",
     }
 
-    result = dispatch("calendar.event.create", payload, user_id="alice", base_url="http://svc")
+    result = dispatch(
+        "calendar.event.request",
+        payload,
+        user_id="alice",
+        group_id="devs",
+        base_url="http://svc",
+    )
 
-    assert result == {"id": "evt1"}
+    assert result == {"ok": True}
+    # permission check
     assert calls[0][0] == "GET"
-    assert "permissions" in calls[0][1]
+    assert calls[0][2]["params"]["user_id"] == "alice"
+    assert calls[0][2]["params"]["group_id"] == "devs"
+    # persistence call
     assert calls[1][0] == "POST"
     assert calls[1][1] == "http://svc/v1/calendar/events"
-    assert calls[1][2]["json"]["travel_time"] == {"duration": "15m"}
-    assert emitted["event"] == ("calendar.event.created", "created", "alice")
-    assert emitted["research"] == "travel time to Cafe"
+    post_json = calls[1][2]["json"]
+    assert any(n["title"].startswith("Leave by") for n in post_json["nodes"])
+    assert {"reason": "travel"} == post_json["edges"][0]["data"]
+    assert post_json["edges"][0]["type"] == "RELATES_TO"
+    # user/group context propagation
+    assert research_ctx["called"] == ("travel time to Cafe", "alice", "devs")
+    assert emitted["event"] == ("calendar.event.created", "created", "alice", "devs")
+
+
+def test_calendar_event_requires_location(monkeypatch):
+    def fake_perm(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr(cec, "_has_permission", fake_perm)
+
+    payload = {
+        "title": "Lunch",
+        "start": "2024-01-01T12:00:00Z",
+        "end": "2024-01-01T13:00:00Z",
+    }
+
+    try:
+        dispatch("calendar.event.request", payload, user_id="alice")
+    except ValueError as exc:
+        assert "location" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected ValueError for missing location")
