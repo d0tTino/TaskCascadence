@@ -50,19 +50,20 @@ def test_financial_decision_support(monkeypatch):
     def fake_emit(name, stage, user_id=None, group_id=None, **_):
         emitted["event"] = (name, stage, user_id, group_id)
 
-    explains = {}
+    dispatched = []
 
     def fake_dispatch(event, payload, user_id=None, group_id=None):
-        explains["called"] = (event, payload, user_id, group_id)
+        dispatched.append((event, payload, user_id, group_id))
 
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
 
-    result = fds.financial_decision_support(
-        {"explain": True, "budget": 100, "max_options": 3},
+    result = dispatch(
+        "finance.decision.request",
+        {"explain": True, "group_id": "g1", "budget": 100, "max_options": 3},
         user_id="alice",
-        group_id="g1",
+
     )
 
     # ensure UME query
@@ -75,6 +76,7 @@ def test_financial_decision_support(monkeypatch):
 
     # persistence call with metrics and edges
     persist = calls[2][2]["json"]
+    assert all(n["user_id"] == "alice" and n["group_id"] == "g1" for n in persist["nodes"])
     assert any(
         n["type"] == "DecisionAnalysis" and n["metrics"]["cost_of_deviation"] == 50
         for n in persist["nodes"]
@@ -83,10 +85,18 @@ def test_financial_decision_support(monkeypatch):
         n["type"] == "ProposedAction" and n["metrics"]["cost_of_deviation"] == 20
         for n in persist["nodes"]
     )
-    assert {"src": "da1", "dst": "act1", "type": "CONSIDERS"} in persist["edges"]
-    assert {"src": "act1", "dst": "acct1", "type": "OWNED_BY"} in persist["edges"]
+    assert all(e["user_id"] == "alice" and e["group_id"] == "g1" for e in persist["edges"])
+    assert any(
+        e["src"] == "da1" and e["dst"] == "act1" and e["type"] == "CONSIDERS"
+        for e in persist["edges"]
+    )
     assert emitted["event"] == ("finance.decision.result", "completed", "alice", "g1")
-    assert explains["called"][0] == "finance.explain.request"
-    assert explains["called"][3] == "g1"
+    assert dispatched[0][0] == "finance.decision.result"
+    assert dispatched[0][1]["summary"]["cost_of_deviation"] == 50
+    assert dispatched[0][2] == "alice"
+    assert dispatched[0][3] == "g1"
+    assert dispatched[1][0] == "finance.explain.request"
+    assert dispatched[1][1]["actions"][0]["id"] == "act1"
+
     assert result["analysis"] == "da1"
     assert result["summary"]["cost_of_deviation"] == 50

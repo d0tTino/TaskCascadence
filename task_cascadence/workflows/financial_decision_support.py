@@ -18,6 +18,8 @@ def financial_decision_support(
 ) -> Dict[str, Any]:
     """Aggregate financial data, run a debt simulation, and persist results."""
 
+    group_id = payload.get("group_id")
+
     url = f"{ume_base.rstrip('/')}/v1/nodes"
     params: Dict[str, Any] = {
         "types": "FinancialAccount,FinancialGoal,DecisionAnalysis",
@@ -35,11 +37,8 @@ def financial_decision_support(
 
     total_balance = sum(a.get("balance", 0) for a in accounts)
 
-    engine_payload: Dict[str, Any] = {
-        "balance": total_balance,
-        "goals": goals,
-        "analyses": analyses,
-    }
+    engine_payload = {"balance": total_balance, "goals": goals, "analyses": analyses}
+
     if "budget" in payload:
         engine_payload["budget"] = payload["budget"]
     if "max_options" in payload:
@@ -56,29 +55,50 @@ def financial_decision_support(
             "id": analysis_id,
             "type": "DecisionAnalysis",
             "metrics": {"cost_of_deviation": eng_result.get("cost_of_deviation", 0)},
+            "user_id": user_id,
         }
     ]
+    if group_id is not None:
+        nodes_to_persist[0]["group_id"] = group_id
     edges = []
 
     for act in actions:
         act_id = act.get("id")
-        nodes_to_persist.append(
-            {
-                "id": act_id,
-                "type": "ProposedAction",
-                "metrics": {"cost_of_deviation": act.get("cost_of_deviation")},
-            }
-        )
-        edges.append({"src": analysis_id, "dst": act_id, "type": "CONSIDERS"})
+        node = {
+            "id": act_id,
+            "type": "ProposedAction",
+            "metrics": {"cost_of_deviation": act.get("cost_of_deviation")},
+            "user_id": user_id,
+        }
+        if group_id is not None:
+            node["group_id"] = group_id
+        nodes_to_persist.append(node)
+        edge = {"src": analysis_id, "dst": act_id, "type": "CONSIDERS", "user_id": user_id}
+        if group_id is not None:
+            edge["group_id"] = group_id
+        edges.append(edge)
         if accounts:
-            edges.append({"src": act_id, "dst": accounts[0].get("id"), "type": "OWNED_BY"})
+            owned_edge = {
+                "src": act_id,
+                "dst": accounts[0].get("id"),
+                "type": "OWNED_BY",
+                "user_id": user_id,
+            }
+            if group_id is not None:
+                owned_edge["group_id"] = group_id
+            edges.append(owned_edge)
 
     request_with_retry("POST", url, json={"nodes": nodes_to_persist, "edges": edges}, timeout=5)
 
+    summary = {"cost_of_deviation": eng_result.get("cost_of_deviation", 0)}
+    context = {"analysis": analysis_id, "summary": summary}
+
+    dispatch("finance.decision.result", context, user_id=user_id, group_id=group_id)
     if payload.get("explain"):
         dispatch(
             "finance.explain.request",
-            {"analysis": analysis_id, "actions": actions},
+            {**context, "actions": actions},
+
             user_id=user_id,
             group_id=group_id,
         )
@@ -87,8 +107,5 @@ def financial_decision_support(
         "finance.decision.result", "completed", user_id=user_id, group_id=group_id
     )
 
-    return {
-        "analysis": analysis_id,
-        "summary": {"cost_of_deviation": eng_result.get("cost_of_deviation", 0)},
-        "actions": actions,
-    }
+    return {**context, "actions": actions}
+
