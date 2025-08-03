@@ -378,6 +378,65 @@ class CronScheduler(BaseScheduler):
     def list_jobs(self):
         return self.scheduler.get_jobs()
 
+    def load_yaml(self, path: str | Path, tasks: dict[str, Any] | None = None) -> None:
+        """Load cron schedules from ``path`` and register them.
+
+        The YAML file should map job identifiers to either a cron expression
+        string or a dictionary with an ``expr`` key and optional ``user_id``,
+        ``group_id`` and ``recurrence`` metadata.  ``tasks`` provides a mapping
+        of job identifiers to task instances.  When omitted the scheduler's
+        already-registered tasks are used.
+        """
+
+        data = self._yaml.safe_load(Path(path).read_text()) or {}
+        for job_id, entry in data.items():
+            if isinstance(entry, str):
+                info: dict[str, Any] = {"expr": entry}
+            else:
+                info = dict(entry)
+
+            task_obj = (tasks or {}).get(job_id)
+            if not task_obj and job_id in self._tasks:
+                task_obj = self._tasks[job_id]["task"]
+            if not task_obj:
+                continue
+
+            self.register_task(
+                name_or_task=task_obj,
+                task_or_expr=info["expr"],
+                user_id=info.get("user_id"),
+                group_id=info.get("group_id"),
+            )
+
+            if "recurrence" in info:
+                sched_entry = self.schedules.get(job_id)
+                if isinstance(sched_entry, dict):
+                    sched_entry["recurrence"] = info["recurrence"]
+                else:
+                    self.schedules[job_id] = {
+                        "expr": info["expr"],
+                        "recurrence": info["recurrence"],
+                    }
+
+        self._save_schedules()
+
+    def schedule_from_event(self, task: Any, event: dict[str, Any]) -> None:
+        """Schedule ``task`` according to ``event`` recurrence settings."""
+
+        recurrence = event.get("recurrence", {})
+        expr = recurrence.get("cron")
+        if not expr:
+            raise ValueError("event missing recurrence cron")
+
+        self.register_task(task, expr)
+        job_id = task.__class__.__name__
+        sched_entry = self.schedules.get(job_id)
+        if isinstance(sched_entry, dict):
+            sched_entry["recurrence"] = recurrence
+        else:
+            self.schedules[job_id] = {"expr": expr, "recurrence": recurrence}
+        self._save_schedules()
+
     def unschedule(self, name: str) -> None:
         """Remove the cron schedule for ``name``."""
 

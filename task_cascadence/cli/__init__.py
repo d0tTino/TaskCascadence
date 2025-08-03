@@ -265,6 +265,22 @@ def show_schedules() -> None:
         typer.echo(f"{name}\t{expr}")
 
 
+@app.command("load-schedules")
+def load_schedules(path: str) -> None:
+    """Load cron schedules from a YAML file."""
+
+    sched = get_default_scheduler()
+    if not isinstance(sched, CronScheduler):
+        typer.echo("error: scheduler lacks cron capabilities", err=True)
+        raise typer.Exit(code=1)
+    try:
+        sched.load_yaml(path)
+        typer.echo(f"loaded schedules from {path}")
+    except Exception as exc:  # pragma: no cover - simple error propagation
+        typer.echo(f"error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+
 @app.command("replay-history")
 def replay_history(path: str) -> None:
     """Replay a workflow history from ``PATH``."""
