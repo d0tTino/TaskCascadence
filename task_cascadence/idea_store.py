@@ -37,15 +37,24 @@ class IdeaStore:
         with open(self.path, "w") as fh:
             yaml.safe_dump(self._data, fh)
 
-    def add_seed(self, seed: IdeaSeed) -> None:
+    def add_seed(self, seed: IdeaSeed, group_id: str | None = None) -> None:
         entry = {"text": seed.text}
         user_hash = getattr(seed, "user_hash", None)
         if user_hash:
             entry["user_hash"] = user_hash
+        if group_id is not None:
+            entry["group_id"] = group_id
         self._data.append(entry)
         self._save()
 
-    def get_seeds(self) -> List[Dict[str, Any]]:
-        return list(self._data)
+    def get_seeds(
+        self, user_hash: str | None = None, group_id: str | None = None
+    ) -> List[Dict[str, Any]]:
+        return [
+            s
+            for s in self._data
+            if (user_hash is None or s.get("user_hash") == user_hash)
+            and (group_id is None or s.get("group_id") == group_id)
+        ]
 
 __all__ = ["IdeaStore"]

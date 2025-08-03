@@ -139,3 +139,20 @@ def test_concurrent_apply_update(monkeypatch, tmp_path):
     data = yaml.safe_load(path.read_text())
     run_ids = sorted(e["run_id"] for e in data["t"])
     assert run_ids == [str(i) for i in range(5)]
+
+
+def test_per_user_and_group_isolation(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    store = PointerStore(path=tmp_path / "pointers.yml")
+
+    store.add_pointer("t", "alice", "r1", group_id="g1")
+    store.add_pointer("t", "alice", "r2", group_id="g2")
+    store.add_pointer("t", "bob", "r3", group_id="g1")
+
+    u_alice = _hash_user_id("alice")
+    u_bob = _hash_user_id("bob")
+
+    assert [p["run_id"] for p in store.get_pointers("t", u_alice, "g1")] == ["r1"]
+    assert [p["run_id"] for p in store.get_pointers("t", u_alice, "g2")] == ["r2"]
+    assert [p["run_id"] for p in store.get_pointers("t", u_bob, "g1")] == ["r3"]
+    assert store.get_pointers("t", u_bob, "g2") == []

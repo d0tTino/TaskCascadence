@@ -37,7 +37,13 @@ class SuggestionStore:
         with open(self.path, "w") as fh:
             yaml.safe_dump(self._data, fh)
 
-    def add_decision(self, pattern: str, decision: str, user_hash: str | None) -> None:
+    def add_decision(
+        self,
+        pattern: str,
+        decision: str,
+        user_hash: str | None,
+        group_id: str | None = None,
+    ) -> None:
         entry: Dict[str, Any] = {
             "pattern": pattern,
             "decision": decision,
@@ -45,11 +51,20 @@ class SuggestionStore:
         }
         if user_hash is not None:
             entry["user_hash"] = user_hash
+        if group_id is not None:
+            entry["group_id"] = group_id
         self._data.append(entry)
         self._save()
 
-    def get_decisions(self) -> List[Dict[str, Any]]:
-        return list(self._data)
+    def get_decisions(
+        self, user_hash: str | None = None, group_id: str | None = None
+    ) -> List[Dict[str, Any]]:
+        return [
+            d
+            for d in self._data
+            if (user_hash is None or d.get("user_hash") == user_hash)
+            and (group_id is None or d.get("group_id") == group_id)
+        ]
 
 
 __all__ = ["SuggestionStore"]

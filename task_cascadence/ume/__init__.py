@@ -90,7 +90,7 @@ def emit_stage_update(
 
     store = _get_stage_store()
     user_hash = _hash_user_id(user_id) if user_id is not None else None
-    store.add_event(task_name, stage, user_hash)
+    store.add_event(task_name, stage, user_hash, group_id)
 
 
 def emit_stage_update_event(
@@ -298,9 +298,8 @@ def emit_idea_seed(
     if user_id is not None:
         seed.user_id = user_id
         seed.user_hash = _hash_user_id(user_id)
-    if group_id is not None:
-        seed.group_id = group_id
-    _get_idea_store().add_seed(seed)
+    _get_idea_store().add_seed(seed, group_id=group_id)
+
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
             _async_queue_within_deadline(seed, target)
@@ -329,13 +328,16 @@ def emit_acceptance_event(
 
 
 def record_suggestion_decision(
-    title: str, decision: str, user_id: str | None = None
+    title: str,
+    decision: str,
+    user_id: str | None = None,
+    group_id: str | None = None,
 ) -> None:
     """Record a suggestion decision with a timestamp."""
 
     store = _get_suggestion_store()
     user_hash = _hash_user_id(user_id) if user_id is not None else None
-    store.add_decision(title, decision, user_hash)
+    store.add_decision(title, decision, user_hash, group_id=group_id)
 
 
 def detect_event_patterns(user_id: str | None = None) -> list[dict[str, Any]]:

@@ -35,6 +35,9 @@ class StageStore:
                             normalized = []
                             for event in events:
                                 if isinstance(event, dict):
+                                    # migrate legacy "user_hash" field
+                                    if "user_hash" in event and "user_id" not in event:
+                                        event["user_id"] = event.pop("user_hash")
                                     normalized.append(event)
                                 else:
                                     # legacy string entry
@@ -66,16 +69,35 @@ class StageStore:
                 else:
                     fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
 
-    def add_event(self, task_name: str, stage: str, user_hash: str | None) -> None:
+    def add_event(
+        self,
+        task_name: str,
+        stage: str,
+        user_id: str | None,
+        group_id: str | None = None,
+    ) -> None:
         entry: Dict[str, Any] = {
             "stage": stage,
             "time": datetime.now(timezone.utc).isoformat(),
         }
-        if user_hash is not None:
-            entry["user_hash"] = user_hash
+        if user_id is not None:
+            entry["user_id"] = user_id
+        if group_id is not None:
+            entry["group_id"] = group_id
         events = self._data.setdefault(task_name, [])
         events.append(entry)
         self._save()
 
-    def get_events(self, task_name: str) -> List[Dict[str, Any]]:
-        return list(self._data.get(task_name, []))
+    def get_events(
+        self,
+        task_name: str,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        events = self._data.get(task_name, [])
+        return [
+            e
+            for e in events
+            if (user_id is None or e.get("user_id") == user_id)
+            and (group_id is None or e.get("group_id") == group_id)
+        ]

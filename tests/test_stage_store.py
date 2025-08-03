@@ -42,3 +42,21 @@ def test_add_event_threads(tmp_path):
 
     data = yaml.safe_load(path.read_text())
     assert len(data["t"]) == 6
+
+
+def test_per_user_and_group_isolation(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    from task_cascadence.ume import _hash_user_id
+
+    store = StageStore(path=tmp_path / "stages.yml")
+    u1 = _hash_user_id("alice")
+    u2 = _hash_user_id("bob")
+
+    store.add_event("t", "s1", u1, "g1")
+    store.add_event("t", "s2", u1, "g2")
+    store.add_event("t", "s3", u2, "g1")
+
+    assert [e["stage"] for e in store.get_events("t", u1, "g1")] == ["s1"]
+    assert [e["stage"] for e in store.get_events("t", u1, "g2")] == ["s2"]
+    assert [e["stage"] for e in store.get_events("t", u2, "g1")] == ["s3"]
+    assert store.get_events("t", u2, "g2") == []

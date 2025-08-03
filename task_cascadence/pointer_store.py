@@ -51,9 +51,17 @@ class PointerStore:
                 yaml.safe_dump(self._data, fh)
             os.replace(tmp, self.path)
 
-    def add_pointer(self, task_name: str, user_id: str, run_id: str) -> None:
+    def add_pointer(
+        self,
+        task_name: str,
+        user_id: str,
+        run_id: str,
+        group_id: str | None = None,
+    ) -> None:
         user_hash = _hash_user_id(user_id)
-        entry = {"run_id": run_id, "user_hash": user_hash}
+        entry: Dict[str, Any] = {"run_id": run_id, "user_hash": user_hash}
+        if group_id is not None:
+            entry["group_id"] = group_id
         pointers = self._data.setdefault(task_name, [])
         if any(e == entry for e in pointers):
             return
@@ -68,8 +76,13 @@ class PointerStore:
         except Exception:  # pragma: no cover - best effort transport
             pass
 
-    def apply_update(self, update: PointerUpdate) -> None:
-        entry = {"run_id": update.run_id, "user_hash": update.user_hash}
+    def apply_update(self, update: PointerUpdate, group_id: str | None = None) -> None:
+        entry: Dict[str, Any] = {
+            "run_id": update.run_id,
+            "user_hash": update.user_hash,
+        }
+        if group_id is not None:
+            entry["group_id"] = group_id
         pointers = self._data.setdefault(update.task_name, [])
         if any(e == entry for e in pointers):
             return
@@ -77,5 +90,16 @@ class PointerStore:
         pointers.append(entry)
         self._save()
 
-    def get_pointers(self, task_name: str) -> List[Dict[str, Any]]:
-        return list(self._data.get(task_name, []))
+    def get_pointers(
+        self,
+        task_name: str,
+        user_hash: str | None = None,
+        group_id: str | None = None,
+    ) -> List[Dict[str, Any]]:
+        pointers = self._data.get(task_name, [])
+        return [
+            p
+            for p in pointers
+            if (user_hash is None or p.get("user_hash") == user_hash)
+            and (group_id is None or p.get("group_id") == group_id)
+        ]
