@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
+
 from . import subscribe
 from ..http_utils import request_with_retry
 from .. import research
@@ -16,6 +17,7 @@ def _has_permission(
     ume_base: str = "http://ume",
     group_id: str | None = None,
     invitee: str | None = None,
+
 ) -> bool:
     """Return ``True`` if ``user_id`` may create calendar events."""
 
@@ -25,6 +27,7 @@ def _has_permission(
         params["group_id"] = group_id
     if invitee is not None:
         params["invitee"] = invitee
+
     resp = request_with_retry("GET", url, params=params, timeout=5)
     data = resp.json()
     return bool(data.get("allowed"))
@@ -33,8 +36,9 @@ def _has_permission(
 @subscribe("calendar.event.create_request")
 def create_calendar_event(
     payload: Dict[str, Any], *, user_id: str, base_url: str = "http://localhost", ume_base: str = "http://ume"
+
 ) -> Dict[str, Any]:
-    """Persist a calendar event after validation and permission checks."""
+    """Persist calendar events after validation and permission checks.
 
     for field in ("title", "start_time"):
         if field not in payload or not payload[field]:

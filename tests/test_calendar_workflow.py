@@ -23,6 +23,7 @@ def test_calendar_event_creation(monkeypatch):
         counter["post"] += 1
         return DummyResponse({"id": f"evt{counter['post']}"})
 
+
     emitted = {}
 
     def fake_emit(name, stage, user_id=None, group_id=None, **_kwargs):
@@ -30,6 +31,7 @@ def test_calendar_event_creation(monkeypatch):
 
     async def fake_async_gather(query):
         emitted["research"] = query
+
         return {"duration": "15m"}
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
@@ -66,3 +68,4 @@ def test_calendar_event_creation(monkeypatch):
     assert calls[5][2]["json"]["type"] == "RELATES_TO"
     assert emitted["event"] == ("calendar.event.created", "created", "alice", "g1")
     assert emitted["research"] == "travel time to Cafe"
+
