@@ -7,6 +7,9 @@ import time
 import asyncio
 from typing import Any
 import hashlib
+from collections import Counter
+from datetime import datetime, timezone, timedelta
+
 from ..config import load_config
 
 from ..transport import BaseTransport, AsyncBaseTransport, get_client
@@ -20,11 +23,13 @@ from .models import (
 )
 from ..stage_store import StageStore
 from ..idea_store import IdeaStore
+from ..suggestion_store import SuggestionStore
 
 
 _default_client: BaseTransport | AsyncBaseTransport | None = None
 _stage_store: StageStore | None = None
 _idea_store: IdeaStore | None = None
+_suggestion_store: SuggestionStore | None = None
 
 
 def _hash_user_id(user_id: str) -> str:
@@ -44,6 +49,13 @@ def _get_idea_store() -> IdeaStore:
     if _idea_store is None:
         _idea_store = IdeaStore()
     return _idea_store
+
+
+def _get_suggestion_store() -> SuggestionStore:
+    global _suggestion_store
+    if _suggestion_store is None:
+        _suggestion_store = SuggestionStore()
+    return _suggestion_store
 
 
 def is_private_event(metadata: dict) -> bool:
@@ -277,3 +289,63 @@ def emit_acceptance_event(
     return emit_task_note(
         note, client=client, user_id=user_id, use_asyncio=use_asyncio
     )
+
+
+def record_suggestion_decision(
+    title: str, decision: str, user_id: str | None = None
+) -> None:
+    """Record a suggestion decision with a timestamp."""
+
+    store = _get_suggestion_store()
+    user_hash = _hash_user_id(user_id) if user_id is not None else None
+    store.add_decision(title, decision, user_hash)
+
+
+def detect_event_patterns(user_id: str | None = None) -> list[dict[str, Any]]:
+    """Detect simple event patterns such as repeated bookmarks."""
+
+    idea_store = _get_idea_store()
+    seeds = idea_store.get_seeds()
+    user_hash = _hash_user_id(user_id) if user_id is not None else None
+    texts = [
+        seed["text"]
+        for seed in seeds
+        if user_hash is None or seed.get("user_hash") == user_hash
+    ]
+    counter = Counter(texts)
+    patterns: list[dict[str, Any]] = []
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=30)
+    decisions = _get_suggestion_store().get_decisions()
+    dismissed: set[str] = set()
+    for entry in decisions:
+        if entry.get("decision") != "dismissed":
+            continue
+        try:
+            when = datetime.fromisoformat(entry["time"])
+        except Exception:  # pragma: no cover - invalid timestamp
+            continue
+        if when < cutoff:
+            continue
+        if user_hash is not None and entry.get("user_hash") != user_hash:
+            continue
+        dismissed.add(entry["pattern"])
+
+    for text, count in counter.items():
+        if count < 2:
+            continue
+        title = f"Repeated bookmark: {text}"
+        if title in dismissed:
+            continue
+        patterns.append(
+            {
+                "id": hashlib.sha256(text.encode()).hexdigest(),
+                "title": title,
+                "description": f"Bookmark '{text}' repeated {count} times",
+                "related": [text],
+                "context": {"text": text, "count": count},
+            }
+        )
+
+    return patterns
