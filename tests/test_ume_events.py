@@ -45,7 +45,7 @@ def test_pipeline_stage_events(monkeypatch, tmp_path):
     stages = [e["stage"] for e in events]
     assert stages == ["intake", "planning", "run", "verification"]
     for e in events:
-        assert e["user_hash"] == _hash_user_id("alice")
+        assert e["user_id"] == _hash_user_id("alice")
 
 
 def test_cli_stage_events(monkeypatch, tmp_path):
@@ -71,7 +71,7 @@ def test_cli_stage_events(monkeypatch, tmp_path):
     events = data["example"]
     assert events[0]["stage"] == "start"
     assert events[-1]["stage"] == "finish"
-    assert events[0]["user_hash"] == _hash_user_id("bob")
+    assert events[0]["user_id"] == _hash_user_id("bob")
 
 
 def test_emit_task_note(monkeypatch):
@@ -141,7 +141,7 @@ def test_emit_stage_update_event(monkeypatch, tmp_path):
     assert again == client.events[0]
 
     data = yaml.safe_load((tmp_path / "stages.yml").read_text())
-    assert data["demo"][0]["user_hash"] == _hash_user_id("alice")
+    assert data["demo"][0]["user_id"] == _hash_user_id("alice")
 
 
 def test_emit_stage_update_event_default_client(monkeypatch, tmp_path):
@@ -166,4 +166,4 @@ def test_emit_stage_update_event_default_client(monkeypatch, tmp_path):
     assert isinstance(client.events[0], StageUpdate)
     assert client.events[0].user_hash == _hash_user_id("bob")
     data = yaml.safe_load((tmp_path / "events.yml").read_text())
-    assert data["demo"][0]["user_hash"] == _hash_user_id("bob")
+    assert data["demo"][0]["user_id"] == _hash_user_id("bob")

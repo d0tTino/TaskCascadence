@@ -80,12 +80,17 @@ def is_private_event(metadata: dict) -> bool:
     return any(f in {"private", "sensitive"} for f in flags)
 
 
-def emit_stage_update(task_name: str, stage: str, user_id: str | None = None) -> None:
+def emit_stage_update(
+    task_name: str,
+    stage: str,
+    user_id: str | None = None,
+    group_id: str | None = None,
+) -> None:
     """Persist a pipeline stage event via :class:`StageStore`."""
 
     store = _get_stage_store()
     user_hash = _hash_user_id(user_id) if user_id is not None else None
-    store.add_event(task_name, stage, user_hash)
+    store.add_event(task_name, stage, user_hash, group_id)
 
 
 def emit_stage_update_event(
@@ -93,12 +98,13 @@ def emit_stage_update_event(
     stage: str,
     client: Any | None = None,
     user_id: str | None = None,
+    group_id: str | None = None,
     *,
     use_asyncio: bool = False,
 ) -> asyncio.Task | threading.Thread | None:
     """Persist and emit ``StageUpdate`` using the configured transport."""
 
-    emit_stage_update(task_name, stage, user_id=user_id)
+    emit_stage_update(task_name, stage, user_id=user_id, group_id=group_id)
     target = client or _default_client
     if target is None:
         return None
@@ -258,6 +264,7 @@ def emit_idea_seed(
     seed: IdeaSeed,
     client: Any | None = None,
     user_id: str | None = None,
+    group_id: str | None = None,
     *,
     use_asyncio: bool = False,
 ) -> asyncio.Task | threading.Thread | None:
@@ -268,7 +275,7 @@ def emit_idea_seed(
         raise ValueError("No transport client configured")
     if user_id is not None:
         seed.user_hash = _hash_user_id(user_id)
-    _get_idea_store().add_seed(seed)
+    _get_idea_store().add_seed(seed, group_id=group_id)
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
             _async_queue_within_deadline(seed, target)
@@ -292,13 +299,16 @@ def emit_acceptance_event(
 
 
 def record_suggestion_decision(
-    title: str, decision: str, user_id: str | None = None
+    title: str,
+    decision: str,
+    user_id: str | None = None,
+    group_id: str | None = None,
 ) -> None:
     """Record a suggestion decision with a timestamp."""
 
     store = _get_suggestion_store()
     user_hash = _hash_user_id(user_id) if user_id is not None else None
-    store.add_decision(title, decision, user_hash)
+    store.add_decision(title, decision, user_hash, group_id=group_id)
 
 
 def detect_event_patterns(user_id: str | None = None) -> list[dict[str, Any]]:
