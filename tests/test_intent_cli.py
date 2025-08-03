@@ -39,8 +39,8 @@ def test_clarification_flow(monkeypatch):
     assert "Derived tasks:" in result.stdout
     assert "Task A" in result.stdout
     assert calls == [
-        {"text": "pay bills"},
-        {"text": "pay bills", "clarification": "Personal"},
+        {"message": "pay bills", "context": []},
+        {"message": "pay bills", "context": [], "clarification": "Personal"},
     ]
 
 
@@ -58,4 +58,4 @@ def test_success_flow(monkeypatch):
 
     assert result.exit_code == 0
     assert "Task B" in result.stdout
-    assert calls == [{"text": "buy milk"}]
+    assert calls == [{"message": "buy milk", "context": []}]
