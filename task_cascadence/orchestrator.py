@@ -43,23 +43,32 @@ class TaskPipeline:
     task: Any
     _paused: bool = field(default=False, init=False, repr=False)
 
-    def _emit_stage(self, stage: str, user_id: str | None = None) -> None:
+    def _emit_stage(
+        self,
+        stage: str,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         spec = TaskSpec(
             id=self.task.__class__.__name__,
             name=self.task.__class__.__name__,
             description=stage,
         )
-        emit_task_spec(spec, user_id=user_id)
+        emit_task_spec(spec, user_id=user_id, group_id=group_id)
         emit_stage_update_event(
-            self.task.__class__.__name__, stage, user_id=user_id
+            self.task.__class__.__name__, stage, user_id=user_id, group_id=group_id
         )
 
-    def intake(self, *, user_id: str | None = None) -> None:
+    def intake(
+        self, *, user_id: str | None = None, group_id: str | None = None
+    ) -> None:
         if hasattr(self.task, "intake"):
             self.task.intake()
-        self._emit_stage("intake", user_id)
+        self._emit_stage("intake", user_id, group_id)
 
-    def research(self, *, user_id: str | None = None) -> Any:
+    def research(
+        self, *, user_id: str | None = None, group_id: str | None = None
+    ) -> Any:
         """Perform optional research for the task."""
         if not hasattr(self.task, "research"):
             return None
@@ -80,9 +89,9 @@ class TaskPipeline:
                 try:
                     result = await research.async_gather(q)
                 except RuntimeError:
-                    self._emit_stage("research", user_id)
+                    self._emit_stage("research", user_id, group_id)
                     return None
-                self._emit_stage("research", user_id)
+                self._emit_stage("research", user_id, group_id)
                 return result
 
             if loop_running:
@@ -94,9 +103,9 @@ class TaskPipeline:
                 try:
                     result = await research.async_gather(query)
                 except RuntimeError:
-                    self._emit_stage("research", user_id)
+                    self._emit_stage("research", user_id, group_id)
                     return None
-                self._emit_stage("research", user_id)
+                self._emit_stage("research", user_id, group_id)
                 return result
 
             return _async_call()
@@ -104,12 +113,14 @@ class TaskPipeline:
         try:
             result = research.gather(query)
         except RuntimeError:
-            self._emit_stage("research", user_id)
+            self._emit_stage("research", user_id, group_id)
             return None
-        self._emit_stage("research", user_id)
+        self._emit_stage("research", user_id, group_id)
         return result
 
-    def plan(self, *, user_id: str | None = None) -> Any:
+    def plan(
+        self, *, user_id: str | None = None, group_id: str | None = None
+    ) -> Any:
         """Return a plan which may include subtasks."""
 
         plan_result = None
@@ -117,10 +128,16 @@ class TaskPipeline:
             plan_result = self.task.plan()
         elif ai_plan is not None and hasattr(ai_plan, "plan"):
             plan_result = ai_plan.plan(self.task)
-        self._emit_stage("planning", user_id)
+        self._emit_stage("planning", user_id, group_id)
         return plan_result
 
-    def execute(self, plan_result: Any = None, *, user_id: str | None = None) -> Any:
+    def execute(
+        self,
+        plan_result: Any = None,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> Any:
         """Run the task or any planned subtasks."""
 
         start_ts = Timestamp()
@@ -145,7 +162,7 @@ class TaskPipeline:
                 if check is not True:
                     status = "error"
                     raise PrecheckError("precheck failed")
-                self._emit_stage("precheck", user_id)
+                    self._emit_stage("precheck", user_id, group_id)
 
             parallel_tasks: list[Any] | None = None
             if isinstance(plan_result, dict) and plan_result.get("execution") == "parallel":
@@ -158,7 +175,7 @@ class TaskPipeline:
 
                 async def _run_all() -> list[Any]:
                     async def _one(p: TaskPipeline) -> Any:
-                        r = p.run(user_id=user_id)
+                        r = p.run(user_id=user_id, group_id=group_id)
                         if inspect.isawaitable(r):
                             return await r
                         return r
@@ -184,7 +201,9 @@ class TaskPipeline:
                     res: list[Any] = []
                     for sub in plan_result:
                         pipeline = sub if isinstance(sub, TaskPipeline) else TaskPipeline(sub)
-                        sub_result = pipeline.run(user_id=user_id)
+                        sub_result = pipeline.run(
+                            user_id=user_id, group_id=group_id
+                        )
                         if inspect.isawaitable(sub_result):
                             sub_result = await cast(Coroutine[Any, Any, Any], sub_result)
                         res.append(sub_result)
@@ -208,9 +227,12 @@ class TaskPipeline:
             else:
                 result = self._call_run(plan_result)
 
-            emit_stage_update_event(
-                self.task.__class__.__name__, "run", user_id=user_id
-            )
+                emit_stage_update_event(
+                    self.task.__class__.__name__,
+                    "run",
+                    user_id=user_id,
+                    group_id=group_id,
+                )
         except Exception:
             status = "error"
             raise
@@ -227,10 +249,16 @@ class TaskPipeline:
                 started_at=start_ts,
                 finished_at=end_ts,
             )
-            emit_task_run(run, user_id=user_id)
+            emit_task_run(run, user_id=user_id, group_id=group_id)
         return result
 
-    def verify(self, exec_result: Any = None, *, user_id: str | None = None) -> Any:
+    def verify(
+        self,
+        exec_result: Any = None,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> Any:
         verify_result = exec_result
         if hasattr(self.task, "verify"):
             verify_result = self.task.verify(exec_result)
@@ -246,22 +274,32 @@ class TaskPipeline:
                         return await res
 
                     verify_result = _await_verify()
-        self._emit_stage("verification", user_id)
+        self._emit_stage("verification", user_id, group_id)
         return verify_result
 
     # ------------------------------------------------------------------
-    def pause(self, *, user_id: str | None = None) -> None:
+    def pause(
+        self, *, user_id: str | None = None, group_id: str | None = None
+    ) -> None:
         """Pause execution of this pipeline."""
         self._paused = True
         emit_stage_update_event(
-            self.task.__class__.__name__, "paused", user_id=user_id
+            self.task.__class__.__name__,
+            "paused",
+            user_id=user_id,
+            group_id=group_id,
         )
 
-    def resume(self, *, user_id: str | None = None) -> None:
+    def resume(
+        self, *, user_id: str | None = None, group_id: str | None = None
+    ) -> None:
         """Resume a previously paused pipeline."""
         self._paused = False
         emit_stage_update_event(
-            self.task.__class__.__name__, "resumed", user_id=user_id
+            self.task.__class__.__name__,
+            "resumed",
+            user_id=user_id,
+            group_id=group_id,
         )
 
     def _wait_if_paused(self) -> Any:
@@ -290,7 +328,9 @@ class TaskPipeline:
             await asyncio.sleep(0.1)
 
     # ------------------------------------------------------------------
-    def run(self, *, user_id: str | None = None) -> Any:
+    def run(
+        self, *, user_id: str | None = None, group_id: str | None = None
+    ) -> Any:
         loop_running = True
         try:
             asyncio.get_running_loop()
@@ -299,14 +339,14 @@ class TaskPipeline:
 
         if loop_running:
             async def _async_run() -> Any:
-                self.intake(user_id=user_id)
+                self.intake(user_id=user_id, group_id=group_id)
                 wait = self._wait_if_paused()
                 if inspect.isawaitable(wait):
                     await wait
                 else:
                     assert wait is None
 
-                result = self.research(user_id=user_id)
+                result = self.research(user_id=user_id, group_id=group_id)
                 if inspect.isawaitable(result):
                     await result
 
@@ -314,7 +354,7 @@ class TaskPipeline:
                 if inspect.isawaitable(wait):
                     await wait
 
-                plan_result = self.plan(user_id=user_id)
+                plan_result = self.plan(user_id=user_id, group_id=group_id)
                 if inspect.isawaitable(plan_result):
                     plan_result = await plan_result
 
@@ -322,7 +362,9 @@ class TaskPipeline:
                 if inspect.isawaitable(wait):
                     await wait
 
-                exec_result = self.execute(plan_result, user_id=user_id)
+                exec_result = self.execute(
+                    plan_result, user_id=user_id, group_id=group_id
+                )
                 if inspect.isawaitable(exec_result):
                     exec_result = await exec_result
 
@@ -330,45 +372,55 @@ class TaskPipeline:
                 if inspect.isawaitable(wait):
                     await wait
 
-                verify_result = self.verify(exec_result, user_id=user_id)
+                verify_result = self.verify(
+                    exec_result, user_id=user_id, group_id=group_id
+                )
                 if inspect.isawaitable(verify_result):
                     verify_result = await verify_result
                 return verify_result
 
             return _async_run()
 
-        self.intake(user_id=user_id)
+        self.intake(user_id=user_id, group_id=group_id)
         self._wait_if_paused()
-        self.research(user_id=user_id)
+        self.research(user_id=user_id, group_id=group_id)
         self._wait_if_paused()
-        plan_result = self.plan(user_id=user_id)
+        plan_result = self.plan(user_id=user_id, group_id=group_id)
         self._wait_if_paused()
-        exec_result = self.execute(plan_result, user_id=user_id)
+        exec_result = self.execute(
+            plan_result, user_id=user_id, group_id=group_id
+        )
         self._wait_if_paused()
-        return self.verify(exec_result, user_id=user_id)
+        return self.verify(exec_result, user_id=user_id, group_id=group_id)
 
-    async def run_async(self, *, user_id: str | None = None) -> Any:
+    async def run_async(
+        self, *, user_id: str | None = None, group_id: str | None = None
+    ) -> Any:
         """Asynchronously execute this pipeline."""
 
-        self.intake(user_id=user_id)
+        self.intake(user_id=user_id, group_id=group_id)
         await self._wait_if_paused_async()
 
-        research_result = self.research(user_id=user_id)
+        research_result = self.research(user_id=user_id, group_id=group_id)
         if inspect.isawaitable(research_result):
             research_result = await research_result
         await self._wait_if_paused_async()
 
-        plan_result = self.plan(user_id=user_id)
+        plan_result = self.plan(user_id=user_id, group_id=group_id)
         if inspect.isawaitable(plan_result):
             plan_result = await plan_result
         await self._wait_if_paused_async()
 
-        exec_result = self.execute(plan_result, user_id=user_id)
+        exec_result = self.execute(
+            plan_result, user_id=user_id, group_id=group_id
+        )
         if inspect.isawaitable(exec_result):
             exec_result = await exec_result
         await self._wait_if_paused_async()
 
-        verify_result = self.verify(exec_result, user_id=user_id)
+        verify_result = self.verify(
+            exec_result, user_id=user_id, group_id=group_id
+        )
         if inspect.isawaitable(verify_result):
             verify_result = await verify_result
         return verify_result

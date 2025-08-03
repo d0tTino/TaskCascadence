@@ -86,6 +86,37 @@ def test_run_task_user_header(monkeypatch, tmp_path):
     assert called["uid"] == "alice"
 
 
+def test_run_task_group_header(monkeypatch, tmp_path):
+    called = {}
+
+    def fake_run(name, use_temporal=False, user_id=None, group_id=None):
+        called["gid"] = group_id
+        return "r"
+
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    monkeypatch.setattr(sched, "run_task", fake_run)
+    client = TestClient(app)
+    client.post("/tasks/dummy/run", headers={"X-Group-ID": "team"})
+    assert called["gid"] == "team"
+
+
+def test_schedule_task_group_header(monkeypatch, tmp_path):
+    called = {}
+
+    def fake_register(name_or_task, task_or_expr, user_id=None, group_id=None):
+        called["gid"] = group_id
+
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    monkeypatch.setattr(sched, "register_task", fake_register)
+    client = TestClient(app)
+    client.post(
+        "/tasks/dummy/schedule",
+        params={"expression": "*/5 * * * *"},
+        headers={"X-Group-ID": "team"},
+    )
+    assert called["gid"] == "team"
+
+
 def test_schedule_task(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)

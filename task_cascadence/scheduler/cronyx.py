@@ -52,23 +52,35 @@ class CronyxScheduler(BaseScheduler):
         *,
         use_temporal: bool | None = None,
         user_id: str | None = None,
+        group_id: str | None = None,
     ) -> Any:
         if (
             name in self._tasks
             and not self._tasks[name]["disabled"]
             and not self._tasks[name].get("paused")
         ):
-            return super().run_task(name, use_temporal=use_temporal, user_id=user_id)
+            return super().run_task(
+                name, use_temporal=use_temporal, user_id=user_id, group_id=group_id
+            )
         payload = {"task": name}
         if user_id is not None:
             payload["user_id"] = _hash_user_id(user_id)
+        if group_id is not None:
+            payload["group_id"] = group_id
         data = self._request("POST", "/jobs", json=payload)
         return data.get("result")
 
     def schedule_task(
-        self, name: str, cron_expression: str, *, user_id: str | None = None
+        self,
+        name: str,
+        cron_expression: str,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
     ) -> Any:
         payload = {"task": name, "cron": cron_expression}
         if user_id is not None:
             payload["user_id"] = _hash_user_id(user_id)
+        if group_id is not None:
+            payload["group_id"] = group_id
         return self._request("POST", "/jobs", json=payload)

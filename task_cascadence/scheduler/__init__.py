@@ -72,6 +72,7 @@ class BaseScheduler:
         *,
         use_temporal: bool | None = None,
         user_id: str | None = None,
+        group_id: str | None = None,
     ) -> Any:
         """Run a task by name if it exists and is enabled."""
 
@@ -115,7 +116,7 @@ class BaseScheduler:
                         pipeline = TaskPipeline(task)
                         add_pipeline(name, pipeline)
                         try:
-                            result = pipeline.run(user_id=user_id)
+                            result = pipeline.run(user_id=user_id, group_id=group_id)
                             if inspect.iscoroutine(result):
                                 try:
                                     asyncio.get_running_loop()
@@ -153,7 +154,7 @@ class BaseScheduler:
                         started_at=started,
                         finished_at=finished,
                     )
-                    emit_task_run(run, user_id=user_id)
+                    emit_task_run(run, user_id=user_id, group_id=group_id)
                 return result
 
             return runner()
@@ -200,8 +201,11 @@ class TemporalScheduler(BaseScheduler):
         *,
         use_temporal: bool | None = None,
         user_id: str | None = None,
+        group_id: str | None = None,
     ) -> Any:
-        return super().run_task(name, use_temporal=True, user_id=user_id)
+        return super().run_task(
+            name, use_temporal=True, user_id=user_id, group_id=group_id
+        )
 
 
 
@@ -251,15 +255,17 @@ class CronScheduler(BaseScheduler):
             if isinstance(data, dict):
                 expr = data.get("expr")
                 user_id = data.get("user_id")
+                group_id = data.get("group_id")
             else:
                 expr = data
                 user_id = None
+                group_id = None
             super().register_task(job_id, task)
             trigger = self._CronTrigger.from_crontab(
                 expr, timezone=self.scheduler.timezone
             )
             self.scheduler.add_job(
-                self._wrap_task(task, user_id=user_id),
+                self._wrap_task(task, user_id=user_id, group_id=group_id),
                 trigger=trigger,
                 id=job_id,
                 replace_existing=True,
@@ -269,12 +275,16 @@ class CronScheduler(BaseScheduler):
         with open(self.storage_path, "w") as fh:
             self._yaml.safe_dump(self.schedules, fh)
 
-    def _wrap_task(self, task, user_id: str | None = None):
+    def _wrap_task(
+        self, task, user_id: str | None = None, group_id: str | None = None
+    ):
         def runner():
             info = self._tasks.get(task.__class__.__name__)
             if info and info.get("paused"):
                 return
-            self.run_task(task.__class__.__name__, user_id=user_id)
+            self.run_task(
+                task.__class__.__name__, user_id=user_id, group_id=group_id
+            )
 
         return runner
 
@@ -284,6 +294,7 @@ class CronScheduler(BaseScheduler):
         task_or_expr: BaseTask | str,
         *,
         user_id: str | None = None,
+        group_id: str | None = None,
     ) -> None:
         """Register a task with optional scheduling.
 
@@ -314,28 +325,41 @@ class CronScheduler(BaseScheduler):
         task, cron_expression = name_or_task, task_or_expr
         job_id = task.__class__.__name__
         super().register_task(job_id, task)
-        if user_id is None:
+        if user_id is None and group_id is None:
             self.schedules[job_id] = cron_expression
         else:
-            self.schedules[job_id] = {"expr": cron_expression, "user_id": user_id}
+            entry: dict[str, Any] = {"expr": cron_expression}
+            if user_id is not None:
+                entry["user_id"] = user_id
+            if group_id is not None:
+                entry["group_id"] = group_id
+            self.schedules[job_id] = entry
         self._save_schedules()
 
         trigger = self._CronTrigger.from_crontab(
             cron_expression, timezone=self.scheduler.timezone
         )
         self.scheduler.add_job(
-            self._wrap_task(task, user_id=user_id),
+            self._wrap_task(task, user_id=user_id, group_id=group_id),
             trigger=trigger,
             id=job_id,
             replace_existing=True,
         )
 
     def schedule_task(
-        self, task: Any, cron_expression: str, *, user_id: str | None = None
+        self,
+        task: Any,
+        cron_expression: str,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
     ) -> None:
         """Convenience wrapper for :meth:`register_task`."""
         self.register_task(
-            name_or_task=task, task_or_expr=cron_expression, user_id=user_id
+            name_or_task=task,
+            task_or_expr=cron_expression,
+            user_id=user_id,
+            group_id=group_id,
         )
 
     def start(self):

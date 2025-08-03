@@ -298,6 +298,8 @@ def emit_idea_seed(
     if user_id is not None:
         seed.user_id = user_id
         seed.user_hash = _hash_user_id(user_id)
+    if group_id is not None:
+        seed.group_id = group_id
     _get_idea_store().add_seed(seed, group_id=group_id)
 
     if use_asyncio:
