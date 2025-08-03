@@ -64,8 +64,9 @@ def create_calendar_event(
     related_event: Dict[str, Any] | None = None
     if payload.get("location"):
         try:
-            travel_info = asyncio.run(
-                research.async_gather(f"travel time to {payload['location']}")
+            event_data["travel_time"] = research.gather(
+                f"travel time to {payload['location']}", user_id=user_id
+
             )
             event_data["travel_time"] = travel_info
             start_dt = datetime.fromisoformat(payload["start_time"].replace("Z", "+00:00"))

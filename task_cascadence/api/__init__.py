@@ -271,11 +271,19 @@ def suggestion_dismiss(
 
 
 @app.post("/intent", response_model=IntentResponse)
-def intent_route(req: IntentRequest):
+def intent_route(
+    req: IntentRequest,
+    user_id: str | None = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
+):
     """Return intent analysis for the provided message."""
+    if user_id is None:
+        raise HTTPException(400, "user_id header required")
     message = sanitize_input(req.message)
     ctx = [sanitize_input(c) for c in req.context]
-    result = resolve_intent(message, ctx)
+    result = resolve_intent(
+        message, ctx, user_id=user_id, group_id=group_id
+    )
     return IntentResponse(
         task=result.task,
         arguments=result.arguments,
