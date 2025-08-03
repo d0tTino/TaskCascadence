@@ -80,7 +80,13 @@ class PointerTask(BaseTask):
     def add_pointer(self, user_id: str, run_id: str) -> None:
         from ..ume import _hash_user_id
 
-        self.pointers.append(TaskPointer(run_id=run_id, user_hash=_hash_user_id(user_id)))
+        self.pointers.append(
+            TaskPointer(
+                run_id=run_id,
+                user_hash=_hash_user_id(user_id),
+                user_id=user_id,
+            )
+        )
         self.store.add_pointer(self.name, user_id, run_id)
 
     def get_pointers(self) -> list[TaskPointer]:
