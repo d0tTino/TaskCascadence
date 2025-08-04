@@ -1,6 +1,6 @@
 import pytest
 
-from task_cascadence import scheduler as scheduler_module
+import task_cascadence.scheduler as scheduler_module
 
 
 @pytest.fixture(autouse=True)

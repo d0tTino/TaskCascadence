@@ -452,6 +452,7 @@ class CronScheduler(BaseScheduler):
             user_id=user_id,
             group_id=group_id,
         )
+
         job_id = task.__class__.__name__
         sched_entry = self.schedules.get(job_id)
         if isinstance(sched_entry, dict):
