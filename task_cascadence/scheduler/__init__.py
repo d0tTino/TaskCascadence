@@ -428,13 +428,20 @@ class CronScheduler(BaseScheduler):
         if not expr:
             raise ValueError("event missing recurrence cron")
 
-        self.register_task(task, expr)
+        user_id = event.get("user_id")
+        group_id = event.get("group_id")
+        self.register_task(task, expr, user_id=user_id, group_id=group_id)
         job_id = task.__class__.__name__
         sched_entry = self.schedules.get(job_id)
         if isinstance(sched_entry, dict):
             sched_entry["recurrence"] = recurrence
         else:
-            self.schedules[job_id] = {"expr": expr, "recurrence": recurrence}
+            entry: dict[str, Any] = {"expr": expr, "recurrence": recurrence}
+            if user_id is not None:
+                entry["user_id"] = user_id
+            if group_id is not None:
+                entry["group_id"] = group_id
+            self.schedules[job_id] = entry
         self._save_schedules()
 
     def unschedule(self, name: str) -> None:
