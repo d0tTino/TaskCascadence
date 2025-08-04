@@ -30,22 +30,17 @@ def test_load_yaml_schedule(tmp_path):
 def test_schedule_from_calendar_event(tmp_path):
     sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
     task = DummyTask()
-    event = {
-        "title": "review",
-        "user_id": "alice",
-        "group_id": "devs",
-        "recurrence": {"cron": "*/2 * * * *"},
-    }
-    sched.schedule_from_event(task, event)
+    event = {"title": "review", "recurrence": {"cron": "*/2 * * * *"}}
+    sched.schedule_from_event(
+        task, event, user_id="alice", group_id="engineering"
+    )
     job = sched.scheduler.get_job("DummyTask")
     assert job is not None
     entry = sched.schedules["DummyTask"]
-    assert entry["user_id"] == "alice"
-    assert entry["group_id"] == "devs"
     assert entry["recurrence"] == {"cron": "*/2 * * * *"}
-
-    data = yaml.safe_load((tmp_path / "sched.yml").read_text())
-    yaml_entry = data["DummyTask"]
-    assert yaml_entry["user_id"] == "alice"
-    assert yaml_entry["group_id"] == "devs"
-    assert yaml_entry["recurrence"] == {"cron": "*/2 * * * *"}
+    assert entry["user_id"] == "alice"
+    assert entry["group_id"] == "engineering"
+    persisted = yaml.safe_load((tmp_path / "sched.yml").read_text())
+    assert persisted["DummyTask"]["user_id"] == "alice"
+    assert persisted["DummyTask"]["group_id"] == "engineering"
+    assert persisted["DummyTask"]["recurrence"] == {"cron": "*/2 * * * *"}
