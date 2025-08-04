@@ -84,15 +84,43 @@ class TaskPipeline:
     def intake(
         self, *, user_id: str | None = None, group_id: str | None = None
     ) -> None:
-        if hasattr(self.task, "intake"):
-            self.task.intake()
+        task_name = self.task.__class__.__name__
+        emit_audit_log(task_name, "intake", "started", user_id=user_id, group_id=group_id)
+        result: Any | None = None
+        try:
+            if hasattr(self.task, "intake"):
+                result = self.task.intake()
+        except Exception as exc:
+            self._emit_stage("intake", user_id, group_id)
+            emit_audit_log(
+                task_name,
+                "intake",
+                "error",
+                reason=str(exc),
+                output=repr(result) if result is not None else None,
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
         self._emit_stage("intake", user_id, group_id)
+        emit_audit_log(
+            task_name,
+            "intake",
+            "success",
+            output=repr(result) if result is not None else None,
+            user_id=user_id,
+            group_id=group_id,
+        )
 
     def research(
         self, *, user_id: str | None = None, group_id: str | None = None
     ) -> Any:
         """Perform optional research for the task."""
+        task_name = self.task.__class__.__name__
+        emit_audit_log(task_name, "research", "started", user_id=user_id, group_id=group_id)
         if not hasattr(self.task, "research"):
+            self._emit_stage("research", user_id, group_id)
+            emit_audit_log(task_name, "research", "success", user_id=user_id, group_id=group_id)
             return None
 
         query = self.task.research()
@@ -103,36 +131,58 @@ class TaskPipeline:
         except RuntimeError:
             loop_running = False
 
+        def _log_success(res: Any) -> Any:
+            self._emit_stage("research", user_id, group_id)
+            emit_audit_log(
+                task_name,
+                "research",
+                "success",
+                output=repr(res) if res is not None else None,
+                user_id=user_id,
+                group_id=group_id,
+            )
+            return res
+
+        def _log_error(exc: Exception) -> Any:
+            self._emit_stage("research", user_id, group_id)
+            emit_audit_log(
+                task_name,
+                "research",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            return None
+
         if inspect.isawaitable(query):
+
             async def _await_query() -> Any:
-                q = await query
-                if inspect.isawaitable(q):
-                    q = await q
                 try:
+                    q = await query
+                    if inspect.isawaitable(q):
+                        q = await q
                     result = await research.async_gather(
                         q, user_id=user_id or "", group_id=group_id
                     )
-                except RuntimeError:
-                    self._emit_stage("research", user_id, group_id)
-                    return None
-                self._emit_stage("research", user_id, group_id)
-                return result
+                except Exception as exc:  # pragma: no cover - network errors
+                    return _log_error(exc)
+                return _log_success(result)
 
             if loop_running:
                 return _await_query()
             return asyncio.run(_await_query())
 
         if loop_running:
+
             async def _async_call() -> Any:
                 try:
                     result = await research.async_gather(
                         query, user_id=user_id or "", group_id=group_id
                     )
-                except RuntimeError:
-                    self._emit_stage("research", user_id, group_id)
-                    return None
-                self._emit_stage("research", user_id, group_id)
-                return result
+                except Exception as exc:  # pragma: no cover - network errors
+                    return _log_error(exc)
+                return _log_success(result)
 
             return _async_call()
 
@@ -140,23 +190,43 @@ class TaskPipeline:
             result = research.gather(
                 query, user_id=user_id or "", group_id=group_id
             )
-        except RuntimeError:
-            self._emit_stage("research", user_id, group_id)
-            return None
-        self._emit_stage("research", user_id, group_id)
-        return result
+        except Exception as exc:  # pragma: no cover - network errors
+            return _log_error(exc)
+        return _log_success(result)
 
     def plan(
         self, *, user_id: str | None = None, group_id: str | None = None
     ) -> Any:
         """Return a plan which may include subtasks."""
-
-        plan_result = None
-        if hasattr(self.task, "plan"):
-            plan_result = self.task.plan()
-        elif ai_plan is not None and hasattr(ai_plan, "plan"):
-            plan_result = ai_plan.plan(self.task)
+        task_name = self.task.__class__.__name__
+        emit_audit_log(task_name, "plan", "started", user_id=user_id, group_id=group_id)
+        plan_result: Any | None = None
+        try:
+            if hasattr(self.task, "plan"):
+                plan_result = self.task.plan()
+            elif ai_plan is not None and hasattr(ai_plan, "plan"):
+                plan_result = ai_plan.plan(self.task)
+        except Exception as exc:
+            self._emit_stage("planning", user_id, group_id)
+            emit_audit_log(
+                task_name,
+                "plan",
+                "error",
+                reason=str(exc),
+                output=repr(plan_result) if plan_result is not None else None,
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
         self._emit_stage("planning", user_id, group_id)
+        emit_audit_log(
+            task_name,
+            "plan",
+            "success",
+            output=repr(plan_result) if plan_result is not None else None,
+            user_id=user_id,
+            group_id=group_id,
+        )
         return plan_result
 
     def execute(
@@ -174,7 +244,7 @@ class TaskPipeline:
         result: Any | None = None
         emit_audit_log(
             self.task.__class__.__name__,
-            "run",
+            "execute",
             "started",
             user_id=user_id,
             group_id=group_id,
@@ -197,8 +267,8 @@ class TaskPipeline:
                         check = _await_precheck()
                 if check is not True:
                     status = "error"
-                    raise PrecheckError("precheck failed")
                     self._emit_stage("precheck", user_id, group_id)
+                    raise PrecheckError("precheck failed")
 
             parallel_tasks: list[Any] | None = None
             if isinstance(plan_result, dict) and plan_result.get("execution") == "parallel":
@@ -301,7 +371,7 @@ class TaskPipeline:
             status = "error"
             emit_audit_log(
                 self.task.__class__.__name__,
-                "run",
+                "execute",
                 "error",
                 reason=str(exc),
                 output=repr(result) if result is not None else None,
@@ -332,7 +402,7 @@ class TaskPipeline:
                 emit_task_run(run, user_id=user_id, group_id=group_id)
         emit_audit_log(
             self.task.__class__.__name__,
-            "run",
+            "execute",
             status,
             output=repr(result) if status == "success" and result is not None else None,
             user_id=user_id,
@@ -347,22 +417,45 @@ class TaskPipeline:
         user_id: str | None = None,
         group_id: str | None = None,
     ) -> Any:
+        task_name = self.task.__class__.__name__
+        emit_audit_log(task_name, "verify", "started", user_id=user_id, group_id=group_id)
         verify_result = exec_result
-        if hasattr(self.task, "verify"):
-            verify_result = self.task.verify(exec_result)
-            if inspect.isawaitable(verify_result):
-                try:
-                    asyncio.get_running_loop()
-                except RuntimeError:
-                    verify_result = asyncio.run(cast(Coroutine[Any, Any, Any], verify_result))
-                else:
-                    _res = verify_result
+        try:
+            if hasattr(self.task, "verify"):
+                verify_result = self.task.verify(exec_result)
+                if inspect.isawaitable(verify_result):
+                    try:
+                        asyncio.get_running_loop()
+                    except RuntimeError:
+                        verify_result = asyncio.run(cast(Coroutine[Any, Any, Any], verify_result))
+                    else:
+                        _res = verify_result
 
-                    async def _await_verify(res=_res) -> Any:
-                        return await res
+                        async def _await_verify(res=_res) -> Any:
+                            return await res
 
-                    verify_result = _await_verify()
+                        verify_result = _await_verify()
+        except Exception as exc:
+            self._emit_stage("verification", user_id, group_id)
+            emit_audit_log(
+                task_name,
+                "verify",
+                "error",
+                reason=str(exc),
+                output=repr(verify_result) if verify_result is not None else None,
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
         self._emit_stage("verification", user_id, group_id)
+        emit_audit_log(
+            task_name,
+            "verify",
+            "success",
+            output=repr(verify_result) if verify_result is not None else None,
+            user_id=user_id,
+            group_id=group_id,
+        )
         return verify_result
 
     # ------------------------------------------------------------------
