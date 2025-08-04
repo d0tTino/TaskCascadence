@@ -420,21 +420,53 @@ class CronScheduler(BaseScheduler):
 
         self._save_schedules()
 
-    def schedule_from_event(self, task: Any, event: dict[str, Any]) -> None:
-        """Schedule ``task`` according to ``event`` recurrence settings."""
+    def schedule_from_event(
+        self,
+        task: Any,
+        event: dict[str, Any],
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
+        """Schedule ``task`` according to ``event`` recurrence settings.
+
+        Parameters
+        ----------
+        task:
+            The task instance to schedule.
+        event:
+            Event payload containing recurrence information.
+        user_id, group_id:
+            Optional identifiers propagated to :meth:`register_task` and stored
+            alongside the schedule metadata.
+        """
 
         recurrence = event.get("recurrence", {})
         expr = recurrence.get("cron")
         if not expr:
             raise ValueError("event missing recurrence cron")
 
-        self.register_task(task, expr)
+        self.register_task(
+            task,
+            expr,
+            user_id=user_id,
+            group_id=group_id,
+        )
         job_id = task.__class__.__name__
         sched_entry = self.schedules.get(job_id)
         if isinstance(sched_entry, dict):
             sched_entry["recurrence"] = recurrence
+            if user_id is not None:
+                sched_entry["user_id"] = user_id
+            if group_id is not None:
+                sched_entry["group_id"] = group_id
         else:
-            self.schedules[job_id] = {"expr": expr, "recurrence": recurrence}
+            entry: dict[str, Any] = {"expr": expr, "recurrence": recurrence}
+            if user_id is not None:
+                entry["user_id"] = user_id
+            if group_id is not None:
+                entry["group_id"] = group_id
+            self.schedules[job_id] = entry
         self._save_schedules()
 
     def unschedule(self, name: str) -> None:
