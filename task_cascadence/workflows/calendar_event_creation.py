@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -44,10 +45,30 @@ def create_calendar_event(
         if field not in payload or not payload[field]:
             raise ValueError(f"missing required field: {field}")
 
+    group_id = payload.get("group_id")
+
+    travel_task: asyncio.Task | None = None
+    travel_thread: threading.Thread | None = None
+    if payload.get("location"):
+        loop = asyncio.new_event_loop()
+        travel_task = loop.create_task(
+            research.async_gather(
+                f"travel time to {payload['location']}",
+                user_id=user_id,
+                group_id=group_id,
+            )
+        )
+
+        def _run() -> None:
+            loop.run_until_complete(travel_task)  # pragma: no cover - run in thread
+            loop.close()
+
+        travel_thread = threading.Thread(target=_run)
+        travel_thread.start()
+
     if not _has_permission(user_id, ume_base=ume_base):
         raise PermissionError("user lacks calendar:create permission")
 
-    group_id = payload.get("group_id")
     if group_id and not _has_permission(user_id, ume_base=ume_base, group_id=group_id):
         raise PermissionError("user lacks group permission")
 
@@ -56,18 +77,19 @@ def create_calendar_event(
         if not _has_permission(user_id, ume_base=ume_base, invitee=invitee):
             raise PermissionError(f"user lacks permission to invite {invitee}")
 
+    if travel_thread:
+        travel_thread.join()
+
     event_data = dict(payload)
     event_data["user_id"] = user_id
     if group_id:
         event_data["group_id"] = group_id
 
     related_event: Dict[str, Any] | None = None
-    if payload.get("location"):
+    travel_info: Dict[str, Any] | None = None
+    if travel_task is not None:
         try:
-            event_data["travel_time"] = research.gather(
-                f"travel time to {payload['location']}", user_id=user_id
-
-            )
+            travel_info = travel_task.result()
             event_data["travel_time"] = travel_info
             start_dt = datetime.fromisoformat(payload["start_time"].replace("Z", "+00:00"))
             duration = travel_info.get("duration")
@@ -89,12 +111,13 @@ def create_calendar_event(
     main_event = resp.json()
     main_id = main_event.get("id")
 
+    edge_url = f"{base_url.rstrip('/')}/v1/calendar/edges"
+
     related_id = None
     if related_event is not None:
         rel_resp = request_with_retry("POST", url, json=related_event, timeout=5)
         related_event = rel_resp.json()
         related_id = related_event.get("id")
-        edge_url = f"{base_url.rstrip('/')}/v1/calendar/edges"
         edge_payload = {
             "src": related_id,
             "dst": main_id,
@@ -105,8 +128,35 @@ def create_calendar_event(
             edge_payload["group_id"] = group_id
         request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
 
+    for invitee in invitees:
+        edge_payload = {
+            "src": main_id,
+            "dst": invitee,
+            "type": "INVITED",
+            "user_id": user_id,
+        }
+        if group_id:
+            edge_payload["group_id"] = group_id
+        request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
+
+    for layer in payload.get("layers", []) or []:
+        edge_payload = {
+            "src": main_id,
+            "dst": layer,
+            "type": "LAYER",
+            "user_id": user_id,
+        }
+        if group_id:
+            edge_payload["group_id"] = group_id
+        request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
+
     emit_stage_update_event(
-        "calendar.event.created", "created", user_id=user_id, group_id=group_id
+        "calendar.event.created",
+        "created",
+        user_id=user_id,
+        group_id=group_id,
+        event_id=main_id,
+        related_event_id=related_id,
     )
 
     result: Dict[str, Any] = {"event_id": main_id}
