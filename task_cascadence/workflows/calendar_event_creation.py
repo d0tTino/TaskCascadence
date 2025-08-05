@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
@@ -9,7 +10,8 @@ from typing import Any, Dict, List
 from . import subscribe
 from ..http_utils import request_with_retry
 from .. import research
-from ..ume import emit_stage_update_event
+from ..ume import emit_stage_update_event, emit_task_note
+from ..ume.models import TaskNote
 
 
 def _has_permission(
@@ -47,20 +49,25 @@ def create_calendar_event(
 
     group_id = payload.get("group_id")
 
-    travel_task: asyncio.Task | None = None
+    travel_holder: Dict[str, asyncio.Task] = {}
     travel_thread: threading.Thread | None = None
     if payload.get("location"):
         loop = asyncio.new_event_loop()
-        travel_task = loop.create_task(
-            research.async_gather(
-                f"travel time to {payload['location']}",
-                user_id=user_id,
-                group_id=group_id,
-            )
-        )
 
-        def _run() -> None:
-            loop.run_until_complete(travel_task)  # pragma: no cover - run in thread
+        async def _inner() -> None:
+            task = asyncio.create_task(
+                research.async_gather(
+                    f"travel time to {payload['location']}",
+                    user_id=user_id,
+                    group_id=group_id,
+                )
+            )
+            travel_holder["task"] = task
+            await task
+
+        def _run() -> None:  # pragma: no cover - executed in thread
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(_inner())
             loop.close()
 
         travel_thread = threading.Thread(target=_run)
@@ -87,6 +94,7 @@ def create_calendar_event(
 
     related_event: Dict[str, Any] | None = None
     travel_info: Dict[str, Any] | None = None
+    travel_task = travel_holder.get("task")
     if travel_task is not None:
         try:
             travel_info = travel_task.result()
@@ -155,9 +163,17 @@ def create_calendar_event(
         "created",
         user_id=user_id,
         group_id=group_id,
-        event_id=main_id,
-        related_event_id=related_id,
     )
+
+    note_payload = {"event_id": main_id}
+    if related_id is not None:
+        note_payload["related_event_id"] = related_id
+    note = TaskNote(
+        task_name="calendar.event.created",
+        run_id=main_id,
+        note=json.dumps(note_payload),
+    )
+    emit_task_note(note, user_id=user_id, group_id=group_id)
 
     result: Dict[str, Any] = {"event_id": main_id}
     if related_id:

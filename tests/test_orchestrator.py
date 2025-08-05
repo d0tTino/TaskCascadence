@@ -52,9 +52,9 @@ def test_pipeline_emits_events(monkeypatch):
     assert result == "ok"
     assert steps == ["intake", "plan", "run", "verify:result"]
     stages = [e[0] for e in emitted]
-    assert stages == ["spec", "spec", "run", "spec"]
+    assert stages == ["spec", "spec", "spec", "run", "spec"]
     assert emitted[0][2] == _hash_user_id("bob")
-    assert emitted[2][2] == _hash_user_id("bob")
+    assert emitted[3][2] == _hash_user_id("bob")
 
 
 def test_pipeline_without_optional(monkeypatch):
@@ -77,7 +77,7 @@ def test_pipeline_without_optional(monkeypatch):
     result = pipeline.run()
 
     assert result == "done"
-    assert emitted == ["intake", "planning", "run", "verification"]
+    assert emitted == ["intake", "research", "planning", "run", "verification"]
 
 
 def test_pipeline_group_id(monkeypatch):
@@ -392,10 +392,10 @@ def test_async_verify(monkeypatch, tmp_path):
     result = pipeline.run()
 
     assert result == "verified:done"
-    assert stages == ["intake", "planning", "run", "verification"]
+    assert stages == ["intake", "research", "planning", "run", "verification"]
 
     events = StageStore(path=tmp_path / "stages.yml").get_events("AsyncTask")
-    assert [e["stage"] for e in events] == ["intake", "planning", "run", "verification"]
+    assert [e["stage"] for e in events] == ["intake", "research", "planning", "run", "verification"]
 
 
 def test_pipeline_run_async(monkeypatch):
@@ -446,7 +446,7 @@ def test_run_async_parallel_plan(monkeypatch, tmp_path):
     result = asyncio.run(pipeline.run_async())
 
     assert sorted(result) == ["a", "b"]
-    assert stages == ["intake", "planning", "run", "verification"]
+    assert stages == ["intake", "research", "planning", "run", "verification"]
 
     events = StageStore(path=tmp_path / "stages.yml").get_events("Parent")
-    assert [e["stage"] for e in events] == ["intake", "planning", "run", "verification"]
+    assert [e["stage"] for e in events] == ["intake", "research", "planning", "run", "verification"]
