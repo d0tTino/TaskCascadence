@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -64,9 +63,8 @@ def create_calendar_event(
     related_event: Dict[str, Any] | None = None
     if payload.get("location"):
         try:
-            event_data["travel_time"] = research.gather(
+            travel_info = research.gather(
                 f"travel time to {payload['location']}", user_id=user_id
-
             )
             event_data["travel_time"] = travel_info
             start_dt = datetime.fromisoformat(payload["start_time"].replace("Z", "+00:00"))
@@ -106,7 +104,11 @@ def create_calendar_event(
         request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
 
     emit_stage_update_event(
-        "calendar.event.created", "created", user_id=user_id, group_id=group_id
+        "calendar.event.created",
+        "created",
+        user_id=user_id,
+        group_id=group_id,
+        event_id=main_id,
     )
 
     result: Dict[str, Any] = {"event_id": main_id}
