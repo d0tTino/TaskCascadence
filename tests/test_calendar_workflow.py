@@ -1,3 +1,5 @@
+import asyncio
+
 from task_cascadence.workflows import dispatch
 from task_cascadence.workflows import calendar_event_creation as cec
 
@@ -32,8 +34,12 @@ def test_calendar_event_creation(monkeypatch):
         emitted["research"] = (query, user_id, group_id)
         return {"duration": "15m"}
 
+    def fake_gather(query, user_id=None, group_id=None):
+        return asyncio.run(fake_async_gather(query, user_id=user_id, group_id=group_id))
+
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
     monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
+    monkeypatch.setattr(cec.research, "gather", fake_gather)
     monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
 
     payload = {
@@ -55,8 +61,11 @@ def test_calendar_event_creation(monkeypatch):
     post_event = [c for c in calls if c[0] == "POST" and c[1] == "http://svc/v1/calendar/events"][0]
     assert post_event[2]["json"]["travel_time"] == {"duration": "15m"}
 
-    invited_edges = [c for c in calls if c[1].endswith("/edges") and c[2]["json"]["type"] == "INVITED"]
+    invited_edges = [
+        c for c in calls if c[1].endswith("/edges") and c[2]["json"]["type"] == "INVITED"
+    ]
     assert invited_edges and invited_edges[0][2]["json"]["dst"] == "bob"
+    assert invited_edges[0][2]["json"]["src"] == "evt1"
     layer_edges = [c for c in calls if c[1].endswith("/edges") and c[2]["json"]["type"] == "LAYER"]
     assert layer_edges and layer_edges[0][2]["json"]["dst"] == "work"
 
