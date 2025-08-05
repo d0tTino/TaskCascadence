@@ -23,15 +23,13 @@ def test_calendar_event_creation(monkeypatch):
         counter["post"] += 1
         return DummyResponse({"id": f"evt{counter['post']}"})
 
-
     emitted = {}
 
-    def fake_emit(name, stage, user_id=None, group_id=None, **_kwargs):
-        emitted["event"] = (name, stage, user_id, group_id)
+    def fake_emit(name, stage, user_id=None, group_id=None, **kwargs):
+        emitted["event"] = (name, stage, user_id, group_id, kwargs)
 
-    def fake_research(query, user_id=None, group_id=None):
+    async def fake_async_gather(query, user_id=None, group_id=None):
         emitted["research"] = (query, user_id, group_id)
-
         return {"duration": "15m"}
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
@@ -44,6 +42,7 @@ def test_calendar_event_creation(monkeypatch):
         "location": "Cafe",
         "group_id": "g1",
         "invitees": ["bob"],
+        "layers": ["work"],
     }
 
     result = dispatch(
@@ -52,11 +51,18 @@ def test_calendar_event_creation(monkeypatch):
 
     assert result == {"event_id": "evt1", "related_event_id": "evt2"}
     # permission checks
-    assert calls[0][0] == "GET"
-    assert "permissions" in calls[0][1]
-    assert calls[1][0] == "POST"
-    assert calls[1][1] == "http://svc/v1/calendar/events"
-    assert calls[1][2]["json"]["travel_time"] == {"duration": "15m"}
-    assert emitted["event"] == ("calendar.event.created", "created", "alice")
-    assert emitted["research"] == ("travel time to Cafe", "alice", None)
+    assert any(c[0] == "GET" and "permissions" in c[1] for c in calls)
+    post_event = [c for c in calls if c[0] == "POST" and c[1] == "http://svc/v1/calendar/events"][0]
+    assert post_event[2]["json"]["travel_time"] == {"duration": "15m"}
 
+    invited_edges = [c for c in calls if c[1].endswith("/edges") and c[2]["json"]["type"] == "INVITED"]
+    assert invited_edges and invited_edges[0][2]["json"]["dst"] == "bob"
+    layer_edges = [c for c in calls if c[1].endswith("/edges") and c[2]["json"]["type"] == "LAYER"]
+    assert layer_edges and layer_edges[0][2]["json"]["dst"] == "work"
+
+    assert emitted["event"][0] == "calendar.event.created"
+    assert emitted["event"][2] == "alice"
+    assert emitted["event"][3] == "g1"
+    assert emitted["event"][4]["event_id"] == "evt1"
+    assert emitted["event"][4]["related_event_id"] == "evt2"
+    assert emitted["research"] == ("travel time to Cafe", "alice", "g1")
