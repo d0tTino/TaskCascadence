@@ -1,4 +1,5 @@
-import asyncio
+import json
+
 
 from task_cascadence.workflows import dispatch
 from task_cascadence.workflows import calendar_event_creation as cec
@@ -27,8 +28,11 @@ def test_calendar_event_creation(monkeypatch):
 
     emitted = {}
 
-    def fake_emit(name, stage, user_id=None, group_id=None, **kwargs):
-        emitted["event"] = (name, stage, user_id, group_id, kwargs)
+    def fake_stage(name, stage, user_id=None, group_id=None):
+        emitted["stage"] = (name, stage, user_id, group_id)
+
+    def fake_note(note, user_id=None, group_id=None):
+        emitted["note"] = (note, user_id, group_id)
 
     async def fake_async_gather(query, user_id=None, group_id=None):
         emitted["research"] = (query, user_id, group_id)
@@ -38,8 +42,8 @@ def test_calendar_event_creation(monkeypatch):
         return asyncio.run(fake_async_gather(query, user_id=user_id, group_id=group_id))
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
-    monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
-    monkeypatch.setattr(cec.research, "gather", fake_gather)
+    monkeypatch.setattr(cec, "emit_stage_update_event", fake_stage)
+    monkeypatch.setattr(cec, "emit_task_note", fake_note)
     monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
 
     payload = {
@@ -69,9 +73,13 @@ def test_calendar_event_creation(monkeypatch):
     layer_edges = [c for c in calls if c[1].endswith("/edges") and c[2]["json"]["type"] == "LAYER"]
     assert layer_edges and layer_edges[0][2]["json"]["dst"] == "work"
 
-    assert emitted["event"][0] == "calendar.event.created"
-    assert emitted["event"][2] == "alice"
-    assert emitted["event"][3] == "g1"
-    assert emitted["event"][4]["event_id"] == "evt1"
-    assert emitted["event"][4]["related_event_id"] == "evt2"
+    assert emitted["stage"] == ("calendar.event.created", "created", "alice", "g1")
+
+    note, note_user, note_group = emitted["note"]
+    assert note.task_name == "calendar.event.created"
+    data = json.loads(note.note)
+    assert data["event_id"] == "evt1"
+    assert data["related_event_id"] == "evt2"
+    assert note_user == "alice"
+    assert note_group == "g1"
     assert emitted["research"] == ("travel time to Cafe", "alice", "g1")
