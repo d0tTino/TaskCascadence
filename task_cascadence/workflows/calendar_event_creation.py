@@ -1,9 +1,12 @@
 from __future__ import annotations
+
 import asyncio
 import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
-from . import dispatch, subscribe
+
+from . import subscribe
+
 from ..http_utils import request_with_retry
 from .. import research
 from ..ume import emit_stage_update_event, emit_task_note
@@ -45,21 +48,21 @@ def create_calendar_event(
 
     group_id = payload.get("group_id")
 
-    travel_holder: Dict[str, asyncio.Task] = {}
+    travel_task: asyncio.Task | None = None
     travel_thread: threading.Thread | None = None
     if payload.get("location"):
         loop = asyncio.new_event_loop()
 
         async def _inner() -> None:
-            task = asyncio.create_task(
+            nonlocal travel_task
+            travel_task = asyncio.create_task(
                 research.async_gather(
                     f"travel time to {payload['location']}",
                     user_id=user_id,
                     group_id=group_id,
                 )
             )
-            travel_holder["task"] = task
-            await task
+            await travel_task
 
         def _run() -> None:  # pragma: no cover - executed in thread
             asyncio.set_event_loop(loop)
@@ -90,15 +93,18 @@ def create_calendar_event(
 
     related_event: Dict[str, Any] | None = None
     travel_info: Dict[str, Any] | None = None
-    travel_task = travel_holder.get("task")
     if travel_task is not None:
         try:
-            travel_info = research.gather(
-                f"travel time to {payload['location']}", user_id=user_id
+            travel_info = travel_task.result()
+            research.gather(
+                f"travel time to {payload['location']}",
+                user_id=user_id,
+                group_id=group_id,
             )
-
             event_data["travel_time"] = travel_info
-            start_dt = datetime.fromisoformat(payload["start_time"].replace("Z", "+00:00"))
+            start_dt = datetime.fromisoformat(
+                payload["start_time"].replace("Z", "+00:00")
+            )
             duration = travel_info.get("duration")
             leave_dt = start_dt
             if isinstance(duration, str) and duration.endswith("m"):
@@ -110,8 +116,14 @@ def create_calendar_event(
             }
             if group_id:
                 related_event["group_id"] = group_id
-        except RuntimeError:
-            pass
+        except Exception:
+            travel_info = None
+
+    note_text = "No travel details"
+    if travel_info:
+        duration = travel_info.get("duration")
+        note_text = f"Travel time to {payload['location']}: {duration}"
+    note = TaskNote(note=note_text)
 
     url = f"{base_url.rstrip('/')}/v1/calendar/events"
     resp = request_with_retry("POST", url, json=event_data, timeout=5)
