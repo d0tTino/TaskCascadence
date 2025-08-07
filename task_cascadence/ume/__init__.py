@@ -99,6 +99,7 @@ def emit_stage_update_event(
     client: Any | None = None,
     user_id: str | None = None,
     group_id: str | None = None,
+    event_id: str | None = None,
     *,
     use_asyncio: bool = False,
 ) -> asyncio.Task | threading.Thread | None:

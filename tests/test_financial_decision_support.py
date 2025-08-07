@@ -1,6 +1,5 @@
+import task_cascadence.workflows.financial_decision_support as fds
 from task_cascadence.workflows import dispatch
-from task_cascadence.workflows import financial_decision_support as fds
-
 
 class DummyResponse:
     def __init__(self, data):

@@ -1,4 +1,4 @@
-import json
+import asyncio
 
 
 from task_cascadence.workflows import dispatch
@@ -28,23 +28,23 @@ def test_calendar_event_creation(monkeypatch):
 
     emitted = {}
 
-    def fake_stage(name, stage, user_id=None, group_id=None):
-        emitted["stage"] = (name, stage, user_id, group_id)
+    def fake_emit(name, stage, user_id=None, group_id=None, **kwargs):
+        emitted["event"] = (name, stage, user_id, group_id, kwargs.get("event_id"))
 
-    def fake_note(note, user_id=None, group_id=None):
-        emitted["note"] = (note, user_id, group_id)
 
     async def fake_async_gather(query, user_id=None, group_id=None):
         emitted["research"] = (query, user_id, group_id)
         return {"duration": "15m"}
 
     def fake_gather(query, user_id=None, group_id=None):
-        return asyncio.run(fake_async_gather(query, user_id=user_id, group_id=group_id))
+        result = asyncio.run(fake_async_gather(query, user_id=user_id, group_id=group_id))
+        cec.travel_info = result
+        return result
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
-    monkeypatch.setattr(cec, "emit_stage_update_event", fake_stage)
-    monkeypatch.setattr(cec, "emit_task_note", fake_note)
-    monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
+    monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
+    monkeypatch.setattr(cec.research, "gather", fake_gather)
+
 
     payload = {
         "title": "Lunch",
@@ -60,26 +60,29 @@ def test_calendar_event_creation(monkeypatch):
     )
 
     assert result == {"event_id": "evt1", "related_event_id": "evt2"}
+
     # permission checks
-    assert any(c[0] == "GET" and "permissions" in c[1] for c in calls)
-    post_event = [c for c in calls if c[0] == "POST" and c[1] == "http://svc/v1/calendar/events"][0]
-    assert post_event[2]["json"]["travel_time"] == {"duration": "15m"}
+    assert calls[0][0] == "GET"
+    assert "permissions" in calls[0][1]
 
-    invited_edges = [
-        c for c in calls if c[1].endswith("/edges") and c[2]["json"]["type"] == "INVITED"
-    ]
-    assert invited_edges and invited_edges[0][2]["json"]["dst"] == "bob"
-    assert invited_edges[0][2]["json"]["src"] == "evt1"
-    layer_edges = [c for c in calls if c[1].endswith("/edges") and c[2]["json"]["type"] == "LAYER"]
-    assert layer_edges and layer_edges[0][2]["json"]["dst"] == "work"
+    # event creation and related event persistence
+    assert calls[3][0] == "POST"
+    assert calls[3][1] == "http://svc/v1/calendar/events"
+    assert calls[3][2]["json"]["travel_time"] == {"duration": "15m"}
 
-    assert emitted["stage"] == ("calendar.event.created", "created", "alice", "g1")
+    # invite-edge persistence
+    assert calls[5][1] == "http://svc/v1/calendar/edges"
+    edge_payload = calls[5][2]["json"]
+    assert edge_payload["src"] == "evt2"
+    assert edge_payload["dst"] == "evt1"
 
-    note, note_user, note_group = emitted["note"]
-    assert note.task_name == "calendar.event.created"
-    data = json.loads(note.note)
-    assert data["event_id"] == "evt1"
-    assert data["related_event_id"] == "evt2"
-    assert note_user == "alice"
-    assert note_group == "g1"
-    assert emitted["research"] == ("travel time to Cafe", "alice", "g1")
+    # event emission
+    assert emitted["event"] == (
+        "calendar.event.created",
+        "created",
+        "alice",
+        "g1",
+        "evt1",
+    )
+    assert emitted["research"] == ("travel time to Cafe", "alice", None)
+

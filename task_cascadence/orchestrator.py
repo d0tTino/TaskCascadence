@@ -119,8 +119,11 @@ class TaskPipeline:
         task_name = self.task.__class__.__name__
         emit_audit_log(task_name, "research", "started", user_id=user_id, group_id=group_id)
         if not hasattr(self.task, "research"):
-            self._emit_stage("research", user_id, group_id)
-            emit_audit_log(task_name, "research", "success", user_id=user_id, group_id=group_id)
+            # Tasks without a dedicated research step should skip this stage
+            # entirely so pipelines emit the standard ``planning`` stage next.
+            emit_audit_log(
+                task_name, "research", "skipped", user_id=user_id, group_id=group_id
+            )
             return None
 
         query = self.task.research()

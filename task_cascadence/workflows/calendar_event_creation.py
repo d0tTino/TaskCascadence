@@ -1,12 +1,6 @@
 from __future__ import annotations
-
-import asyncio
-import json
-import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
-
-
 from . import subscribe
 from ..http_utils import request_with_retry
 from .. import research
@@ -97,7 +91,10 @@ def create_calendar_event(
     travel_task = travel_holder.get("task")
     if travel_task is not None:
         try:
-            travel_info = travel_task.result()
+            travel_info = research.gather(
+                f"travel time to {payload['location']}", user_id=user_id
+            )
+
             event_data["travel_time"] = travel_info
             start_dt = datetime.fromisoformat(payload["start_time"].replace("Z", "+00:00"))
             duration = travel_info.get("duration")
@@ -163,15 +160,8 @@ def create_calendar_event(
         "created",
         user_id=user_id,
         group_id=group_id,
-    )
+        event_id=main_id,
 
-    note_payload = {"event_id": main_id}
-    if related_id is not None:
-        note_payload["related_event_id"] = related_id
-    note = TaskNote(
-        task_name="calendar.event.created",
-        run_id=main_id,
-        note=json.dumps(note_payload),
     )
     emit_task_note(note, user_id=user_id, group_id=group_id)
 
