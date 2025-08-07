@@ -90,6 +90,14 @@ def test_financial_decision_support(monkeypatch):
         e["src"] == "da1" and e["dst"] == "act1" and e["type"] == "CONSIDERS"
         for e in persist["edges"]
     )
+    assert any(
+        e["src"] == "act1" and e["dst"] == "acct1" and e["type"] == "OWNED_BY"
+        for e in persist["edges"]
+    )
+    assert any(
+        e["src"] == "act1" and e["dst"] == "acct2" and e["type"] == "OWNED_BY"
+        for e in persist["edges"]
+    )
     assert emitted["event"] == ("finance.decision.result", "completed", "alice", "g1")
     assert dispatched[0][0] == "finance.decision.result"
     assert dispatched[0][1]["summary"]["cost_of_deviation"] == 50
@@ -100,3 +108,27 @@ def test_financial_decision_support(monkeypatch):
 
     assert result["analysis"] == "da1"
     assert result["summary"]["cost_of_deviation"] == 50
+
+
+def test_financial_decision_support_time_horizon(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append((method, url, kwargs))
+        if method == "GET":
+            return DummyResponse({"nodes": []})
+        elif url.endswith("/v1/simulations/debt"):
+            return DummyResponse({"id": "da1", "actions": []})
+        else:
+            return DummyResponse({"ok": True})
+
+    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "emit_stage_update_event", lambda *a, **k: None)
+    monkeypatch.setattr(fds, "dispatch", lambda *a, **k: None)
+
+    dispatch("finance.decision.request", {"time_horizon": "6m"}, user_id="alice")
+
+    assert calls[0][2]["params"]["time_horizon"] == "6m"
+    persist = calls[2][2]["json"]
+    analysis = next(n for n in persist["nodes"] if n["type"] == "DecisionAnalysis")
+    assert analysis["metadata"]["time_horizon"] == "6m"

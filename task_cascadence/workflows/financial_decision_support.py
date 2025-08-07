@@ -19,6 +19,7 @@ def financial_decision_support(
     """Aggregate financial data, run a debt simulation, and persist results."""
 
     group_id = payload.get("group_id")
+    time_horizon = payload.get("time_horizon")
 
     url = f"{ume_base.rstrip('/')}/v1/nodes"
     params: Dict[str, Any] = {
@@ -27,6 +28,8 @@ def financial_decision_support(
     }
     if group_id is not None:
         params["group_id"] = group_id
+    if time_horizon is not None:
+        params["time_horizon"] = time_horizon
     resp = request_with_retry("GET", url, params=params, timeout=5)
     data = resp.json()
     nodes: List[Dict[str, Any]] = data.get("nodes", [])
@@ -50,16 +53,17 @@ def financial_decision_support(
 
     analysis_id = eng_result.get("id", "analysis")
     actions: List[Dict[str, Any]] = eng_result.get("actions", [])
-    nodes_to_persist = [
-        {
-            "id": analysis_id,
-            "type": "DecisionAnalysis",
-            "metrics": {"cost_of_deviation": eng_result.get("cost_of_deviation", 0)},
-            "user_id": user_id,
-        }
-    ]
+    analysis_node: Dict[str, Any] = {
+        "id": analysis_id,
+        "type": "DecisionAnalysis",
+        "metrics": {"cost_of_deviation": eng_result.get("cost_of_deviation", 0)},
+        "user_id": user_id,
+    }
     if group_id is not None:
-        nodes_to_persist[0]["group_id"] = group_id
+        analysis_node["group_id"] = group_id
+    if time_horizon is not None:
+        analysis_node["metadata"] = {"time_horizon": time_horizon}
+    nodes_to_persist = [analysis_node]
     edges = []
 
     for act in actions:
@@ -77,10 +81,10 @@ def financial_decision_support(
         if group_id is not None:
             edge["group_id"] = group_id
         edges.append(edge)
-        if accounts:
+        for account in accounts:
             owned_edge = {
                 "src": act_id,
-                "dst": accounts[0].get("id"),
+                "dst": account.get("id"),
                 "type": "OWNED_BY",
                 "user_id": user_id,
             }
