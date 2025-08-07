@@ -1,13 +1,11 @@
 from __future__ import annotations
-
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
-
-
 from . import subscribe
 from ..http_utils import request_with_retry
 from .. import research
-from ..ume import emit_stage_update_event
+from ..ume import emit_stage_update_event, emit_task_note
+from ..ume.models import TaskNote
 
 
 def _has_permission(
@@ -43,10 +41,35 @@ def create_calendar_event(
         if field not in payload or not payload[field]:
             raise ValueError(f"missing required field: {field}")
 
+    group_id = payload.get("group_id")
+
+    travel_holder: Dict[str, asyncio.Task] = {}
+    travel_thread: threading.Thread | None = None
+    if payload.get("location"):
+        loop = asyncio.new_event_loop()
+
+        async def _inner() -> None:
+            task = asyncio.create_task(
+                research.async_gather(
+                    f"travel time to {payload['location']}",
+                    user_id=user_id,
+                    group_id=group_id,
+                )
+            )
+            travel_holder["task"] = task
+            await task
+
+        def _run() -> None:  # pragma: no cover - executed in thread
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(_inner())
+            loop.close()
+
+        travel_thread = threading.Thread(target=_run)
+        travel_thread.start()
+
     if not _has_permission(user_id, ume_base=ume_base):
         raise PermissionError("user lacks calendar:create permission")
 
-    group_id = payload.get("group_id")
     if group_id and not _has_permission(user_id, ume_base=ume_base, group_id=group_id):
         raise PermissionError("user lacks group permission")
 
@@ -55,17 +78,23 @@ def create_calendar_event(
         if not _has_permission(user_id, ume_base=ume_base, invitee=invitee):
             raise PermissionError(f"user lacks permission to invite {invitee}")
 
+    if travel_thread:
+        travel_thread.join()
+
     event_data = dict(payload)
     event_data["user_id"] = user_id
     if group_id:
         event_data["group_id"] = group_id
 
     related_event: Dict[str, Any] | None = None
-    if payload.get("location"):
+    travel_info: Dict[str, Any] | None = None
+    travel_task = travel_holder.get("task")
+    if travel_task is not None:
         try:
             travel_info = research.gather(
                 f"travel time to {payload['location']}", user_id=user_id
             )
+
             event_data["travel_time"] = travel_info
             start_dt = datetime.fromisoformat(payload["start_time"].replace("Z", "+00:00"))
             duration = travel_info.get("duration")
@@ -87,16 +116,39 @@ def create_calendar_event(
     main_event = resp.json()
     main_id = main_event.get("id")
 
+    edge_url = f"{base_url.rstrip('/')}/v1/calendar/edges"
+
     related_id = None
     if related_event is not None:
         rel_resp = request_with_retry("POST", url, json=related_event, timeout=5)
         related_event = rel_resp.json()
         related_id = related_event.get("id")
-        edge_url = f"{base_url.rstrip('/')}/v1/calendar/edges"
         edge_payload = {
             "src": related_id,
             "dst": main_id,
             "type": "RELATES_TO",
+            "user_id": user_id,
+        }
+        if group_id:
+            edge_payload["group_id"] = group_id
+        request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
+
+    for invitee in invitees:
+        edge_payload = {
+            "src": main_id,
+            "dst": invitee,
+            "type": "INVITED",
+            "user_id": user_id,
+        }
+        if group_id:
+            edge_payload["group_id"] = group_id
+        request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
+
+    for layer in payload.get("layers", []) or []:
+        edge_payload = {
+            "src": main_id,
+            "dst": layer,
+            "type": "LAYER",
             "user_id": user_id,
         }
         if group_id:
@@ -109,7 +161,9 @@ def create_calendar_event(
         user_id=user_id,
         group_id=group_id,
         event_id=main_id,
+
     )
+    emit_task_note(note, user_id=user_id, group_id=group_id)
 
     result: Dict[str, Any] = {"event_id": main_id}
     if related_id:

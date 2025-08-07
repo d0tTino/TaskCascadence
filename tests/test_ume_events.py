@@ -43,7 +43,7 @@ def test_pipeline_stage_events(monkeypatch, tmp_path):
     data = yaml.safe_load(path.read_text())
     events = data["DemoTask"]
     stages = [e["stage"] for e in events]
-    assert stages == ["intake", "planning", "run", "verification"]
+    assert stages == ["intake", "research", "planning", "run", "verification"]
     for e in events:
         assert e["user_id"] == _hash_user_id("alice")
 

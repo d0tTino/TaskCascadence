@@ -1,5 +1,6 @@
 import asyncio
 
+
 from task_cascadence.workflows import dispatch
 from task_cascadence.workflows import calendar_event_creation as cec
 
@@ -25,11 +26,11 @@ def test_calendar_event_creation(monkeypatch):
         counter["post"] += 1
         return DummyResponse({"id": f"evt{counter['post']}"})
 
-
     emitted = {}
 
     def fake_emit(name, stage, user_id=None, group_id=None, **kwargs):
         emitted["event"] = (name, stage, user_id, group_id, kwargs.get("event_id"))
+
 
     async def fake_async_gather(query, user_id=None, group_id=None):
         emitted["research"] = (query, user_id, group_id)
@@ -44,12 +45,14 @@ def test_calendar_event_creation(monkeypatch):
     monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(cec.research, "gather", fake_gather)
 
+
     payload = {
         "title": "Lunch",
         "start_time": "2024-01-01T12:00:00Z",
         "location": "Cafe",
         "group_id": "g1",
         "invitees": ["bob"],
+        "layers": ["work"],
     }
 
     result = dispatch(
