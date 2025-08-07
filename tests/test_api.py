@@ -33,12 +33,35 @@ class AsyncTask(CronTask):
         return "async"
 
 
+class PipelineTask(CronTask):
+    name = "pipe"
+
+    def intake(self):
+        pass
+
+    def run(self):
+        return "pipe"
+
+
+class AsyncPipelineTask(CronTask):
+    name = "asyncpipe"
+
+    def intake(self):
+        pass
+
+    async def run(self):
+        return "asyncpipe"
+
+
 def setup_scheduler(monkeypatch, tmp_path):
     sched = CronScheduler(storage_path=tmp_path / "sched.yml")
     task = DummyTask()
     sched.register_task(name_or_task="dummy", task_or_expr=task)
     monkeypatch.setattr("task_cascadence.api.get_default_scheduler", lambda: sched)
-    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run, user_id=None: None)
+    monkeypatch.setattr(
+        "task_cascadence.ume.emit_task_run",
+        lambda run, user_id=None, group_id=None: None,
+    )
     tmp = tempfile.NamedTemporaryFile(delete=False)
     monkeypatch.setenv("CASCADENCE_POINTERS_PATH", tmp.name)
     monkeypatch.setenv("CASCADENCE_TASKS_PATH", str(tmp_path / "tasks.yml"))
@@ -98,6 +121,66 @@ def test_run_task_group_header(monkeypatch, tmp_path):
     client = TestClient(app)
     client.post("/tasks/dummy/run", headers={"X-Group-ID": "team"})
     assert called["gid"] == "team"
+
+
+def test_stage_update_event_includes_headers(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    pipeline = PipelineTask()
+    sched.register_task(name_or_task="pipe", task_or_expr=pipeline)
+    events: list[dict[str, str]] = []
+
+    def fake_emit(task_name, stage, **kwargs):
+        events.append(kwargs)
+
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_stage_update_event", fake_emit
+    )
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_audit_log", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None
+    )
+
+    client = TestClient(app)
+    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
+    resp = client.post("/tasks/pipe/run", headers=headers)
+    assert resp.status_code == 200
+    assert events
+    assert all(e["user_id"] == "alice" and e["group_id"] == "team" for e in events)
+
+
+def test_stage_update_event_includes_headers_async(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    pipeline = AsyncPipelineTask()
+    sched.register_task(name_or_task="asyncpipe", task_or_expr=pipeline)
+    events: list[dict[str, str]] = []
+
+    def fake_emit(task_name, stage, **kwargs):
+        events.append(kwargs)
+
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_stage_update_event", fake_emit
+    )
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_audit_log", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None
+    )
+
+    client = TestClient(app)
+    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
+    resp = client.post("/tasks/asyncpipe/run-async", headers=headers)
+    assert resp.status_code == 200
+    assert events
+    assert all(e["user_id"] == "alice" and e["group_id"] == "team" for e in events)
 
 
 def test_schedule_task_group_header(monkeypatch, tmp_path):
