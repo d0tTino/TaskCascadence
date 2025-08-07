@@ -74,6 +74,28 @@ httpx.post(
 )
 ```
 
+## User and Group Context
+
+Tasks run with a user identifier and optional group identifier so results and
+audit logs can be scoped. When calling the HTTP API include ``X-User-ID`` and,
+if needed, ``X-Group-ID`` headers:
+
+```bash
+curl -X POST http://localhost:8000/tasks/example/run \
+     -H "X-User-ID: alice" \
+     -H "X-Group-ID: engineering"
+```
+
+In code, pass the same information via ``user_id`` and ``group_id`` arguments:
+
+```python
+pipeline.run(user_id="alice", group_id="engineering")
+from task_cascadence.workflows import dispatch
+dispatch("calendar.event.create_request", payload, user_id="alice", group_id="engineering")
+```
+
+User identifiers are hashed before being persisted.
+
 ## Nested Pipelines
 
 The return value of ``plan`` may include a list of tasks or ``TaskPipeline``
@@ -221,7 +243,10 @@ Example usage with ``httpx``:
 import httpx
 
 tasks = httpx.get("http://localhost:8000/tasks").json()
-httpx.post("http://localhost:8000/tasks/example/run", headers={"X-User-ID": "bob"})
+httpx.post(
+    "http://localhost:8000/tasks/example/run",
+    headers={"X-User-ID": "bob", "X-Group-ID": "engineering"},
+)
 
 # capture a task definition from another machine
 httpx.post(
@@ -232,8 +257,8 @@ httpx.post(
 
 This allows capturing a task definition on one device and registering it on another.
 
-Including the ``X-User-ID`` header attaches a hashed identifier to emitted
-events, aligning with the project's privacy goals.
+Including ``X-User-ID`` and ``X-Group-ID`` headers attaches identifiers to
+emitted events while hashing user values for privacy.
 
 Pointers for :class:`PointerTask` implementations can be managed via the API as well:
 
@@ -261,7 +286,22 @@ Navigate to ``http://localhost:8000`` to see task statuses and pause or resume
 individual tasks. The table also lists the number of pointers stored for each
 task via ``PointerStore``.
 
-## YAML-Based Recurrence
+## Audit Logging
+
+Each stage transition within a :class:`TaskPipeline` is recorded via
+``emit_audit_log``. Entries capture the stage name, status (for example
+``started``, ``success``, ``error`` or ``skipped``) and optional ``reason`` or
+``output`` fields. User identifiers are hashed and stored alongside any
+``group_id``. Audit records are persisted by :class:`StageStore` and can be
+retrieved through the API:
+
+```bash
+curl http://localhost:8000/pipeline/MyTask
+```
+
+This endpoint returns the chronological audit trail for ``MyTask``.
+
+## Recurring Schedule YAML Format
 
 ``CronScheduler`` persists recurrence rules in ``schedules.yml``.  The file is
 created next to the running application unless ``storage_path`` is overridden
@@ -270,17 +310,20 @@ and maps task names to cron expressions and optional context:
 ```yaml
 ExampleTask:
   expr: "0 12 * * *"
+  user_id: alice
   group_id: ops
+  recurrence:
+    note: "every day at noon"
 ```
 
-Timezone-aware scheduling requires access to the IANA timezone database
-provided by the `tzdata` package. Ensure this package is installed when
-creating schedulers with non-UTC timezones.
+The scheduler reloads this file on startup and recreates any jobs whose task
+objects are available via the ``tasks`` argument. Editing the file adjusts
+recurrence without changing code. Removing an entry triggers an ``unschedule``
+stage event for that task.
 
-When a ``CronScheduler`` starts it reads this YAML and re-creates any jobs for
-which task objects are supplied via the ``tasks`` argument.  Editing the file
-lets you adjust recurrence without changing code.  Removing a schedule triggers
-an ``unschedule`` stage event for that task.
+Timezone-aware scheduling requires access to the IANA timezone database
+provided by the ``tzdata`` package when creating schedulers with non-UTC
+timezones.
 
 ## Task DAGs
 
@@ -635,23 +678,29 @@ Cascadence includes sample workflows that react to events published on the UME
 bus.  Use :func:`task_cascadence.workflows.dispatch` to trigger them from your
 code or services.
 
-### Calendar Event Creation
+### CalendarEventCreation
 
-This workflow listens for ``calendar.event.create`` and persists a validated
-event to an external calendar service after optional research:
+This workflow listens for ``calendar.event.create_request`` and persists a
+validated event to an external calendar service after optional research. A
+``calendar.event.created`` event is emitted once the entry is stored:
 
 ```python
 from task_cascadence.workflows import dispatch
 
-payload = {"title": "Team Sync", "start": "2024-04-01T09:00Z", "end": "2024-04-01T10:00Z"}
-dispatch("calendar.event.create", payload, user_id="alice")
+payload = {
+    "title": "Team Sync",
+    "start_time": "2024-04-01T09:00:00Z",
+    "invitees": ["bob"],
+}
+dispatch("calendar.event.create_request", payload, user_id="alice")
 ```
 
-### Financial Decision Support
+### FinancialDecisionSupport
 
-``financial_decision_support`` aggregates accounts and goals, calls an external
+``FinancialDecisionSupport`` aggregates accounts and goals, calls an external
 engine, and stores the resulting analysis when ``finance.decision.request`` is
-dispatched:
+dispatched. It emits ``finance.decision.result`` and optionally
+``finance.explain.request`` events:
 
 ```python
 from task_cascadence.workflows import dispatch
@@ -684,16 +733,16 @@ $ pip install -e .[dev]
 
 The ``dev`` extras include ``mypy`` as well as the ``types-requests`` and
 ``types-PyYAML`` stub packages. These are required for ``test_mypy_runs`` to
-pass, so ensure they are installed before running ``ruff``, ``mypy`` or
-``pytest``.
+pass.
 
-This will install tools like ``ruff``, ``pytest`` and ``mypy``. Run them from
-the project root to lint, type-check and test the codebase:
+## Testing
+
+After installing the development extras, run the linters and test suite:
 
 ```bash
-$ ruff .
-$ mypy .
-$ pytest
+ruff .
+mypy .
+pytest
 ```
 
 The test suite requires ``protobuf>=6``.
