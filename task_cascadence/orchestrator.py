@@ -119,8 +119,10 @@ class TaskPipeline:
         task_name = self.task.__class__.__name__
         emit_audit_log(task_name, "research", "started", user_id=user_id, group_id=group_id)
         if not hasattr(self.task, "research"):
-            # Tasks without a dedicated research step should skip this stage
-            # entirely so pipelines emit the standard ``planning`` stage next.
+            # Even if a task has no dedicated research step, emit the standard
+            # stage notification so downstream consumers observe a "research"
+            # phase was considered and skipped.
+            self._emit_stage("research", user_id, group_id)
             emit_audit_log(
                 task_name, "research", "skipped", user_id=user_id, group_id=group_id
             )
