@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 from . import subscribe
+
 from ..http_utils import request_with_retry
 from .. import research
 from ..ume import emit_stage_update_event, emit_task_note
@@ -176,9 +177,12 @@ def create_calendar_event(
         event_id=main_id,
 
     )
+    note = TaskNote(note=f"Created event {payload['title']}")
     emit_task_note(note, user_id=user_id, group_id=group_id)
 
     result: Dict[str, Any] = {"event_id": main_id}
     if related_id:
         result["related_event_id"] = related_id
+
+    dispatch("calendar.event.created", result, user_id=user_id, group_id=group_id)
     return result
