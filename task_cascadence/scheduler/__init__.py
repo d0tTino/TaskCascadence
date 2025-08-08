@@ -9,6 +9,7 @@ APScheduler.
 from __future__ import annotations
 
 from pathlib import Path
+import os
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -27,6 +28,7 @@ if TYPE_CHECKING:  # pragma: no cover - used for type hints only
 
 from ..temporal import TemporalBackend
 from .. import metrics
+from ..http_utils import request_with_retry
 
 
 class BaseScheduler:
@@ -282,6 +284,60 @@ class CronScheduler(BaseScheduler):
         with open(self.storage_path, "w") as fh:
             self._yaml.safe_dump(self.schedules, fh)
 
+    # ------------------------------------------------------------------
+    # Calendar event integration
+
+    def _fetch_calendar_event(self, node: str) -> dict[str, Any]:
+        """Retrieve calendar event metadata from UME.
+
+        The default implementation performs an HTTP ``GET`` against the
+        ``UME_BASE_URL`` environment variable.  Tests and consumers may
+        monkeypatch this method for custom behaviour.
+        """
+
+        base = os.environ.get("UME_BASE_URL")
+        if not base:
+            raise RuntimeError("UME_BASE_URL not configured")
+        node = node.lstrip("/")
+        url = f"{base.rstrip('/')}/v1/calendar/nodes/{node}"
+        response = request_with_retry("GET", url, timeout=5)
+        return response.json()
+
+    def poll_calendar_event(
+        self,
+        task: Any,
+        node: str,
+        *,
+        interval: int = 300,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
+        """Poll a calendar ``node`` and schedule ``task`` on changes.
+
+        The event is fetched immediately and then every ``interval`` seconds to
+        refresh the schedule if the recurrence changes.
+        """
+
+        def _poll() -> None:
+            event = self._fetch_calendar_event(node)
+            self.schedule_from_event(
+                task, event, user_id=user_id, group_id=group_id
+            )
+            job_id = task.__class__.__name__
+            sched_entry = self.schedules.get(job_id)
+            if isinstance(sched_entry, dict):
+                sched_entry["calendar_event"] = {"node": node, "poll": interval}
+                self._save_schedules()
+
+        self.scheduler.add_job(
+            _poll,
+            "interval",
+            seconds=interval,
+            id=f"poll:{task.__class__.__name__}:{node}",
+            replace_existing=True,
+        )
+        _poll()
+
     def _wrap_task(
         self, task, user_id: str | None = None, group_id: str | None = None
     ):
@@ -382,8 +438,9 @@ class CronScheduler(BaseScheduler):
         """Load cron schedules from ``path`` and register them.
 
         The YAML file should map job identifiers to either a cron expression
-        string or a dictionary with an ``expr`` key and optional ``user_id``,
-        ``group_id`` and ``recurrence`` metadata.  ``tasks`` provides a mapping
+        string, a dictionary with an ``expr`` key or an entry containing a
+        ``calendar_event`` reference. Optional ``user_id``/``group_id`` and
+        ``recurrence`` metadata may be supplied. ``tasks`` provides a mapping
         of job identifiers to task instances.  When omitted the scheduler's
         already-registered tasks are used.
         """
@@ -399,6 +456,35 @@ class CronScheduler(BaseScheduler):
             if not task_obj and job_id in self._tasks:
                 task_obj = self._tasks[job_id]["task"]
             if not task_obj:
+                continue
+
+            if "calendar_event" in info:
+                ce = info["calendar_event"]
+                if isinstance(ce, dict):
+                    node = ce.get("node")
+                    poll = ce.get("poll")
+                    user_id = ce.get("user_id", info.get("user_id"))
+                    group_id = ce.get("group_id", info.get("group_id"))
+                else:
+                    node = ce
+                    poll = info.get("poll")
+                    user_id = info.get("user_id")
+                    group_id = info.get("group_id")
+                if not node:
+                    continue
+                if poll:
+                    self.poll_calendar_event(
+                        task_obj, node, interval=poll, user_id=user_id, group_id=group_id
+                    )
+                else:
+                    event = self._fetch_calendar_event(node)
+                    self.schedule_from_event(
+                        task_obj, event, user_id=user_id, group_id=group_id
+                    )
+                    sched_entry = self.schedules.get(job_id)
+                    if isinstance(sched_entry, dict):
+                        sched_entry["calendar_event"] = {"node": node}
+                        self._save_schedules()
                 continue
 
             self.register_task(
