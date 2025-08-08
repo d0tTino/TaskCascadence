@@ -41,6 +41,7 @@ def test_manual_trigger_cli(monkeypatch):
 
     runner = CliRunner()
     result = runner.invoke(app, ["trigger", "manual_demo", "--user-id", "bob"])
+
     assert result.exit_code == 0
 
 
@@ -65,6 +66,7 @@ def test_run_command_temporal(monkeypatch):
 
     runner = CliRunner()
     result = runner.invoke(app, ["run", "dummy", "--temporal", "--user-id", "bob"])
+
     assert result.exit_code == 0
     assert called["workflow"] == "DummyTask"
 
@@ -111,11 +113,14 @@ def test_cli_schedule_creates_entry(monkeypatch, tmp_path):
     sched.register_task(name_or_task="example", task_or_expr=ExampleTask())
 
     runner = CliRunner()
-    result = runner.invoke(app, ["schedule", "example", "0 12 * * *"])
+    result = runner.invoke(
+        app, ["schedule", "example", "0 12 * * *", "--user-id", "alice"]
+    )
 
     assert result.exit_code == 0
     data = yaml.safe_load((tmp_path / "sched.yml").read_text())
-    assert data["ExampleTask"] == "0 12 * * *"
+    assert data["ExampleTask"]["expr"] == "0 12 * * *"
+    assert data["ExampleTask"]["user_id"] == "alice"
 
 
 def test_cli_schedule_user_id(monkeypatch, tmp_path):
@@ -146,7 +151,9 @@ def test_cli_schedule_unknown_task(monkeypatch):
     monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["schedule", "missing", "* * * * *"])
+    result = runner.invoke(
+        app, ["schedule", "missing", "* * * * *", "--user-id", "alice"]
+    )
 
     assert result.exit_code == 1
 
@@ -160,7 +167,9 @@ def test_cli_schedule_requires_cron_scheduler(monkeypatch):
     monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["schedule", "example", "0 12 * * *"])
+    result = runner.invoke(
+        app, ["schedule", "example", "0 12 * * *", "--user-id", "alice"]
+    )
 
     assert result.exit_code == 1
     assert "scheduler lacks cron capabilities" in result.output
@@ -173,7 +182,9 @@ def test_cli_schedule_env_base(monkeypatch):
     importlib.reload(task_cascadence)
     task_cascadence.initialize()
     runner = CliRunner()
-    result = runner.invoke(app, ["schedule", "example", "0 12 * * *"])
+    result = runner.invoke(
+        app, ["schedule", "example", "0 12 * * *", "--user-id", "alice"]
+    )
     assert result.exit_code == 1
     assert "scheduler lacks cron capabilities" in result.output
 
@@ -468,7 +479,9 @@ def test_cli_unschedule(monkeypatch, tmp_path):
     sched.register_task(name_or_task="example", task_or_expr=ExampleTask())
 
     runner = CliRunner()
-    result = runner.invoke(app, ["schedule", "example", "0 12 * * *"])
+    result = runner.invoke(
+        app, ["schedule", "example", "0 12 * * *", "--user-id", "alice"]
+    )
     assert result.exit_code == 0
 
     result = runner.invoke(app, ["unschedule", "example"])
@@ -512,6 +525,7 @@ def test_cli_run_async(monkeypatch):
 
     runner = CliRunner()
     result = runner.invoke(app, ["run-async", "async_demo", "--user-id", "alice"])
+
 
     assert result.exit_code == 0
     assert steps == ["run"]
@@ -573,7 +587,7 @@ def test_cli_disable_prevents_run(monkeypatch):
     assert result.exit_code == 0
     assert "demo disabled" in result.output
 
-    result = runner.invoke(app, ["run", "demo"])
+    result = runner.invoke(app, ["run", "demo", "--user-id", "alice"])
     assert result.exit_code != 0
     assert "disabled" in (result.stderr or result.output)
 

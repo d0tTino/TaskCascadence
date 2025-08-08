@@ -33,8 +33,10 @@ class IntentResponse(BaseModel):
     clarification: bool
 
 
-def get_user_id(x_user_id: str | None = Header(default=None)) -> str | None:
-    """Return the user identifier from ``X-User-ID`` header if supplied."""
+def get_user_id(x_user_id: str | None = Header(default=None)) -> str:
+    """Return the user identifier from ``X-User-ID`` header."""
+    if x_user_id is None:
+        raise HTTPException(400, "user_id header required")
     return x_user_id
 
 
@@ -77,7 +79,7 @@ def register_task(path: str, schedule: str | None = None):
 def run_task(
     name: str,
     temporal: bool = False,
-    user_id: str | None = Depends(get_user_id),
+    user_id: str = Depends(get_user_id),
     group_id: str | None = Depends(get_group_id),
 ):
     """Execute ``name`` and return its result."""
@@ -85,6 +87,7 @@ def run_task(
     try:
         if user_id is None:
             raise HTTPException(400, "user_id is required")
+
         kwargs: dict[str, Any] = {"use_temporal": temporal, "user_id": user_id}
         if group_id is not None:
             kwargs["group_id"] = group_id
@@ -98,7 +101,7 @@ def run_task(
 async def run_task_async(
     name: str,
     temporal: bool = False,
-    user_id: str | None = Depends(get_user_id),
+    user_id: str = Depends(get_user_id),
     group_id: str | None = Depends(get_group_id),
 ):
     """Execute ``name`` asynchronously and return its result."""
@@ -106,6 +109,7 @@ async def run_task_async(
     try:
         if user_id is None:
             raise HTTPException(400, "user_id is required")
+
         kwargs: dict[str, Any] = {"use_temporal": temporal, "user_id": user_id}
         if group_id is not None:
             kwargs["group_id"] = group_id
@@ -121,7 +125,7 @@ async def run_task_async(
 def schedule_task(
     name: str,
     expression: str,
-    user_id: str | None = Depends(get_user_id),
+    user_id: str = Depends(get_user_id),
     group_id: str | None = Depends(get_group_id),
 ):
     """Schedule ``name`` according to ``expression``."""
@@ -246,7 +250,7 @@ def suggestion_list():
 @app.post("/suggestions/{suggestion_id}/accept")
 def suggestion_accept(
     suggestion_id: str,
-    user_id: str | None = Depends(get_user_id),
+    user_id: str = Depends(get_user_id),
     group_id: str | None = Depends(get_group_id),
 ):
     """Accept a suggestion and enqueue its task."""
@@ -261,7 +265,7 @@ def suggestion_accept(
 @app.post("/suggestions/{suggestion_id}/snooze")
 def suggestion_snooze(
     suggestion_id: str,
-    user_id: str | None = Depends(get_user_id),
+    user_id: str = Depends(get_user_id),
     group_id: str | None = Depends(get_group_id),
 ):
     """Snooze a suggestion."""
@@ -276,7 +280,7 @@ def suggestion_snooze(
 @app.post("/suggestions/{suggestion_id}/dismiss")
 def suggestion_dismiss(
     suggestion_id: str,
-    user_id: str | None = Depends(get_user_id),
+    user_id: str = Depends(get_user_id),
     group_id: str | None = Depends(get_group_id),
 ):
     """Dismiss a suggestion."""
@@ -289,12 +293,10 @@ def suggestion_dismiss(
 @app.post("/intent", response_model=IntentResponse)
 def intent_route(
     req: IntentRequest,
-    user_id: str | None = Depends(get_user_id),
+    user_id: str = Depends(get_user_id),
     group_id: str | None = Depends(get_group_id),
 ):
     """Return intent analysis for the provided message."""
-    if user_id is None:
-        raise HTTPException(400, "user_id header required")
     message = sanitize_input(req.message)
     ctx = [sanitize_input(c) for c in req.context]
     result = resolve_intent(
