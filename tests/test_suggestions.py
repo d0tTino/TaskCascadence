@@ -56,7 +56,7 @@ def test_accept_enqueues_task(monkeypatch, tmp_path):
         def __init__(self):
             self.ran = []
 
-        def run_task(self, name):
+        def run_task(self, name, user_id=None, group_id=None):
             self.ran.append(name)
 
     scheduler = DummyScheduler()

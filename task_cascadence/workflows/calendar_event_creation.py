@@ -5,7 +5,7 @@ import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
-from . import subscribe
+from . import dispatch, subscribe
 
 from ..http_utils import request_with_retry
 from .. import research
@@ -177,7 +177,6 @@ def create_calendar_event(
         event_id=main_id,
 
     )
-    note = TaskNote(note=f"Created event {payload['title']}")
     emit_task_note(note, user_id=user_id, group_id=group_id)
 
     result: Dict[str, Any] = {"event_id": main_id}

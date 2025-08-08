@@ -40,7 +40,8 @@ def test_manual_trigger_cli(monkeypatch):
     monkeypatch.setattr(ume, "emit_task_run", lambda run, user_id=None: None)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["trigger", "manual_demo", "--user-id", "alice"])
+    result = runner.invoke(app, ["trigger", "manual_demo", "--user-id", "bob"])
+
     assert result.exit_code == 0
 
 
@@ -64,7 +65,8 @@ def test_run_command_temporal(monkeypatch):
     monkeypatch.setattr(backend, "run_workflow_sync", fake_run)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["run", "dummy", "--temporal", "--user-id", "alice"])
+    result = runner.invoke(app, ["run", "dummy", "--temporal", "--user-id", "bob"])
+
     assert result.exit_code == 0
     assert called["workflow"] == "DummyTask"
 
@@ -522,9 +524,8 @@ def test_cli_run_async(monkeypatch):
     monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda *a, **k: None)
 
     runner = CliRunner()
-    result = runner.invoke(
-        app, ["run-async", "async_demo", "--user-id", "alice"]
-    )
+    result = runner.invoke(app, ["run-async", "async_demo", "--user-id", "alice"])
+
 
     assert result.exit_code == 0
     assert steps == ["run"]

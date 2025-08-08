@@ -49,7 +49,7 @@ def test_audit_log_persists_and_captures_failure(monkeypatch, tmp_path):
 
     pipeline = TaskPipeline(FailingTask())
     with pytest.raises(RuntimeError):
-        pipeline.execute()
+        pipeline.execute(user_id="alice")
 
     store = StageStore()
     events = store.get_events("FailingTask", category="audit")
@@ -67,7 +67,7 @@ def test_audit_log_records_success_with_output(monkeypatch, tmp_path):
     _init_store(monkeypatch, tmp_path)
 
     pipeline = TaskPipeline(SuccessTask())
-    assert pipeline.execute() == "done"
+    assert pipeline.execute(user_id="alice") == "done"
 
     store = StageStore()
     events = store.get_events("SuccessTask", category="audit")
@@ -80,7 +80,7 @@ def test_audit_log_records_precheck_failure(monkeypatch, tmp_path):
 
     pipeline = TaskPipeline(PrecheckFailTask())
     with pytest.raises(PrecheckError):
-        pipeline.execute()
+        pipeline.execute(user_id="alice")
 
     store = StageStore()
     events = store.get_events("PrecheckFailTask", category="audit")
@@ -101,7 +101,7 @@ def test_audit_log_records_partial_output_on_failure(monkeypatch, tmp_path):
 
     pipeline = TaskPipeline(PartialOutputTask())
     with pytest.raises(RuntimeError, match="emit fail"):
-        pipeline.execute()
+        pipeline.execute(user_id="alice")
 
     store = StageStore()
     events = store.get_events("PartialOutputTask", category="audit")

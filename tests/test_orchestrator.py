@@ -74,7 +74,7 @@ def test_pipeline_without_optional(monkeypatch):
             return "done"
 
     pipeline = TaskPipeline(Simple())
-    result = pipeline.run()
+    result = pipeline.run(user_id="bob")
 
     assert result == "done"
     assert emitted == ["intake", "research", "planning", "run", "verification"]
@@ -103,7 +103,7 @@ def test_pipeline_group_id(monkeypatch):
             return "ok"
 
     pipeline = TaskPipeline(Simple())
-    pipeline.run(group_id="team1")
+    pipeline.run(user_id="alice", group_id="team1")
 
     gids = [g for _, g in emitted]
     assert gids and all(g == "team1" for g in gids)
@@ -138,7 +138,7 @@ def test_scheduler_runs_pipeline(monkeypatch):
 
     sched = BaseScheduler()
     sched.register_task("demo", Demo(steps))
-    result = sched.run_task("demo")
+    result = sched.run_task("demo", user_id="alice")
 
     assert result == "ok"
     assert steps == ["intake", "run"]
@@ -161,7 +161,7 @@ def test_plan_result_passed_to_run(monkeypatch):
 
     task = PlanTask()
     pipeline = TaskPipeline(task)
-    result = pipeline.run()
+    result = pipeline.run(user_id="alice")
 
     assert result == "myplan"
     assert task.received == "myplan"
@@ -190,7 +190,7 @@ def test_nested_task_execution(monkeypatch):
             return result
 
     pipeline = TaskPipeline(Parent())
-    result = pipeline.run()
+    result = pipeline.run(user_id="alice")
 
     assert result == ["a", "b"]
     assert steps == ["run-a", "run-b", "verify-['a', 'b']"]
@@ -219,7 +219,7 @@ def test_nested_tasks_parent_run(monkeypatch):
             return results
 
     pipeline = TaskPipeline(Parent())
-    result = pipeline.run()
+    result = pipeline.run(user_id="alice")
 
     assert result == ["x", "y"]
     assert steps == ["run-x", "run-y", "parent-run-['x', 'y']"]
@@ -251,7 +251,7 @@ def test_subtask_results_resolved_sync(monkeypatch):
 
     parent = Parent()
     pipeline = TaskPipeline(parent)
-    result = pipeline.run()
+    result = pipeline.run(user_id="alice")
 
     assert result == ["sync", "async"]
     assert parent.received == ["sync", "async"]
@@ -285,7 +285,7 @@ async def test_subtask_results_resolved_async(monkeypatch):
 
     parent = Parent()
     pipeline = TaskPipeline(parent)
-    result = await pipeline.run()
+    result = await pipeline.run(user_id="alice")
 
     assert result == ["sync", "async"]
     assert parent.received == ["sync", "async"]
@@ -310,7 +310,7 @@ def test_precheck_failure_stops_pipeline(monkeypatch):
     pipeline = TaskPipeline(PrecheckTask())
 
     with pytest.raises(RuntimeError):
-        pipeline.run()
+        pipeline.run(user_id="alice")
 
     assert steps == ["precheck"]
 
@@ -336,7 +336,7 @@ def test_parallel_execution_dict(monkeypatch):
             return {"execution": "parallel", "tasks": [Child("a"), Child("b")]} 
 
     pipeline = TaskPipeline(Parent())
-    result = pipeline.run()
+    result = pipeline.run(user_id="alice")
 
     assert sorted(result) == ["a", "b"]
 
@@ -357,7 +357,7 @@ def test_parallel_execution_object(monkeypatch):
             return ParallelPlan([Child("x"), Child("y")])
 
     pipeline = TaskPipeline(Parent())
-    result = pipeline.run()
+    result = pipeline.run(user_id="alice")
 
     assert sorted(result) == ["x", "y"]
 
@@ -389,7 +389,7 @@ def test_async_verify(monkeypatch, tmp_path):
             return f"verified:{result}"
 
     pipeline = TaskPipeline(AsyncTask())
-    result = pipeline.run()
+    result = pipeline.run(user_id="alice")
 
     assert result == "verified:done"
     assert stages == ["intake", "research", "planning", "run", "verification"]
@@ -408,7 +408,7 @@ def test_pipeline_run_async(monkeypatch):
             return "ok"
 
     pipeline = TaskPipeline(AsyncTask())
-    result = asyncio.run(pipeline.run_async())
+    result = asyncio.run(pipeline.run_async(user_id="alice"))
     assert result == "ok"
 
 
@@ -443,7 +443,7 @@ def test_run_async_parallel_plan(monkeypatch, tmp_path):
             return ParallelPlan([Child("a"), Child("b")])
 
     pipeline = TaskPipeline(Parent())
-    result = asyncio.run(pipeline.run_async())
+    result = asyncio.run(pipeline.run_async(user_id="alice"))
 
     assert sorted(result) == ["a", "b"]
     assert stages == ["intake", "research", "planning", "run", "verification"]

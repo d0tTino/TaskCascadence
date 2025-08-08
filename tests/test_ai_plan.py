@@ -14,7 +14,7 @@ def test_ai_plan_module_used(monkeypatch):
             return plan
 
     task = DemoTask()
-    result = TaskPipeline(task).run()
+    result = TaskPipeline(task).run(user_id="alice")
 
     assert result == "auto"
     mock_ai_plan.plan.assert_called_once_with(task)

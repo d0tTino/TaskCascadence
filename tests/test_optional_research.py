@@ -32,7 +32,7 @@ def test_pipeline_runs_without_tino_storm(monkeypatch):
             return "ok"
 
     pipeline = TaskPipeline(ResearchTask())
-    result = pipeline.run()
+    result = pipeline.run(user_id="u1")
 
     assert result == "ok"
     assert emitted == ["intake", "research", "planning", "run", "verification"]

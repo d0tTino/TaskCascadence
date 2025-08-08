@@ -52,7 +52,7 @@ def test_financial_decision_support(monkeypatch):
 
     dispatched = []
 
-    def fake_dispatch(event, payload, user_id=None, group_id=None):
+    def fake_dispatch(event, payload, user_id, group_id=None):
         dispatched.append((event, payload, user_id, group_id))
 
     monkeypatch.setattr(fds, "request_with_retry", fake_request)

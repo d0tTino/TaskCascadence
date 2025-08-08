@@ -85,6 +85,9 @@ def run_task(
     """Execute ``name`` and return its result."""
     sched = get_default_scheduler()
     try:
+        if user_id is None:
+            raise HTTPException(400, "user_id is required")
+
         kwargs: dict[str, Any] = {"use_temporal": temporal, "user_id": user_id}
         if group_id is not None:
             kwargs["group_id"] = group_id
@@ -104,6 +107,9 @@ async def run_task_async(
     """Execute ``name`` asynchronously and return its result."""
     sched = get_default_scheduler()
     try:
+        if user_id is None:
+            raise HTTPException(400, "user_id is required")
+
         kwargs: dict[str, Any] = {"use_temporal": temporal, "user_id": user_id}
         if group_id is not None:
             kwargs["group_id"] = group_id
@@ -154,13 +160,19 @@ def disable_task(name: str):
 
 
 @app.post("/tasks/{name}/pause")
-def pause_task(name: str):
+def pause_task(
+    name: str,
+    user_id: str | None = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
+):
     """Pause ``name`` so it temporarily stops running."""
     sched = get_default_scheduler()
     try:
         pipeline = get_pipeline(name)
         if pipeline:
-            pipeline.pause()
+            if user_id is None:
+                raise HTTPException(400, "user_id is required")
+            pipeline.pause(user_id=user_id, group_id=group_id)
         else:
             sched.pause_task(name)
         return {"status": "paused"}
@@ -169,13 +181,19 @@ def pause_task(name: str):
 
 
 @app.post("/tasks/{name}/resume")
-def resume_task(name: str):
+def resume_task(
+    name: str,
+    user_id: str | None = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
+):
     """Resume a previously paused task."""
     sched = get_default_scheduler()
     try:
         pipeline = get_pipeline(name)
         if pipeline:
-            pipeline.resume()
+            if user_id is None:
+                raise HTTPException(400, "user_id is required")
+            pipeline.resume(user_id=user_id, group_id=group_id)
         else:
             sched.resume_task(name)
         return {"status": "resumed"}
@@ -238,6 +256,8 @@ def suggestion_accept(
     """Accept a suggestion and enqueue its task."""
 
     engine = get_default_engine()
+    if user_id is None:
+        raise HTTPException(400, "user_id is required")
     engine.accept(suggestion_id, user_id=user_id, group_id=group_id)
     return {"status": "accepted"}
 
@@ -251,6 +271,8 @@ def suggestion_snooze(
     """Snooze a suggestion."""
 
     engine = get_default_engine()
+    if user_id is None:
+        raise HTTPException(400, "user_id is required")
     engine.snooze(suggestion_id, user_id=user_id, group_id=group_id)
     return {"status": "snoozed"}
 

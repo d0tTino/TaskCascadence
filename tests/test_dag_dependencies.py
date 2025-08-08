@@ -35,11 +35,11 @@ def test_dependency_deduplication(tmp_path, monkeypatch):
     a = TaskA(log)
     b = TaskB(log)
     c = TaskC(log)
-    sched.register_task(c, "* * * * *")
-    sched.register_task(b, "* * * * *", dependencies=["TaskC"])
-    sched.register_task(a, "* * * * *", dependencies=["TaskB", "TaskC"])
+    sched.register_task(c, "* * * * *", user_id="alice")
+    sched.register_task(b, "* * * * *", dependencies=["TaskC"], user_id="alice")
+    sched.register_task(a, "* * * * *", dependencies=["TaskB", "TaskC"], user_id="alice")
 
-    sched.run_task("TaskA")
+    sched.run_task("TaskA", user_id="alice")
 
     assert log == ["C", "B", "A"]
 
@@ -61,9 +61,9 @@ def test_wrap_task_paused(tmp_path, monkeypatch):
     log = []
     sched = DagCronScheduler(timezone="UTC", storage_path=tmp_path / "s.yml")
     t = TaskA(log)
-    sched.register_task(t, "* * * * *")
+    sched.register_task(t, "* * * * *", user_id="alice")
     sched.pause_task("TaskA")
-    runner = sched._wrap_task(t)
+    runner = sched._wrap_task(t, user_id="alice")
     runner()
     assert log == []
     sched.resume_task("TaskA")
