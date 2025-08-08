@@ -104,7 +104,7 @@ def list_tasks() -> None:
 def run_task(
     name: str,
     temporal: bool = typer.Option(False, "--temporal", help="Execute via Temporal"),
-    user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+    user_id: str = typer.Option(..., "--user-id", help="User ID for UME events"),
 ) -> None:
     """Run ``NAME`` if it exists and is enabled."""
 
@@ -124,7 +124,7 @@ def run_task(
 def run_task_async(
     name: str,
     temporal: bool = typer.Option(False, "--temporal", help="Execute via Temporal"),
-    user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+    user_id: str = typer.Option(..., "--user-id", help="User ID for UME events"),
 ) -> None:
     """Run ``NAME`` asynchronously if it exists and is enabled."""
 
@@ -148,7 +148,7 @@ def run_task_async(
 @app.command("trigger")
 def manual_trigger(
     name: str,
-    user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+    user_id: str = typer.Option(..., "--user-id", help="User ID for UME events"),
 ) -> None:
     """Run ``NAME`` if it is a ManualTrigger task."""
 
@@ -209,7 +209,7 @@ def resume_task(name: str) -> None:
 def schedule_task(
     name: str,
     expression: str,
-    user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+    user_id: str = typer.Option(..., "--user-id", help="User ID for UME events"),
 ) -> None:
     """Schedule ``NAME`` according to ``EXPRESSION``."""
 

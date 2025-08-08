@@ -79,7 +79,7 @@ def test_list_tasks(monkeypatch, tmp_path):
 def test_run_task(monkeypatch, tmp_path):
     sched, task = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    resp = client.post("/tasks/dummy/run")
+    resp = client.post("/tasks/dummy/run", headers={"X-User-ID": "alice"})
     assert resp.status_code == 200
     assert resp.json() == {"result": "ok"}
     assert task.ran == 1
@@ -90,7 +90,7 @@ def test_run_task_async_endpoint(monkeypatch, tmp_path):
     async_task = AsyncTask()
     sched.register_task(name_or_task="async", task_or_expr=async_task)
     client = TestClient(app)
-    resp = client.post("/tasks/async/run-async")
+    resp = client.post("/tasks/async/run-async", headers={"X-User-ID": "alice"})
     assert resp.status_code == 200
     assert resp.json() == {"result": "async"}
 
@@ -119,7 +119,10 @@ def test_run_task_group_header(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     monkeypatch.setattr(sched, "run_task", fake_run)
     client = TestClient(app)
-    client.post("/tasks/dummy/run", headers={"X-Group-ID": "team"})
+    client.post(
+        "/tasks/dummy/run",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
     assert called["gid"] == "team"
 
 
@@ -195,7 +198,7 @@ def test_schedule_task_group_header(monkeypatch, tmp_path):
     client.post(
         "/tasks/dummy/schedule",
         params={"expression": "*/5 * * * *"},
-        headers={"X-Group-ID": "team"},
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
     )
     assert called["gid"] == "team"
 
@@ -203,7 +206,11 @@ def test_schedule_task_group_header(monkeypatch, tmp_path):
 def test_schedule_task(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    resp = client.post("/tasks/dummy/schedule", params={"expression": "*/5 * * * *"})
+    resp = client.post(
+        "/tasks/dummy/schedule",
+        params={"expression": "*/5 * * * *"},
+        headers={"X-User-ID": "alice"},
+    )
     assert resp.status_code == 200
     job = sched.scheduler.get_job("DummyTask")
     assert job is not None
@@ -225,7 +232,10 @@ def test_register_task(monkeypatch, tmp_path):
     assert "dynamic" in [name for name, _ in sched.list_tasks()]
     data = yaml.safe_load(open(tmp_path / "tasks.yml").read())
     assert "tests.test_api:DynamicTask" in data
-    run = client.post("/tasks/dynamic/run")
+    run = client.post(
+        "/tasks/dynamic/run",
+        headers={"X-User-ID": "alice"},
+    )
     assert run.status_code == 200
     assert run.json()["result"] == "dyn"
 
