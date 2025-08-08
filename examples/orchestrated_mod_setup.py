@@ -4,7 +4,7 @@ import asyncio
 
 from task_cascadence.scheduler.dag import DagCronScheduler
 from task_cascadence.plugins import CronTask
-from task_cascadence.ume import emit_stage_update
+from task_cascadence.ume import emit_stage_update_event
 
 
 def plan_mod_setup() -> list[str]:
@@ -36,7 +36,7 @@ class ModSetup(CronTask):
                 print("Installing mod")
             elif step == "enable":
                 print("Enabling mod")
-            emit_stage_update("mod_setup", step)
+            emit_stage_update_event("mod_setup", step)
 
     def verify(self, _result: None) -> None:
         print("Mod enabled and verified")

@@ -20,6 +20,7 @@ from .models import (
     TaskNote,
     IdeaSeed,
     StageUpdate,
+    AuditEvent,
 )
 from ..stage_store import StageStore
 from ..idea_store import IdeaStore
@@ -126,13 +127,16 @@ def emit_audit_log(
     task_name: str,
     stage: str,
     status: str,
+    client: Any | None = None,
     *,
     reason: str | None = None,
     output: str | None = None,
     user_id: str | None = None,
     group_id: str | None = None,
-) -> None:
-    """Record a state transition with optional details."""
+
+    use_asyncio: bool = False,
+) -> asyncio.Task | threading.Thread | None:
+    """Persist and emit an audit log entry using the configured transport."""
 
     store = _get_stage_store()
     user_hash = _hash_user_id(user_id) if user_id is not None else None
@@ -146,6 +150,24 @@ def emit_audit_log(
         output=output,
         category="audit",
     )
+    target = client or _default_client
+    if target is None:
+        return None
+    event = AuditEvent(task_name=task_name, stage=stage, status=status)
+    if reason is not None:
+        event.reason = reason
+    if output is not None:
+        event.output = output
+    if user_id is not None:
+        event.user_id = user_id
+        event.user_hash = _hash_user_id(user_id)
+    if group_id is not None:
+        event.group_id = group_id
+    if use_asyncio:
+        return asyncio.get_running_loop().create_task(
+            _async_queue_within_deadline(event, target)
+        )
+    return _queue_within_deadline(event, target)
 
 
 def configure_transport(transport: str, **kwargs: Any) -> None:

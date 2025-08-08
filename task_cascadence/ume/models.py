@@ -29,6 +29,9 @@ IdeaSeed = tasks_pb2.IdeaSeed  # type: ignore[attr-defined]
 StageUpdate = tasks_pb2.StageUpdate  # type: ignore[attr-defined]
 """Pipeline stage change message."""
 
+AuditEvent = tasks_pb2.AuditEvent  # type: ignore[attr-defined]
+"""Detailed audit log entry."""
+
 __all__ = [
     "TaskSpec",
     "TaskRun",
@@ -37,4 +40,5 @@ __all__ = [
     "TaskNote",
     "IdeaSeed",
     "StageUpdate",
+    "AuditEvent",
 ]

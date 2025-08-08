@@ -6,7 +6,7 @@ from task_cascadence.cli import app
 from task_cascadence.scheduler import BaseScheduler
 from task_cascadence.plugins import ExampleTask
 from task_cascadence.ume import _hash_user_id, emit_task_note, emit_idea_seed
-from task_cascadence.ume.models import TaskNote, IdeaSeed, StageUpdate
+from task_cascadence.ume.models import AuditEvent, IdeaSeed, StageUpdate, TaskNote
 
 
 class DemoTask:
@@ -175,3 +175,41 @@ def test_emit_stage_update_event_default_client(monkeypatch, tmp_path):
     assert client.events[0].group_id == "devs"
     data = yaml.safe_load((tmp_path / "events.yml").read_text())
     assert data["demo"][0]["user_id"] == _hash_user_id("bob")
+
+
+def test_emit_audit_log_emits_event(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "audit.yml"))
+
+    class Client:
+        def __init__(self) -> None:
+            self.events = []
+
+        def enqueue(self, obj) -> None:
+            self.events.append(obj)
+
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+    client = Client()
+
+    ume.emit_audit_log(
+        "demo",
+        "run",
+        "success",
+        client,
+        user_id="carol",
+        group_id="devs",
+        output="done",
+    )
+
+    assert isinstance(client.events[0], AuditEvent)
+    assert client.events[0].user_hash == _hash_user_id("carol")
+    assert client.events[0].user_id == "carol"
+    assert client.events[0].group_id == "devs"
+    assert client.events[0].status == "success"
+    assert client.events[0].output == "done"
+
+    data = yaml.safe_load((tmp_path / "audit.yml").read_text())
+    key = "demo:audit"
+    assert data[key][0]["user_id"] == _hash_user_id("carol")
+    assert data[key][0]["status"] == "success"
