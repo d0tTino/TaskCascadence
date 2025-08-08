@@ -78,7 +78,7 @@ def test_run_emits_result(monkeypatch, tmp_path):
     monkeypatch.setattr(ume, "emit_task_run", fake_emit)
     sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
     task = DummyTask()
-    sched.register_task(name_or_task=task, task_or_expr="*/1 * * * *")
+    sched.register_task(name_or_task=task, task_or_expr="*/1 * * * *", user_id="alice")
     job = sched.scheduler.get_job("DummyTask")
     job.func()
     assert emitted_run is not None
@@ -149,7 +149,7 @@ def test_metrics_increment_for_job(tmp_path, monkeypatch):
     # Prevent actual event emission
     monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run, user_id=None: None)
 
-    sched.register_task(name_or_task=task, task_or_expr="*/1 * * * *")
+    sched.register_task(name_or_task=task, task_or_expr="*/1 * * * *", user_id="alice")
     job = sched.scheduler.get_job("DummyTask")
 
     success = metrics.TASK_SUCCESS.labels("DummyTask")
@@ -236,7 +236,7 @@ def test_run_task_metrics_success(monkeypatch):
     before_success = success._value.get()
     before_failure = failure._value.get()
 
-    result = sched.run_task("simple")
+    result = sched.run_task("simple", user_id="alice")
 
     assert result == "ok"
     assert success._value.get() == before_success + 1
@@ -264,7 +264,7 @@ def test_run_task_metrics_failure(monkeypatch):
     before_failure = failure._value.get()
 
     with pytest.raises(RuntimeError):
-        sched.run_task("boom")
+        sched.run_task("boom", user_id="alice")
 
     assert success._value.get() == before_success
     assert failure._value.get() == before_failure + 1
@@ -351,7 +351,7 @@ def test_scheduled_job_runs_pipeline(monkeypatch, tmp_path):
 
     sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
     task = DemoTask()
-    sched.register_task(name_or_task=task, task_or_expr="* * * * *")
+    sched.register_task(name_or_task=task, task_or_expr="* * * * *", user_id="alice")
 
     job = sched.scheduler.get_job("DemoTask")
     assert job is not None

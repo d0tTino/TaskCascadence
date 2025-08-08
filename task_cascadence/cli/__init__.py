@@ -174,13 +174,18 @@ def disable_task(name: str) -> None:
 
 
 @app.command("pause")
-def pause_task(name: str) -> None:
+def pause_task(
+    name: str,
+    user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+) -> None:
     """Pause ``NAME`` so it temporarily stops running."""
 
     try:
         pipeline = get_pipeline(name)
         if pipeline:
-            pipeline.pause()
+            if user_id is None:
+                raise typer.BadParameter("--user-id is required when pausing a running task")
+            pipeline.pause(user_id=user_id)
         else:
             get_default_scheduler().pause_task(name)
         typer.echo(f"{name} paused")
@@ -190,13 +195,18 @@ def pause_task(name: str) -> None:
 
 
 @app.command("resume")
-def resume_task(name: str) -> None:
+def resume_task(
+    name: str,
+    user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+) -> None:
     """Resume a paused task called ``NAME``."""
 
     try:
         pipeline = get_pipeline(name)
         if pipeline:
-            pipeline.resume()
+            if user_id is None:
+                raise typer.BadParameter("--user-id is required when resuming a running task")
+            pipeline.resume(user_id=user_id)
         else:
             get_default_scheduler().resume_task(name)
         typer.echo(f"{name} resumed")

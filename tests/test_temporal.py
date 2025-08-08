@@ -25,7 +25,7 @@ def test_run_task_via_temporal(monkeypatch):
 
     monkeypatch.setattr(backend, "run_workflow_sync", fake_run)
 
-    result = scheduler.run_task("dummy")
+    result = scheduler.run_task("dummy", user_id="alice")
     assert result == "remote"
     assert called["workflow"] == "DummyTask"
 

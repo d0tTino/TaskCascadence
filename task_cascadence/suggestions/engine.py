@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
-import inspect
 from uuid import uuid4
 
 from ..scheduler import get_default_scheduler
@@ -127,37 +126,16 @@ class SuggestionEngine:
     def accept(
         self,
         suggestion_id: str,
-        user_id: str | None = None,
+        user_id: str,
         group_id: str | None = None,
     ) -> None:
         suggestion = self.get(suggestion_id)
         suggestion.state = "accepted"
         if suggestion.task_name:
             scheduler = get_default_scheduler()
-            params = inspect.signature(scheduler.run_task).parameters
-            if "user_id" in params and "group_id" in params:
-                if user_id is None and group_id is None:
-                    scheduler.run_task(suggestion.task_name)
-                elif group_id is None:
-                    scheduler.run_task(suggestion.task_name, user_id=user_id)
-                elif user_id is None:
-                    scheduler.run_task(suggestion.task_name, group_id=group_id)
-                else:
-                    scheduler.run_task(
-                        suggestion.task_name, user_id=user_id, group_id=group_id
-                    )
-            elif "user_id" in params:
-                if user_id is None:
-                    scheduler.run_task(suggestion.task_name)
-                else:
-                    scheduler.run_task(suggestion.task_name, user_id=user_id)
-            elif "group_id" in params:
-                if group_id is None:
-                    scheduler.run_task(suggestion.task_name)
-                else:
-                    scheduler.run_task(suggestion.task_name, group_id=group_id)
-            else:
-                scheduler.run_task(suggestion.task_name)
+            scheduler.run_task(
+                suggestion.task_name, user_id=user_id, group_id=group_id
+            )
         emit_acceptance_event(suggestion.title, user_id=user_id, group_id=group_id)
         record_suggestion_decision(
             suggestion.title, "accepted", user_id=user_id, group_id=group_id

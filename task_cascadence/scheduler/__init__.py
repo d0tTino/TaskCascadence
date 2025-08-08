@@ -83,6 +83,9 @@ class BaseScheduler:
             raise ValueError(f"Task '{name}' is disabled")
         if info.get("paused"):
             raise ValueError(f"Task '{name}' is paused")
+        if user_id is None:
+            raise ValueError("user_id is required")
+        uid = user_id
         task = info["task"]
 
         if (use_temporal or (use_temporal is None and self._temporal)):
@@ -116,7 +119,7 @@ class BaseScheduler:
                         pipeline = TaskPipeline(task)
                         add_pipeline(name, pipeline)
                         try:
-                            result = pipeline.run(user_id=user_id, group_id=group_id)
+                            result = pipeline.run(user_id=uid, group_id=group_id)
                             if inspect.iscoroutine(result):
                                 try:
                                     asyncio.get_running_loop()

@@ -15,5 +15,5 @@ def test_async_verify(monkeypatch):
     monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
     monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
     pipeline = TaskPipeline(DemoTask())
-    result = pipeline.run()
+    result = pipeline.run(user_id="alice")
     assert result == "verified-ok"

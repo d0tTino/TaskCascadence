@@ -15,13 +15,23 @@ def subscribe(event: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     return decorator
 
 
-def dispatch(event: str, *args: Any, **kwargs: Any) -> Any:
+def dispatch(
+    event: str,
+    *args: Any,
+    user_id: str | None = None,
+    group_id: str | None = None,
+    **kwargs: Any,
+) -> Any:
     """Dispatch *event* to the registered workflow."""
 
+    if user_id is None:
+        raise ValueError("user_id is required")
     handler = _registry.get(event)
     if not handler:
         raise ValueError(f"No workflow registered for {event}")
-    return handler(*args, **kwargs)
+    if group_id is None:
+        return handler(*args, user_id=user_id, **kwargs)
+    return handler(*args, user_id=user_id, group_id=group_id, **kwargs)
 
 
 # Import built-in workflows so they register themselves

@@ -101,15 +101,15 @@ def test_pause_running_pipeline(monkeypatch, tmp_path):
     monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda *a, **k: None)
 
     runner = CliRunner()
-    thread = threading.Thread(target=lambda: sched.run_task("slow"))
+    thread = threading.Thread(target=lambda: sched.run_task("slow", user_id="bob"))
     thread.start()
     time.sleep(0.05)
-    result = runner.invoke(app, ["pause", "slow"])
+    result = runner.invoke(app, ["pause", "slow", "--user-id", "bob"])
     assert result.exit_code == 0
     pipeline = get_pipeline("slow")
     assert pipeline is not None and pipeline._paused is True
     assert thread.is_alive()
-    result = runner.invoke(app, ["resume", "slow"])
+    result = runner.invoke(app, ["resume", "slow", "--user-id", "bob"])
     assert result.exit_code == 0
     thread.join()
     assert pipeline._paused is False
@@ -149,7 +149,7 @@ def test_pipeline_pause_non_blocking(monkeypatch):
             return "ok"
 
     pipeline = TaskPipeline(SimpleTask())
-    pipeline.pause()
+    pipeline.pause(user_id="alice")
 
     ran = {"flag": False}
 
@@ -159,10 +159,10 @@ def test_pipeline_pause_non_blocking(monkeypatch):
 
     async def resume_later() -> None:
         await asyncio.sleep(0.05)
-        pipeline.resume()
+        pipeline.resume(user_id="alice")
 
     async def runner() -> str:
-        result = pipeline.run()
+        result = pipeline.run(user_id="alice")
         if inspect.isawaitable(result):
             result = await result
         return result

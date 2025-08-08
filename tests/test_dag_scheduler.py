@@ -38,11 +38,11 @@ def test_run_respects_dependencies(tmp_path, monkeypatch):
     b = TaskB(log)
     c = TaskC(log)
 
-    sched.register_task(c, "* * * * *")
-    sched.register_task(b, "* * * * *", dependencies=["TaskC"])
-    sched.register_task(a, "* * * * *", dependencies=["TaskB", "TaskC"])
+    sched.register_task(c, "* * * * *", user_id="alice")
+    sched.register_task(b, "* * * * *", dependencies=["TaskC"], user_id="alice")
+    sched.register_task(a, "* * * * *", dependencies=["TaskB", "TaskC"], user_id="alice")
 
-    sched.run_task("TaskA")
+    sched.run_task("TaskA", user_id="alice")
 
     assert log == ["C", "B", "A"]
 
@@ -55,11 +55,11 @@ def test_cycle_detection(tmp_path, monkeypatch):
     a = TaskA(log)
     b = TaskB(log)
 
-    sched.register_task(a, "* * * * *", dependencies=["TaskB"])
-    sched.register_task(b, "* * * * *", dependencies=["TaskA"])
+    sched.register_task(a, "* * * * *", dependencies=["TaskB"], user_id="alice")
+    sched.register_task(b, "* * * * *", dependencies=["TaskA"], user_id="alice")
 
     with pytest.raises(ValueError):
-        sched.run_task("TaskA")
+        sched.run_task("TaskA", user_id="alice")
 
 
 def test_restore_dag_from_file(tmp_path, monkeypatch):
@@ -71,9 +71,9 @@ def test_restore_dag_from_file(tmp_path, monkeypatch):
     b = TaskB(log)
     a = TaskA(log)
 
-    sched.register_task(c, "*/5 * * * *")
-    sched.register_task(b, "*/5 * * * *", dependencies=["TaskC"])
-    sched.register_task(a, "*/5 * * * *", dependencies=["TaskB"])
+    sched.register_task(c, "*/5 * * * *", user_id="alice")
+    sched.register_task(b, "*/5 * * * *", dependencies=["TaskC"], user_id="alice")
+    sched.register_task(a, "*/5 * * * *", dependencies=["TaskB"], user_id="alice")
 
     data = yaml.safe_load((tmp_path / "s.yml").read_text())
     assert data["TaskA"]["deps"] == ["TaskB"]

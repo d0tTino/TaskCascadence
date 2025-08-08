@@ -1,4 +1,6 @@
 
+from typing import Any
+
 from task_cascadence.workflows import dispatch
 from task_cascadence.workflows import calendar_event_creation as cec
 
@@ -44,13 +46,12 @@ def test_calendar_event_creation(monkeypatch):
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
     monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
-    monkeypatch.setattr(cec, "emit_task_note", fake_emit_note)
     monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
     monkeypatch.setattr(cec.research, "gather", fake_gather)
     monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
-    monkeypatch.setattr(cec, "emit_task_note", lambda *a, **kw: None)
+    monkeypatch.setattr(cec, "emit_task_note", fake_emit_note)
 
-    def fake_dispatch(event, data, *, user_id=None, group_id=None):
+    def fake_dispatch(event, data, *, user_id, group_id=None):
         dispatched["event"] = (event, data, user_id, group_id)
 
     monkeypatch.setattr(cec, "dispatch", fake_dispatch)
