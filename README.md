@@ -305,7 +305,9 @@ This endpoint returns the chronological audit trail for ``MyTask``.
 
 ``CronScheduler`` persists recurrence rules in ``schedules.yml``.  The file is
 created next to the running application unless ``storage_path`` is overridden
-and maps task names to cron expressions and optional context:
+and maps task names to cron expressions and optional context.  Schedules may be
+specified directly with an ``expr`` field or by referencing a UME calendar
+event:
 
 ```yaml
 ExampleTask:
@@ -314,6 +316,16 @@ ExampleTask:
   group_id: ops
   recurrence:
     note: "every day at noon"
+
+Another form references an existing calendar event. The scheduler fetches the
+event's recurrence rule and applies it, optionally polling for changes:
+
+```yaml
+ExampleTask:
+  calendar_event:
+    node: "evt123"
+    poll: 3600  # refresh every hour
+```
 ```
 
 The scheduler reloads this file on startup and recreates any jobs whose task
