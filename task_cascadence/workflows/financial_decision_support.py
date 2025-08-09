@@ -17,7 +17,12 @@ def financial_decision_support(
     engine_base: str = "http://finance-engine",
 ) -> Dict[str, Any]:
     """Aggregate financial data, run a debt simulation, and persist results."""
-    group_id = payload.get("group_id")
+    payload_group_id = payload.get("group_id")
+    if payload_group_id is not None and payload_group_id != group_id:
+        emit_stage_update_event(
+            "finance.decision.result", "error", user_id=user_id, group_id=group_id
+        )
+        raise ValueError("Payload group_id does not match caller group_id")
     time_horizon = payload.get("time_horizon")
 
     required_fields = {"budget", "max_options"}
