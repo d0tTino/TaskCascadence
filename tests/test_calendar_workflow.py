@@ -1,8 +1,35 @@
 
 from typing import Any
 
-from task_cascadence.workflows import dispatch
-from task_cascadence.workflows import calendar_event_creation as cec
+import pytest
+
+import importlib.util
+import sys
+from pathlib import Path
+
+package = importlib.util.module_from_spec(
+    importlib.machinery.ModuleSpec("task_cascadence", loader=None)
+)
+package.__path__ = [str(Path(__file__).resolve().parent.parent / "task_cascadence")]
+sys.modules["task_cascadence"] = package
+
+workflows_spec = importlib.util.spec_from_file_location(
+    "task_cascadence.workflows", Path("task_cascadence/workflows/__init__.py")
+)
+workflows = importlib.util.module_from_spec(workflows_spec)
+sys.modules["task_cascadence.workflows"] = workflows
+assert workflows_spec.loader is not None
+workflows_spec.loader.exec_module(workflows)
+dispatch = workflows.dispatch
+
+cec_spec = importlib.util.spec_from_file_location(
+    "task_cascadence.workflows.calendar_event_creation",
+    Path("task_cascadence/workflows/calendar_event_creation.py"),
+)
+cec = importlib.util.module_from_spec(cec_spec)
+sys.modules["task_cascadence.workflows.calendar_event_creation"] = cec
+assert cec_spec.loader is not None
+cec_spec.loader.exec_module(cec)
 
 
 class DummyResponse:
@@ -48,7 +75,6 @@ def test_calendar_event_creation(monkeypatch):
     monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
     monkeypatch.setattr(cec.research, "gather", fake_gather)
-    monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
     monkeypatch.setattr(cec, "emit_task_note", fake_emit_note)
 
     def fake_dispatch(event, data, *, user_id, group_id=None):
@@ -98,5 +124,89 @@ def test_calendar_event_creation(monkeypatch):
     assert emitted["async_research"] == ("travel time to Cafe", "alice", "g1")
     assert emitted["gather"] == ("travel time to Cafe", "alice", "g1")
     assert emitted["note"] == ("Travel time to Cafe: 15m", "alice", "g1")
+
+
+def test_calendar_event_permission_error(monkeypatch):
+    def fake_request(method, url, timeout, **kwargs):
+        if method == "GET":
+            raise RuntimeError("network down")
+        return DummyResponse({"id": "evt1"})
+
+    audit: dict[str, tuple[str, str, str, str]] = {}
+
+    def fake_emit_audit_log(task_name, stage, status, *, reason=None, user_id=None, group_id=None, **_):
+        audit["log"] = (task_name, stage, status, reason)
+
+    monkeypatch.setattr(cec, "request_with_retry", fake_request)
+    monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
+
+    payload = {"title": "Lunch", "start_time": "2024-01-01T12:00:00Z"}
+
+    with pytest.raises(RuntimeError):
+        dispatch("calendar.event.create_request", payload, user_id="alice")
+
+    assert audit["log"][0] == "calendar.event.create"
+    assert audit["log"][1] == "permission"
+    assert audit["log"][2] == "error"
+    assert "network down" in audit["log"][3]
+
+
+def test_calendar_event_ume_failure(monkeypatch):
+    calls = []
+    counter = {"post": 0}
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append((method, url, kwargs))
+        if method == "GET":
+            return DummyResponse({"allowed": True})
+        if url.endswith("/edges"):
+            return DummyResponse({"ok": True})
+        counter["post"] += 1
+        return DummyResponse({"id": f"evt{counter['post']}"})
+
+    async def fake_async_gather(query, user_id=None, group_id=None):
+        return {"duration": "15m"}
+
+    def fake_gather(query, user_id=None, group_id=None):
+        return {"duration": "15m"}
+
+    audit: dict[str, tuple[str, str, str, str, str | None, str | None]] = {}
+
+    def fake_emit_audit_log(task_name, stage, status, *, reason=None, user_id=None, group_id=None, **_):
+        audit["log"] = (task_name, stage, status, reason, user_id, group_id)
+
+    def fake_emit(*a, **k):
+        pass
+
+    def failing_emit_note(note, user_id=None, group_id=None):
+        raise RuntimeError("ume down")
+
+    monkeypatch.setattr(cec, "request_with_retry", fake_request)
+    monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
+    monkeypatch.setattr(cec.research, "gather", fake_gather)
+    monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
+    monkeypatch.setattr(cec, "emit_task_note", failing_emit_note)
+    monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
+
+    def fake_dispatch(event, data, *, user_id, group_id=None):
+        pass
+
+    monkeypatch.setattr(cec, "dispatch", fake_dispatch)
+
+    payload = {
+        "title": "Lunch",
+        "start_time": "2024-01-01T12:00:00Z",
+        "location": "Cafe",
+    }
+
+    result = dispatch(
+        "calendar.event.create_request", payload, user_id="alice", base_url="http://svc"
+    )
+
+    assert result == {"event_id": "evt1", "related_event_id": "evt2"}
+    assert audit["log"][0] == "calendar.event.create"
+    assert audit["log"][1] == "emit_task_note"
+    assert audit["log"][2] == "error"
+    assert "ume down" in audit["log"][3]
 
 

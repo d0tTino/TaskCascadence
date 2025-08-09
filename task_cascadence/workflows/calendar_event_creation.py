@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import threading
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -9,7 +8,7 @@ from . import dispatch, subscribe
 
 from ..http_utils import request_with_retry
 from .. import research
-from ..ume import emit_stage_update_event, emit_task_note
+from ..ume import emit_stage_update_event, emit_task_note, emit_audit_log
 from ..ume.models import TaskNote
 
 
@@ -47,44 +46,67 @@ def create_calendar_event(
             raise ValueError(f"missing required field: {field}")
 
     group_id = payload.get("group_id")
-
-    travel_task: asyncio.Task | None = None
-    travel_thread: threading.Thread | None = None
+    travel_info: Dict[str, Any] | None = None
     if payload.get("location"):
-        loop = asyncio.new_event_loop()
-
-        async def _inner() -> None:
-            nonlocal travel_task
-            travel_task = asyncio.create_task(
+        try:
+            travel_info = asyncio.run(
                 research.async_gather(
                     f"travel time to {payload['location']}",
                     user_id=user_id,
                     group_id=group_id,
                 )
             )
-            await travel_task
+            research.gather(
+                f"travel time to {payload['location']}",
+                user_id=user_id,
+                group_id=group_id,
+            )
+        except Exception:
+            travel_info = None
 
-        def _run() -> None:  # pragma: no cover - executed in thread
-            asyncio.set_event_loop(loop)
-            loop.run_until_complete(_inner())
-            loop.close()
+    try:
+        if not _has_permission(user_id, ume_base=ume_base):
+            raise PermissionError("user lacks calendar:create permission")
+    except Exception as exc:  # pragma: no cover - network failures
+        emit_audit_log(
+            "calendar.event.create",
+            "permission",
+            "error",
+            reason=str(exc),
+            user_id=user_id,
+            group_id=group_id,
+        )
+        raise
 
-        travel_thread = threading.Thread(target=_run)
-        travel_thread.start()
-
-    if not _has_permission(user_id, ume_base=ume_base):
-        raise PermissionError("user lacks calendar:create permission")
-
-    if group_id and not _has_permission(user_id, ume_base=ume_base, group_id=group_id):
-        raise PermissionError("user lacks group permission")
+    try:
+        if group_id and not _has_permission(user_id, ume_base=ume_base, group_id=group_id):
+            raise PermissionError("user lacks group permission")
+    except Exception as exc:  # pragma: no cover - network failures
+        emit_audit_log(
+            "calendar.event.create",
+            "permission",
+            "error",
+            reason=str(exc),
+            user_id=user_id,
+            group_id=group_id,
+        )
+        raise
 
     invitees: List[str] = payload.get("invitees", []) or []
     for invitee in invitees:
-        if not _has_permission(user_id, ume_base=ume_base, invitee=invitee):
-            raise PermissionError(f"user lacks permission to invite {invitee}")
-
-    if travel_thread:
-        travel_thread.join()
+        try:
+            if not _has_permission(user_id, ume_base=ume_base, invitee=invitee):
+                raise PermissionError(f"user lacks permission to invite {invitee}")
+        except Exception as exc:  # pragma: no cover - network failures
+            emit_audit_log(
+                "calendar.event.create",
+                "permission",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
 
     event_data = dict(payload)
     event_data["user_id"] = user_id
@@ -92,15 +114,8 @@ def create_calendar_event(
         event_data["group_id"] = group_id
 
     related_event: Dict[str, Any] | None = None
-    travel_info: Dict[str, Any] | None = None
-    if travel_task is not None:
+    if travel_info is not None:
         try:
-            travel_info = travel_task.result()
-            research.gather(
-                f"travel time to {payload['location']}",
-                user_id=user_id,
-                group_id=group_id,
-            )
             event_data["travel_time"] = travel_info
             start_dt = datetime.fromisoformat(
                 payload["start_time"].replace("Z", "+00:00")
@@ -169,15 +184,35 @@ def create_calendar_event(
             edge_payload["group_id"] = group_id
         request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
 
-    emit_stage_update_event(
-        "calendar.event.created",
-        "created",
-        user_id=user_id,
-        group_id=group_id,
-        event_id=main_id,
+    try:
+        emit_stage_update_event(
+            "calendar.event.created",
+            "created",
+            user_id=user_id,
+            group_id=group_id,
+            event_id=main_id,
 
-    )
-    emit_task_note(note, user_id=user_id, group_id=group_id)
+        )
+    except Exception as exc:  # pragma: no cover - network failures
+        emit_audit_log(
+            "calendar.event.create",
+            "emit_stage_update_event",
+            "error",
+            reason=str(exc),
+            user_id=user_id,
+            group_id=group_id,
+        )
+    try:
+        emit_task_note(note, user_id=user_id, group_id=group_id)
+    except Exception as exc:  # pragma: no cover - network failures
+        emit_audit_log(
+            "calendar.event.create",
+            "emit_task_note",
+            "error",
+            reason=str(exc),
+            user_id=user_id,
+            group_id=group_id,
+        )
 
     result: Dict[str, Any] = {"event_id": main_id}
     if related_id:
