@@ -32,6 +32,7 @@ assert cec_spec.loader is not None
 cec_spec.loader.exec_module(cec)
 
 
+
 class DummyResponse:
     def __init__(self, data):
         self._data = data
@@ -192,6 +193,7 @@ def test_calendar_event_ume_failure(monkeypatch):
         pass
 
     monkeypatch.setattr(cec, "dispatch", fake_dispatch)
+
 
     payload = {
         "title": "Lunch",
