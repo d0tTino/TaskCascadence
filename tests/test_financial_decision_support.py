@@ -1,5 +1,33 @@
-import task_cascadence.workflows.financial_decision_support as fds
-from task_cascadence.workflows import dispatch
+import pytest
+import requests
+import importlib.util
+import importlib.machinery
+import sys
+from pathlib import Path
+
+package = importlib.util.module_from_spec(
+    importlib.machinery.ModuleSpec("task_cascadence", loader=None)
+)
+package.__path__ = [str(Path(__file__).resolve().parent.parent / "task_cascadence")]
+sys.modules["task_cascadence"] = package
+
+workflows_spec = importlib.util.spec_from_file_location(
+    "task_cascadence.workflows", Path("task_cascadence/workflows/__init__.py")
+)
+workflows = importlib.util.module_from_spec(workflows_spec)
+sys.modules["task_cascadence.workflows"] = workflows
+assert workflows_spec.loader is not None
+workflows_spec.loader.exec_module(workflows)
+dispatch = workflows.dispatch
+
+fds_spec = importlib.util.spec_from_file_location(
+    "task_cascadence.workflows.financial_decision_support",
+    Path("task_cascadence/workflows/financial_decision_support.py"),
+)
+fds = importlib.util.module_from_spec(fds_spec)
+sys.modules["task_cascadence.workflows.financial_decision_support"] = fds
+assert fds_spec.loader is not None
+fds_spec.loader.exec_module(fds)
 
 class DummyResponse:
     def __init__(self, data):
@@ -126,9 +154,114 @@ def test_financial_decision_support_time_horizon(monkeypatch):
     monkeypatch.setattr(fds, "emit_stage_update_event", lambda *a, **k: None)
     monkeypatch.setattr(fds, "dispatch", lambda *a, **k: None)
 
-    dispatch("finance.decision.request", {"time_horizon": "6m"}, user_id="alice")
+    dispatch(
+        "finance.decision.request",
+        {"time_horizon": "6m", "budget": 0, "max_options": 0},
+        user_id="alice",
+    )
 
     assert calls[0][2]["params"]["time_horizon"] == "6m"
     persist = calls[2][2]["json"]
     analysis = next(n for n in persist["nodes"] if n["type"] == "DecisionAnalysis")
     assert analysis["metadata"]["time_horizon"] == "6m"
+
+
+def test_financial_decision_support_ume_error(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append((method, url, kwargs))
+        if method == "GET":
+            raise requests.HTTPError("boom")
+        return DummyResponse({})
+
+    emitted = []
+
+    def fake_emit(name, stage, user_id=None, group_id=None, **_):
+        emitted.append((name, stage, user_id, group_id))
+
+    dispatched = []
+
+    def fake_dispatch(event, payload, user_id, group_id=None):
+        dispatched.append(event)
+
+    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
+    monkeypatch.setattr(fds, "dispatch", fake_dispatch)
+
+    with pytest.raises(requests.HTTPError):
+        dispatch(
+            "finance.decision.request",
+            {"budget": 100, "max_options": 3},
+            user_id="alice",
+        )
+
+    assert len(calls) == 1
+    assert emitted == [("finance.decision.result", "error", "alice", None)]
+    assert "finance.decision.result" not in dispatched
+
+
+def test_financial_decision_support_engine_failure(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append((method, url, kwargs))
+        if method == "GET":
+            return DummyResponse({"nodes": []})
+        elif url.endswith("/v1/simulations/debt"):
+            raise requests.HTTPError("boom")
+        return DummyResponse({})
+
+    emitted = []
+
+    def fake_emit(name, stage, user_id=None, group_id=None, **_):
+        emitted.append((name, stage, user_id, group_id))
+
+    dispatched = []
+
+    def fake_dispatch(event, payload, user_id, group_id=None):
+        dispatched.append(event)
+
+    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
+    monkeypatch.setattr(fds, "dispatch", fake_dispatch)
+
+    with pytest.raises(requests.HTTPError):
+        dispatch(
+            "finance.decision.request",
+            {"budget": 100, "max_options": 3},
+            user_id="alice",
+        )
+
+    assert len(calls) == 2
+    assert emitted == [("finance.decision.result", "error", "alice", None)]
+    assert "finance.decision.result" not in dispatched
+
+
+def test_financial_decision_support_missing_fields(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append((method, url, kwargs))
+        return DummyResponse({})
+
+    emitted = []
+
+    def fake_emit(name, stage, user_id=None, group_id=None, **_):
+        emitted.append((name, stage, user_id, group_id))
+
+    dispatched = []
+
+    def fake_dispatch(event, payload, user_id, group_id=None):
+        dispatched.append(event)
+
+    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
+    monkeypatch.setattr(fds, "dispatch", fake_dispatch)
+
+    with pytest.raises(ValueError):
+        dispatch("finance.decision.request", {}, user_id="alice")
+
+    assert calls == []
+    assert emitted == [("finance.decision.result", "error", "alice", None)]
+    assert "finance.decision.result" not in dispatched
