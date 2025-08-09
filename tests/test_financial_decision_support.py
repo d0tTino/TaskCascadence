@@ -89,9 +89,9 @@ def test_financial_decision_support(monkeypatch):
 
     result = dispatch(
         "finance.decision.request",
-        {"explain": True, "group_id": "g1", "budget": 100, "max_options": 3},
+        {"explain": True, "budget": 100, "max_options": 3},
         user_id="alice",
-
+        group_id="g1",
     )
 
     # ensure UME query
@@ -136,6 +136,23 @@ def test_financial_decision_support(monkeypatch):
 
     assert result["analysis"] == "da1"
     assert result["summary"]["cost_of_deviation"] == 50
+
+
+def test_financial_decision_support_group_id_mismatch(monkeypatch):
+    def fake_request(*a, **k):
+        raise AssertionError("request should not be called")
+
+    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "emit_stage_update_event", lambda *a, **k: None)
+    monkeypatch.setattr(fds, "dispatch", lambda *a, **k: None)
+
+    with pytest.raises(ValueError):
+        dispatch(
+            "finance.decision.request",
+            {"group_id": "g2", "budget": 0, "max_options": 0},
+            user_id="alice",
+            group_id="g1",
+        )
 
 
 def test_financial_decision_support_time_horizon(monkeypatch):
