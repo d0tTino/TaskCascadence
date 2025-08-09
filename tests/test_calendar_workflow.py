@@ -1,8 +1,38 @@
 
 from typing import Any
 
-from task_cascadence.workflows import dispatch
-from task_cascadence.workflows import calendar_event_creation as cec
+import importlib.util
+from pathlib import Path
+import sys
+import types
+
+import pytest
+
+PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "task_cascadence"
+pkg = types.ModuleType("task_cascadence")
+pkg.__path__ = [str(PACKAGE_ROOT)]
+sys.modules["task_cascadence"] = pkg
+
+
+def _load(name: str, rel: str):
+    spec = importlib.util.spec_from_file_location(
+        name, PACKAGE_ROOT / rel
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    sys.modules[name] = module
+    return module
+
+
+_load("task_cascadence.http_utils", "http_utils.py")
+_load("task_cascadence.research", "research.py")
+_load("task_cascadence.ume", "ume/__init__.py")
+workflows = _load("task_cascadence.workflows", "workflows/__init__.py")
+cec = _load(
+    "task_cascadence.workflows.calendar_event_creation",
+    "workflows/calendar_event_creation.py",
+)
+dispatch = workflows.dispatch
 
 
 class DummyResponse:
@@ -98,5 +128,87 @@ def test_calendar_event_creation(monkeypatch):
     assert emitted["async_research"] == ("travel time to Cafe", "alice", "g1")
     assert emitted["gather"] == ("travel time to Cafe", "alice", "g1")
     assert emitted["note"] == ("Travel time to Cafe: 15m", "alice", "g1")
+
+
+@pytest.mark.parametrize("missing_field", ["title", "start_time"])
+def test_calendar_event_creation_missing_field(monkeypatch, missing_field):
+    calls: list[str] = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append(method)
+        return DummyResponse({})
+
+    monkeypatch.setattr(cec, "request_with_retry", fake_request)
+    emitted: dict[str, tuple[Any, ...]] = {}
+    monkeypatch.setattr(
+        cec, "emit_stage_update_event", lambda *a, **k: emitted.setdefault("event", (a, k))
+    )
+
+    payload = {"title": "Lunch", "start_time": "2024-01-01T12:00:00Z"}
+    payload.pop(missing_field)
+
+    with pytest.raises(ValueError):
+        dispatch("calendar.event.create_request", payload, user_id="alice")
+
+    assert "POST" not in calls
+    assert "event" not in emitted
+
+
+def test_calendar_event_creation_permission_denied(monkeypatch):
+    calls: list[str] = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append(method)
+        return DummyResponse({})
+
+    monkeypatch.setattr(cec, "request_with_retry", fake_request)
+    monkeypatch.setattr(cec, "_has_permission", lambda *a, **k: False)
+
+    emitted: dict[str, tuple[Any, ...]] = {}
+    monkeypatch.setattr(
+        cec, "emit_stage_update_event", lambda *a, **k: emitted.setdefault("event", (a, k))
+    )
+
+    payload = {"title": "Lunch", "start_time": "2024-01-01T12:00:00Z"}
+
+    with pytest.raises(PermissionError):
+        dispatch("calendar.event.create_request", payload, user_id="alice")
+
+    assert "POST" not in calls
+    assert "event" not in emitted
+
+
+def test_calendar_event_creation_research_failure(monkeypatch):
+    calls: list[str] = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append(method)
+        return DummyResponse({})
+
+    monkeypatch.setattr(cec, "request_with_retry", fake_request)
+    monkeypatch.setattr(cec, "_has_permission", lambda *a, **k: True)
+
+    async def fail_async(*a, **k):
+        raise KeyboardInterrupt("gather boom")
+
+    monkeypatch.setattr(cec.research, "async_gather", fail_async)
+
+    emitted: dict[str, tuple[Any, ...]] = {}
+    monkeypatch.setattr(
+        cec, "emit_stage_update_event", lambda *a, **k: emitted.setdefault("event", (a, k))
+    )
+    monkeypatch.setattr(cec, "emit_task_note", lambda *a, **k: None)
+
+    payload = {
+        "title": "Lunch",
+        "start_time": "2024-01-01T12:00:00Z",
+        "location": "Cafe",
+    }
+
+    with pytest.raises(KeyboardInterrupt):
+        dispatch("calendar.event.create_request", payload, user_id="alice", base_url="http://svc")
+
+    assert "POST" not in calls
+    assert "event" not in emitted
 
 
