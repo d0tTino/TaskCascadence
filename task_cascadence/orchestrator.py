@@ -231,8 +231,9 @@ class TaskPipeline:
         start_ts.FromDatetime(datetime.now())
         status = "success"
         result: Any | None = None
+        task_name = self.task.__class__.__name__
         emit_audit_log(
-            self.task.__class__.__name__,
+            task_name,
             "execute",
             "started",
             user_id=user_id,
@@ -241,23 +242,57 @@ class TaskPipeline:
 
         try:
             if hasattr(self.task, "precheck"):
-                check = self.task.precheck()
-                if inspect.isawaitable(check):
-                    try:
-                        asyncio.get_running_loop()
-                    except RuntimeError:
-                        check = asyncio.run(cast(Coroutine[Any, Any, Any], check))
-                    else:
-                        _res = check
+                emit_audit_log(
+                    task_name, "precheck", "started", user_id=user_id, group_id=group_id
+                )
+                try:
+                    check = self.task.precheck()
+                    if inspect.isawaitable(check):
+                        try:
+                            asyncio.get_running_loop()
+                        except RuntimeError:
+                            check = asyncio.run(cast(Coroutine[Any, Any, Any], check))
+                        else:
+                            _res = check
 
-                        async def _await_precheck(res=_res) -> Any:
-                            return await res
+                            async def _await_precheck(res=_res) -> Any:
+                                return await res
 
-                        check = _await_precheck()
-                if check is not True:
+                            check = _await_precheck()
+                    if check is not True:
+                        status = "error"
+                        self._emit_stage("precheck", user_id, group_id)
+                        reason = check if isinstance(check, str) else "precheck failed"
+                        emit_audit_log(
+                            task_name,
+                            "precheck",
+                            "error",
+                            reason=str(reason),
+                            user_id=user_id,
+                            group_id=group_id,
+                        )
+                        raise PrecheckError(str(reason))
+                except Exception as exc:
                     status = "error"
                     self._emit_stage("precheck", user_id, group_id)
-                    raise PrecheckError("precheck failed")
+                    emit_audit_log(
+                        task_name,
+                        "precheck",
+                        "error",
+                        reason=str(exc),
+                        user_id=user_id,
+                        group_id=group_id,
+                    )
+                    raise
+                else:
+                    self._emit_stage("precheck", user_id, group_id)
+                    emit_audit_log(
+                        task_name,
+                        "precheck",
+                        "success",
+                        user_id=user_id,
+                        group_id=group_id,
+                    )
 
             parallel_tasks: list[Any] | None = None
             if isinstance(plan_result, dict) and plan_result.get("execution") == "parallel":
