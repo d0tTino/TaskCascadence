@@ -24,6 +24,8 @@ class BaseTask:
     """Base class for all tasks."""
 
     name: str = "base"
+    user_id: str | None = None
+    group_id: str | None = None
 
     def run(self):  # pragma: no cover - trivial demo function
         """Run the task."""

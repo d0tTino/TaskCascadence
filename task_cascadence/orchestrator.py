@@ -479,6 +479,8 @@ class TaskPipeline:
 
     # ------------------------------------------------------------------
     def run(self, *, user_id: str, group_id: str | None = None) -> Any:
+        self.task.user_id = user_id
+        self.task.group_id = group_id
         loop_running = True
         try:
             asyncio.get_running_loop()
@@ -545,7 +547,8 @@ class TaskPipeline:
         self, *, user_id: str, group_id: str | None = None
     ) -> Any:
         """Asynchronously execute this pipeline."""
-
+        self.task.user_id = user_id
+        self.task.group_id = group_id
         self.intake(user_id=user_id, group_id=group_id)
         await self._wait_if_paused_async()
 
