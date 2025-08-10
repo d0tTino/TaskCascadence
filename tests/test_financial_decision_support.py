@@ -1,33 +1,16 @@
-import pytest
-import requests
-import importlib.util
-import importlib.machinery
 import sys
 from pathlib import Path
+from typing import Any
 
-package = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("task_cascadence", loader=None)
-)
-package.__path__ = [str(Path(__file__).resolve().parent.parent / "task_cascadence")]
-sys.modules["task_cascadence"] = package
+import pytest
+import requests
 
-workflows_spec = importlib.util.spec_from_file_location(
-    "task_cascadence.workflows", Path("task_cascadence/workflows/__init__.py")
-)
-workflows = importlib.util.module_from_spec(workflows_spec)
-sys.modules["task_cascadence.workflows"] = workflows
-assert workflows_spec.loader is not None
-workflows_spec.loader.exec_module(workflows)
-dispatch = workflows.dispatch
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-fds_spec = importlib.util.spec_from_file_location(
-    "task_cascadence.workflows.financial_decision_support",
-    Path("task_cascadence/workflows/financial_decision_support.py"),
+from task_cascadence.workflows import dispatch
+from task_cascadence.workflows import (
+    financial_decision_support as fds,
 )
-fds = importlib.util.module_from_spec(fds_spec)
-sys.modules["task_cascadence.workflows.financial_decision_support"] = fds
-assert fds_spec.loader is not None
-fds_spec.loader.exec_module(fds)
 
 class DummyResponse:
     def __init__(self, data):
@@ -38,7 +21,7 @@ class DummyResponse:
 
 
 def test_financial_decision_support(monkeypatch):
-    calls = []
+    calls: list[tuple[str, str, dict[str, Any]]] = []
 
     def fake_request(method, url, timeout, **kwargs):
         calls.append((method, url, kwargs))
