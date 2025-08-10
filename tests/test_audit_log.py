@@ -1,7 +1,52 @@
+import importlib.machinery
+import importlib.util
+import pathlib
+import sys
+import types
+
 import pytest
 
-from task_cascadence.stage_store import StageStore
-from task_cascadence.orchestrator import PrecheckError, TaskPipeline
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+spec_pkg = importlib.machinery.ModuleSpec(
+    "task_cascadence", loader=None, is_package=True
+)
+spec_pkg.submodule_search_locations = [str(ROOT / "task_cascadence")]
+pkg = importlib.util.module_from_spec(spec_pkg)
+sys.modules.setdefault("task_cascadence", pkg)
+
+spec_ume_pkg = importlib.machinery.ModuleSpec(
+    "task_cascadence.ume", loader=None, is_package=True
+)
+spec_ume_pkg.submodule_search_locations = [str(ROOT / "task_cascadence" / "ume")]
+ume_pkg = importlib.util.module_from_spec(spec_ume_pkg)
+sys.modules.setdefault("task_cascadence.ume", ume_pkg)
+
+
+def _load(name: str, path: pathlib.Path) -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    assert spec and spec.loader
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    if "." in name:
+        parent_name, attr = name.rsplit(".", 1)
+        parent = sys.modules[parent_name]
+        setattr(parent, attr, module)
+    return module
+
+
+_load("task_cascadence.config", ROOT / "task_cascadence" / "config.py")
+_load("task_cascadence.ume.models", ROOT / "task_cascadence" / "ume" / "models.py")
+_load("task_cascadence.idea_store", ROOT / "task_cascadence" / "idea_store.py")
+_load("task_cascadence.suggestion_store", ROOT / "task_cascadence" / "suggestion_store.py")
+stage_store = _load("task_cascadence.stage_store", ROOT / "task_cascadence" / "stage_store.py")
+StageStore = stage_store.StageStore
+_load("task_cascadence.transport", ROOT / "task_cascadence" / "transport.py")
+_load("task_cascadence.ume", ROOT / "task_cascadence" / "ume" / "__init__.py")
+_load("task_cascadence.research", ROOT / "task_cascadence" / "research.py")
+orchestrator = _load("task_cascadence.orchestrator", ROOT / "task_cascadence" / "orchestrator.py")
+PrecheckError = orchestrator.PrecheckError
+TaskPipeline = orchestrator.TaskPipeline
 
 
 class FailingTask:
@@ -20,6 +65,14 @@ class PrecheckFailTask:
 
     def run(self):
         return "unused"
+
+
+class PrecheckPassTask:
+    def precheck(self):
+        return True
+
+    def run(self):
+        return "ok"
 
 
 class PartialOutputTask:
@@ -84,9 +137,24 @@ def test_audit_log_records_precheck_failure(monkeypatch, tmp_path):
 
     store = StageStore()
     events = store.get_events("PrecheckFailTask", category="audit")
-    failure = [e for e in events if e.get("status") == "error"]
-    assert failure and failure[0]["reason"] == "precheck failed"
+    started = [e for e in events if e.get("stage") == "precheck" and e.get("status") == "started"]
+    failure = [e for e in events if e.get("stage") == "precheck" and e.get("status") == "error"]
+    assert started and failure
+    assert failure[0]["reason"] == "precheck failed"
     assert failure[0].get("output") is None
+
+
+def test_audit_log_records_precheck_success(monkeypatch, tmp_path):
+    _init_store(monkeypatch, tmp_path)
+
+    pipeline = TaskPipeline(PrecheckPassTask())
+    assert pipeline.execute(user_id="alice") == "ok"
+
+    store = StageStore()
+    events = store.get_events("PrecheckPassTask", category="audit")
+    started = [e for e in events if e.get("stage") == "precheck" and e.get("status") == "started"]
+    success = [e for e in events if e.get("stage") == "precheck" and e.get("status") == "success"]
+    assert started and success
 
 
 def test_audit_log_records_partial_output_on_failure(monkeypatch, tmp_path):
