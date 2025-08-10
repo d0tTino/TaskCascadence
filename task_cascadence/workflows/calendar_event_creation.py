@@ -36,8 +36,12 @@ def _has_permission(
 
 @subscribe("calendar.event.create_request")
 def create_calendar_event(
-    payload: Dict[str, Any], *, user_id: str, base_url: str = "http://localhost", ume_base: str = "http://ume"
-
+    payload: Dict[str, Any],
+    *,
+    user_id: str,
+    group_id: str | None = None,
+    base_url: str = "http://localhost",
+    ume_base: str = "http://ume",
 ) -> Dict[str, Any]:
     """Persist calendar events after validation and permission checks."""
 
@@ -45,7 +49,6 @@ def create_calendar_event(
         if field not in payload or not payload[field]:
             raise ValueError(f"missing required field: {field}")
 
-    group_id = payload.get("group_id")
     travel_info: Dict[str, Any] | None = None
     if payload.get("location"):
         try:
@@ -65,22 +68,10 @@ def create_calendar_event(
             travel_info = None
 
     try:
-        if not _has_permission(user_id, ume_base=ume_base):
+        if not _has_permission(
+            user_id, ume_base=ume_base, group_id=group_id
+        ):
             raise PermissionError("user lacks calendar:create permission")
-    except Exception as exc:  # pragma: no cover - network failures
-        emit_audit_log(
-            "calendar.event.create",
-            "permission",
-            "error",
-            reason=str(exc),
-            user_id=user_id,
-            group_id=group_id,
-        )
-        raise
-
-    try:
-        if group_id and not _has_permission(user_id, ume_base=ume_base, group_id=group_id):
-            raise PermissionError("user lacks group permission")
     except Exception as exc:  # pragma: no cover - network failures
         emit_audit_log(
             "calendar.event.create",

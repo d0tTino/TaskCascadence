@@ -3,33 +3,15 @@ from typing import Any
 
 import pytest
 
-import importlib.util
 import sys
 from pathlib import Path
 
-package = importlib.util.module_from_spec(
-    importlib.machinery.ModuleSpec("task_cascadence", loader=None)
-)
-package.__path__ = [str(Path(__file__).resolve().parent.parent / "task_cascadence")]
-sys.modules["task_cascadence"] = package
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-workflows_spec = importlib.util.spec_from_file_location(
-    "task_cascadence.workflows", Path("task_cascadence/workflows/__init__.py")
+from task_cascadence.workflows import dispatch
+from task_cascadence.workflows import (
+    calendar_event_creation as cec,
 )
-workflows = importlib.util.module_from_spec(workflows_spec)
-sys.modules["task_cascadence.workflows"] = workflows
-assert workflows_spec.loader is not None
-workflows_spec.loader.exec_module(workflows)
-dispatch = workflows.dispatch
-
-cec_spec = importlib.util.spec_from_file_location(
-    "task_cascadence.workflows.calendar_event_creation",
-    Path("task_cascadence/workflows/calendar_event_creation.py"),
-)
-cec = importlib.util.module_from_spec(cec_spec)
-sys.modules["task_cascadence.workflows.calendar_event_creation"] = cec
-assert cec_spec.loader is not None
-cec_spec.loader.exec_module(cec)
 
 
 
@@ -88,13 +70,12 @@ def test_calendar_event_creation(monkeypatch):
         "title": "Lunch",
         "start_time": "2024-01-01T12:00:00Z",
         "location": "Cafe",
-        "group_id": "g1",
         "invitees": ["bob"],
         "layers": ["work"],
     }
 
     result = dispatch(
-        "calendar.event.create_request", payload, user_id="alice", base_url="http://svc"
+        "calendar.event.create_request", payload, user_id="alice", group_id="g1", base_url="http://svc"
     )
 
     assert result == {"event_id": "evt1", "related_event_id": "evt2"}
@@ -104,13 +85,13 @@ def test_calendar_event_creation(monkeypatch):
     assert "permissions" in calls[0][1]
 
     # event creation and related event persistence
-    assert calls[3][0] == "POST"
-    assert calls[3][1] == "http://svc/v1/calendar/events"
-    assert calls[3][2]["json"]["travel_time"] == {"duration": "15m"}
+    assert calls[2][0] == "POST"
+    assert calls[2][1] == "http://svc/v1/calendar/events"
+    assert calls[2][2]["json"]["travel_time"] == {"duration": "15m"}
 
     # invite-edge persistence
-    assert calls[5][1] == "http://svc/v1/calendar/edges"
-    edge_payload = calls[5][2]["json"]
+    assert calls[4][1] == "http://svc/v1/calendar/edges"
+    edge_payload = calls[4][2]["json"]
     assert edge_payload["src"] == "evt2"
     assert edge_payload["dst"] == "evt1"
 
