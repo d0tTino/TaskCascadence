@@ -1,4 +1,6 @@
 
+# Tests for calendar event creation workflow
+
 from typing import Any
 
 import pytest
@@ -46,10 +48,6 @@ def test_calendar_event_creation(monkeypatch):
         emitted["async_research"] = (query, user_id, group_id)
         return {"duration": "15m"}
 
-    def fake_gather(query, user_id=None, group_id=None):
-        emitted["gather"] = (query, user_id, group_id)
-        return {"duration": "15m"}
-
     def fake_emit_note(note, user_id=None, group_id=None):
         emitted["note"] = (note.note, user_id, group_id)
 
@@ -57,7 +55,6 @@ def test_calendar_event_creation(monkeypatch):
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
     monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
-    monkeypatch.setattr(cec.research, "gather", fake_gather)
     monkeypatch.setattr(cec, "emit_task_note", fake_emit_note)
 
     def fake_dispatch(event, data, *, user_id, group_id=None):
@@ -104,7 +101,6 @@ def test_calendar_event_creation(monkeypatch):
         "evt1",
     )
     assert emitted["async_research"] == ("travel time to Cafe", "alice", "g1")
-    assert emitted["gather"] == ("travel time to Cafe", "alice", "g1")
     assert emitted["note"] == ("Travel time to Cafe: 15m", "alice", "g1")
 
 
@@ -149,9 +145,6 @@ def test_calendar_event_ume_failure(monkeypatch):
     async def fake_async_gather(query, user_id=None, group_id=None):
         return {"duration": "15m"}
 
-    def fake_gather(query, user_id=None, group_id=None):
-        return {"duration": "15m"}
-
     audit: dict[str, tuple[str, str, str, str, str | None, str | None]] = {}
 
     def fake_emit_audit_log(task_name, stage, status, *, reason=None, user_id=None, group_id=None, **_):
@@ -165,7 +158,6 @@ def test_calendar_event_ume_failure(monkeypatch):
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
     monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
-    monkeypatch.setattr(cec.research, "gather", fake_gather)
     monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(cec, "emit_task_note", failing_emit_note)
     monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
