@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from . import subscribe, dispatch
 from ..http_utils import request_with_retry
-from ..ume import emit_stage_update_event
+from ..ume import emit_stage_update_event, emit_audit_log
 
 
 @subscribe("finance.decision.request")
@@ -17,6 +17,14 @@ def financial_decision_support(
     engine_base: str = "http://finance-engine",
 ) -> Dict[str, Any]:
     """Aggregate financial data, run a debt simulation, and persist results."""
+    emit_audit_log(
+        "finance.decision",
+        "workflow",
+        "started",
+        user_id=user_id,
+        group_id=group_id,
+    )
+
     payload_group_id = payload.get("group_id")
     if payload_group_id is not None and payload_group_id != group_id:
         emit_stage_update_event(
@@ -53,15 +61,38 @@ def financial_decision_support(
 
         total_balance = sum(a.get("balance", 0) for a in accounts)
 
-        engine_payload = {"balance": total_balance, "goals": goals, "analyses": analyses}
+        engine_payload = {
+            "balance": total_balance,
+            "goals": goals,
+            "analyses": analyses,
+            "user_id": user_id,
+        }
+        if group_id is not None:
+            engine_payload["group_id"] = group_id
 
         if "budget" in payload:
             engine_payload["budget"] = payload["budget"]
         if "max_options" in payload:
             engine_payload["max_options"] = payload["max_options"]
-        eng_resp = request_with_retry(
-            "POST", f"{engine_base.rstrip('/')}/v1/simulations/debt", json=engine_payload, timeout=5
-        )
+
+        try:
+            eng_resp = request_with_retry(
+                "POST",
+                f"{engine_base.rstrip('/')}/v1/simulations/debt",
+                json=engine_payload,
+                timeout=5,
+            )
+        except Exception as exc:
+            emit_audit_log(
+                "finance.decision",
+                "engine",
+                "error",
+                reason=str(exc),
+                output=str(engine_payload),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
         eng_result = eng_resp.json()
 
         analysis_id = eng_result.get("id", "analysis")
@@ -105,9 +136,24 @@ def financial_decision_support(
                     owned_edge["group_id"] = group_id
                 edges.append(owned_edge)
 
-        request_with_retry(
-            "POST", url, json={"nodes": nodes_to_persist, "edges": edges}, timeout=5
-        )
+        try:
+            request_with_retry(
+                "POST",
+                url,
+                json={"nodes": nodes_to_persist, "edges": edges},
+                timeout=5,
+            )
+        except Exception as exc:
+            emit_audit_log(
+                "finance.decision",
+                "persistence",
+                "error",
+                reason=str(exc),
+                output=str({"nodes": nodes_to_persist, "edges": edges}),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
 
         summary = {"cost_of_deviation": eng_result.get("cost_of_deviation", 0)}
         context = {"analysis": analysis_id, "summary": summary}
@@ -125,9 +171,24 @@ def financial_decision_support(
         emit_stage_update_event(
             "finance.decision.result", "completed", user_id=user_id, group_id=group_id
         )
+        emit_audit_log(
+            "finance.decision",
+            "workflow",
+            "completed",
+            user_id=user_id,
+            group_id=group_id,
+        )
 
         return {**context, "actions": actions}
-    except Exception:
+    except Exception as exc:
+        emit_audit_log(
+            "finance.decision",
+            "workflow",
+            "error",
+            reason=str(exc),
+            user_id=user_id,
+            group_id=group_id,
+        )
         emit_stage_update_event(
             "finance.decision.result", "error", user_id=user_id, group_id=group_id
         )
