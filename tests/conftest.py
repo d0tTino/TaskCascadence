@@ -7,25 +7,16 @@ import pytest
 # Ensure package root is on sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-# Stub modules that have heavy deps before importing package
-metrics_mod = ModuleType("task_cascadence.metrics")
-
-
-def track_task(*args, **kwargs):
-    def deco(fn):
-        return fn
-    return deco
-
-
-metrics_mod.track_task = track_task
-metrics_mod.start_metrics_server = lambda port=8000: None
-sys.modules["task_cascadence.metrics"] = metrics_mod
-
+# Provide a lightweight TemporalBackend stub before importing package
 temporal_mod = ModuleType("task_cascadence.temporal")
 
 
 class TemporalBackend:  # minimal stub for tests
-    pass
+    def run_workflow_sync(self, workflow):  # pragma: no cover - patched in tests
+        raise NotImplementedError
+
+    def replay(self, path):  # pragma: no cover - patched in tests
+        raise NotImplementedError
 
 
 temporal_mod.TemporalBackend = TemporalBackend
@@ -54,3 +45,14 @@ def tmp_pointers(monkeypatch, tmp_path):
     path = tmp_path / "pointers.yml"
     monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(path))
     yield
+
+
+@pytest.fixture(autouse=True)
+def stub_ume(monkeypatch):
+    """Stub UME emission functions to avoid needing a transport client."""
+    monkeypatch.setattr("task_cascadence.ume.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "task_cascadence.ume.emit_stage_update_event", lambda *a, **k: None
+    )
+    monkeypatch.setattr("task_cascadence.ume.emit_audit_log", lambda *a, **k: None)

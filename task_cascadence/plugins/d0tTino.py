@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import subprocess
+import logging
 
 import requests
 
 from . import CronTask
+
+logger = logging.getLogger(__name__)
 
 
 class D0tTinoTask(CronTask):
@@ -20,8 +23,12 @@ class D0tTinoTask(CronTask):
     def _call(self, command: str) -> str:
         if self.use_api:
             url = f"{self.base_url}/{command}"
-            response = requests.post(url, json={"prompt": self.prompt}, timeout=30)
-            response.raise_for_status()
+            try:
+                response = requests.post(url, json={"prompt": self.prompt}, timeout=30)
+                response.raise_for_status()
+            except requests.RequestException as exc:
+                logger.error("d0tTino API request failed: %s", exc)
+                raise
             return response.text.strip()
         result = subprocess.run(
             ["d0tTino", command, self.prompt],

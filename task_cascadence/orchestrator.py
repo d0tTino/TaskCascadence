@@ -24,6 +24,7 @@ from .ume import (
 )
 from .ume.models import TaskRun, TaskSpec
 from . import research
+from .async_utils import run_coroutine
 import time
 
 
@@ -164,7 +165,7 @@ class TaskPipeline:
 
             if loop_running:
                 return _await_query()
-            return asyncio.run(_await_query())
+            return run_coroutine(_await_query())
 
         if loop_running:
 
@@ -251,7 +252,7 @@ class TaskPipeline:
                         try:
                             asyncio.get_running_loop()
                         except RuntimeError:
-                            check = asyncio.run(cast(Coroutine[Any, Any, Any], check))
+                            check = run_coroutine(cast(Coroutine[Any, Any, Any], check))
                         else:
                             _res = check
 
@@ -316,7 +317,7 @@ class TaskPipeline:
                 try:
                     asyncio.get_running_loop()
                 except RuntimeError:
-                    results = asyncio.run(_run_all())
+                    results = run_coroutine(_run_all())
                 else:
                     async def _await_all() -> list[Any]:
                         return await _run_all()
@@ -362,7 +363,7 @@ class TaskPipeline:
                 try:
                     asyncio.get_running_loop()
                 except RuntimeError:
-                    result = asyncio.run(_resolve_and_run())
+                    result = run_coroutine(_resolve_and_run())
                 else:
                     result = _resolve_and_run()
             else:
@@ -435,7 +436,9 @@ class TaskPipeline:
                     try:
                         asyncio.get_running_loop()
                     except RuntimeError:
-                        verify_result = asyncio.run(cast(Coroutine[Any, Any, Any], verify_result))
+                        verify_result = run_coroutine(
+                            cast(Coroutine[Any, Any, Any], verify_result)
+                        )
                     else:
                         _res = verify_result
 
@@ -626,7 +629,7 @@ class TaskPipeline:
             try:
                 asyncio.get_running_loop()
             except RuntimeError:
-                return asyncio.run(_async_call())
+                return run_coroutine(_async_call())
             return _async_call()
 
         if len(sig.parameters) > 0:

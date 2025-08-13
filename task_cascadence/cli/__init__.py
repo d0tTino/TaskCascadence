@@ -130,14 +130,14 @@ def run_task_async(
 
     from ..ume import emit_stage_update_event
     import inspect
-    import asyncio
     from typing import Coroutine, Any, cast
+    from ..async_utils import run_coroutine
 
     try:
         emit_stage_update_event(name, "start", user_id=user_id)
         result = get_default_scheduler().run_task(name, use_temporal=temporal, user_id=user_id)
         if inspect.isawaitable(result):
-            result = asyncio.run(cast(Coroutine[Any, Any, Any], result))
+            result = run_coroutine(cast(Coroutine[Any, Any, Any], result))
         emit_stage_update_event(name, "finish", user_id=user_id)
     except Exception as exc:  # pragma: no cover - simple error propagation
         emit_stage_update_event(name, "error", user_id=user_id)
