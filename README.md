@@ -74,11 +74,12 @@ httpx.post(
 )
 ```
 
-## User and Group Context
+## Mandatory User and Group Headers
 
-Tasks run with a user identifier and optional group identifier so results and
-audit logs can be scoped. When calling the HTTP API include ``X-User-ID`` and,
-if needed, ``X-Group-ID`` headers:
+Tasks run with a user identifier and a group identifier so results and audit
+logs can be scoped. When calling the HTTP API you **must** include both
+``X-User-ID`` and ``X-Group-ID`` headers; requests missing either header are
+rejected:
 
 ```bash
 curl -X POST http://localhost:8000/tasks/example/run \
@@ -94,7 +95,7 @@ from task_cascadence.workflows import dispatch
 dispatch("calendar.event.create_request", payload, user_id="alice", group_id="engineering")
 ```
 
-User identifiers are hashed before being persisted.
+User and group identifiers are hashed before being persisted.
 
 ## Nested Pipelines
 
@@ -286,14 +287,16 @@ Navigate to ``http://localhost:8000`` to see task statuses and pause or resume
 individual tasks. The table also lists the number of pointers stored for each
 task via ``PointerStore``.
 
-## Audit Logging
+## Audit Log Behavior
 
-Each stage transition within a :class:`TaskPipeline` is recorded via
-``emit_audit_log``. Entries capture the stage name, status (for example
-``started``, ``success``, ``error`` or ``skipped``) and optional ``reason`` or
-``output`` fields. User identifiers are hashed and stored alongside any
-``group_id``. Audit records are persisted by :class:`StageStore` and can be
-retrieved through the API:
+Each stage transition within a :class:`TaskPipeline` results in an entry
+recorded via ``emit_audit_log``. A record is written when a stage starts,
+completes, or fails. Each entry includes the stage name, status (for example
+``started``, ``success``, ``error`` or ``skipped``), optional ``reason`` or
+``output`` fields, and the hashed user and group identifiers supplied through
+the mandatory headers. Audit records are persisted by
+:class:`StageStore` and emitted on the configured transport so external systems
+can observe them. Retrieve stored logs through the API:
 
 ```bash
 curl http://localhost:8000/pipeline/MyTask
@@ -584,33 +587,6 @@ dashboard so the same input maps to a consistent hash. Salting allows
 deployments to generate unique hashes while avoiding exposure of the raw ID,
 helping preserve privacy when events are stored or forwarded.
 
-## User and Group Context
-
-Most orchestration helpers accept optional ``user_id`` and ``group_id``
-arguments so activity can be attributed to individuals or teams.  These
-identifiers flow through to emitted events and dashboards.
-
-The HTTP API reads them from ``X-User-ID`` and ``X-Group-ID`` headers:
-
-```bash
-curl -X POST http://localhost:8000/tasks/dummy/run \
-     -H "X-Group-ID: team1" -H "X-User-ID: alice"
-```
-
-They can also be supplied directly when running pipelines:
-
-```python
-pipeline = TaskPipeline(Demo())
-pipeline.run(user_id="alice", group_id="team1")
-```
-
-## Audit Logs
-
-Cascadence records an audit trail for each task in ``StageStore``.  Entries
-include stage transitions, success or error status, and any failure reasons.
-Logs are persisted to YAML so they survive process restarts and can be
-inspected later for debugging or compliance.
-
 ## Pointer Sync Service
 
 When tasks emit pointer updates they can be synchronized across multiple
@@ -694,7 +670,8 @@ code or services.
 
 This workflow listens for ``calendar.event.create_request`` and persists a
 validated event to an external calendar service after optional research. A
-``calendar.event.created`` event is emitted once the entry is stored:
+``calendar.event.created`` event is emitted once the entry is stored. Include
+recurrence metadata to schedule repeating events:
 
 ```python
 from task_cascadence.workflows import dispatch
@@ -703,8 +680,14 @@ payload = {
     "title": "Team Sync",
     "start_time": "2024-04-01T09:00:00Z",
     "invitees": ["bob"],
+    "recurrence": {"cron": "0 9 * * 1"},
 }
-dispatch("calendar.event.create_request", payload, user_id="alice")
+dispatch(
+    "calendar.event.create_request",
+    payload,
+    user_id="alice",
+    group_id="engineering",
+)
 ```
 
 ### FinancialDecisionSupport
@@ -712,12 +695,18 @@ dispatch("calendar.event.create_request", payload, user_id="alice")
 ``FinancialDecisionSupport`` aggregates accounts and goals, calls an external
 engine, and stores the resulting analysis when ``finance.decision.request`` is
 dispatched. It emits ``finance.decision.result`` and optionally
-``finance.explain.request`` events:
+``finance.explain.request`` events. Recurrence metadata schedules periodic
+analyses:
 
 ```python
 from task_cascadence.workflows import dispatch
 
-dispatch("finance.decision.request", {"explain": True}, user_id="bob")
+dispatch(
+    "finance.decision.request",
+    {"explain": True, "recurrence": {"cron": "0 8 * * *"}},
+    user_id="bob",
+    group_id="finance",
+)
 ```
 
 ## n8n Export
