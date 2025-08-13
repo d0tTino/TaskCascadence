@@ -1,12 +1,11 @@
 
 # Tests for calendar event creation workflow
 
-from typing import Any
-
 import pytest
 
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -40,6 +39,7 @@ def test_calendar_event_creation(monkeypatch):
 
     emitted: dict[str, tuple[Any, ...]] = {}
     dispatched: dict[str, tuple[Any, ...]] = {}
+    audit_logs: list[tuple[str, str, str, str | None, str | None]] = []
 
     def fake_emit(name, stage, user_id=None, group_id=None, **kwargs):
         emitted["event"] = (name, stage, user_id, group_id, kwargs.get("event_id"))
@@ -56,6 +56,13 @@ def test_calendar_event_creation(monkeypatch):
     monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
     monkeypatch.setattr(cec, "emit_task_note", fake_emit_note)
+    monkeypatch.setattr(
+        cec,
+        "emit_audit_log",
+        lambda task, stage, status, *, reason=None, user_id=None, group_id=None, **_: audit_logs.append(
+            (task, stage, status, user_id, group_id)
+        ),
+    )
 
     def fake_dispatch(event, data, *, user_id, group_id=None):
         dispatched["event"] = (event, data, user_id, group_id)
@@ -102,6 +109,20 @@ def test_calendar_event_creation(monkeypatch):
     )
     assert emitted["async_research"] == ("travel time to Cafe", "alice", "g1")
     assert emitted["note"] == ("Travel time to Cafe: 15m", "alice", "g1")
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "started",
+        "alice",
+        "g1",
+    ) in audit_logs
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "completed",
+        "alice",
+        "g1",
+    ) in audit_logs
 
 
 def test_calendar_event_permission_error(monkeypatch):
@@ -110,10 +131,10 @@ def test_calendar_event_permission_error(monkeypatch):
             raise RuntimeError("network down")
         return DummyResponse({"id": "evt1"})
 
-    audit: dict[str, tuple[str, str, str, str]] = {}
+    audit_logs: list[tuple[str, str, str]] = []
 
     def fake_emit_audit_log(task_name, stage, status, *, reason=None, user_id=None, group_id=None, **_):
-        audit["log"] = (task_name, stage, status, reason)
+        audit_logs.append((task_name, stage, status, reason))
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
     monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
@@ -123,10 +144,18 @@ def test_calendar_event_permission_error(monkeypatch):
     with pytest.raises(RuntimeError):
         dispatch("calendar.event.create_request", payload, user_id="alice")
 
-    assert audit["log"][0] == "calendar.event.create"
-    assert audit["log"][1] == "permission"
-    assert audit["log"][2] == "error"
-    assert "network down" in audit["log"][3]
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "started",
+        None,
+    ) in audit_logs
+    assert (
+        "calendar.event.create",
+        "permission",
+        "error",
+        "network down",
+    ) in audit_logs
 
 
 def test_calendar_event_ume_failure(monkeypatch):
@@ -145,10 +174,10 @@ def test_calendar_event_ume_failure(monkeypatch):
     async def fake_async_gather(query, user_id=None, group_id=None):
         return {"duration": "15m"}
 
-    audit: dict[str, tuple[str, str, str, str, str | None, str | None]] = {}
+    audit_logs: list[tuple[str, str, str, str | None]] = []
 
     def fake_emit_audit_log(task_name, stage, status, *, reason=None, user_id=None, group_id=None, **_):
-        audit["log"] = (task_name, stage, status, reason, user_id, group_id)
+        audit_logs.append((task_name, stage, status, reason))
 
     def fake_emit(*a, **k):
         pass
@@ -167,7 +196,6 @@ def test_calendar_event_ume_failure(monkeypatch):
 
     monkeypatch.setattr(cec, "dispatch", fake_dispatch)
 
-
     payload = {
         "title": "Lunch",
         "start_time": "2024-01-01T12:00:00Z",
@@ -179,9 +207,74 @@ def test_calendar_event_ume_failure(monkeypatch):
     )
 
     assert result == {"event_id": "evt1", "related_event_id": "evt2"}
-    assert audit["log"][0] == "calendar.event.create"
-    assert audit["log"][1] == "emit_task_note"
-    assert audit["log"][2] == "error"
-    assert "ume down" in audit["log"][3]
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "started",
+        None,
+    ) in audit_logs
+    assert (
+        "calendar.event.create",
+        "emit_task_note",
+        "error",
+        "ume down",
+    ) in audit_logs
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "completed",
+        None,
+    ) in audit_logs
+
+
+@pytest.mark.asyncio
+async def test_calendar_event_creation_in_event_loop(monkeypatch):
+    counter = {"post": 0}
+
+    def fake_request(method, url, timeout, **kwargs):
+        if method == "GET":
+            return DummyResponse({"allowed": True})
+        if url.endswith("/edges"):
+            return DummyResponse({"ok": True})
+        counter["post"] += 1
+        return DummyResponse({"id": f"evt{counter['post']}"})
+
+    async def fake_async_gather(query, user_id=None, group_id=None):
+        return {"duration": "15m"}
+
+    audit_logs: list[tuple[str, str, str]] = []
+
+    monkeypatch.setattr(cec, "request_with_retry", fake_request)
+    monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
+    monkeypatch.setattr(cec, "emit_stage_update_event", lambda *a, **k: None)
+    monkeypatch.setattr(cec, "emit_task_note", lambda *a, **k: None)
+    monkeypatch.setattr(
+        cec,
+        "emit_audit_log",
+        lambda task, stage, status, *, reason=None, user_id=None, group_id=None, **_: audit_logs.append(
+            (task, stage, status)
+        ),
+    )
+    monkeypatch.setattr(cec, "dispatch", lambda *a, **k: None)
+
+    payload = {
+        "title": "Lunch",
+        "start_time": "2024-01-01T12:00:00Z",
+        "location": "Cafe",
+    }
+
+    result = dispatch("calendar.event.create_request", payload, user_id="alice")
+
+    assert result == {"event_id": "evt1", "related_event_id": "evt2"}
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "started",
+    ) in audit_logs
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "completed",
+    ) in audit_logs
 
 
