@@ -1,4 +1,5 @@
 import yaml
+import pytest
 from apscheduler.triggers.cron import CronTrigger
 from task_cascadence.scheduler import CronScheduler
 
@@ -26,6 +27,14 @@ def test_load_yaml_schedule(tmp_path):
     job = sched.scheduler.get_job("DummyTask")
     assert job is not None
     assert sched.schedules["DummyTask"]["recurrence"] == {"note": "every minute"}
+
+
+def test_load_yaml_malformed(tmp_path):
+    cfg = tmp_path / "bad.yml"
+    cfg.write_text("DummyTask: [1, 2")
+    sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
+    with pytest.raises(yaml.YAMLError):
+        sched.load_yaml(cfg, {"DummyTask": DummyTask()})
 
 
 def test_schedule_from_calendar_event(tmp_path):
