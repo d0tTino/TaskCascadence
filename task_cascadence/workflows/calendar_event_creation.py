@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -44,6 +45,13 @@ def create_calendar_event(
     ume_base: str = "http://ume",
 ) -> Dict[str, Any]:
     """Persist calendar events after validation and permission checks."""
+    emit_audit_log(
+        "calendar.event.create",
+        "workflow",
+        "started",
+        user_id=user_id,
+        group_id=group_id,
+    )
 
     for field in ("title", "start_time"):
         if field not in payload or not payload[field]:
@@ -57,8 +65,10 @@ def create_calendar_event(
                     f"travel time to {payload['location']}",
                     user_id=user_id,
                     group_id=group_id,
+
                 )
-            )
+            except Exception:
+                travel_info = None
         except Exception:
             travel_info = None
 
@@ -205,4 +215,11 @@ def create_calendar_event(
         result["related_event_id"] = related_id
 
     dispatch("calendar.event.created", result, user_id=user_id, group_id=group_id)
+    emit_audit_log(
+        "calendar.event.create",
+        "workflow",
+        "completed",
+        user_id=user_id,
+        group_id=group_id,
+    )
     return result

@@ -17,6 +17,14 @@ def financial_decision_support(
     engine_base: str = "http://finance-engine",
 ) -> Dict[str, Any]:
     """Aggregate financial data, run a debt simulation, and persist results."""
+    emit_audit_log(
+        "finance.decision",
+        "workflow",
+        "started",
+        user_id=user_id,
+        group_id=group_id,
+    )
+
     payload_group_id = payload.get("group_id")
     if payload_group_id is not None and payload_group_id != group_id:
         emit_stage_update_event(
@@ -61,12 +69,20 @@ def financial_decision_support(
 
         total_balance = sum(a.get("balance", 0) for a in accounts)
 
-        engine_payload = {"balance": total_balance, "goals": goals, "analyses": analyses}
+        engine_payload = {
+            "balance": total_balance,
+            "goals": goals,
+            "analyses": analyses,
+            "user_id": user_id,
+        }
+        if group_id is not None:
+            engine_payload["group_id"] = group_id
 
         if "budget" in payload:
             engine_payload["budget"] = payload["budget"]
         if "max_options" in payload:
             engine_payload["max_options"] = payload["max_options"]
+
         try:
             eng_resp = request_with_retry(
                 "POST",
@@ -91,6 +107,7 @@ def financial_decision_support(
                 "error",
                 reason=str(exc),
                 output=repr(engine_payload),
+
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -103,6 +120,7 @@ def financial_decision_support(
             user_id=user_id,
             group_id=group_id,
         )
+
 
         analysis_id = eng_result.get("id", "analysis")
         actions: List[Dict[str, Any]] = eng_result.get("actions", [])
@@ -167,6 +185,7 @@ def financial_decision_support(
                 "error",
                 reason=str(exc),
                 output=payload_repr,
+
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -189,6 +208,13 @@ def financial_decision_support(
         emit_stage_update_event(
             "finance.decision.result", "completed", user_id=user_id, group_id=group_id
         )
+        emit_audit_log(
+            "finance.decision",
+            "workflow",
+            "completed",
+            user_id=user_id,
+            group_id=group_id,
+        )
 
         result = {**context, "actions": actions}
         emit_audit_log(
@@ -201,6 +227,7 @@ def financial_decision_support(
         )
         return result
     except Exception as exc:
+
         emit_stage_update_event(
             "finance.decision.result", "error", user_id=user_id, group_id=group_id
         )

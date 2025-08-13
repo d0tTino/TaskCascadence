@@ -44,6 +44,8 @@ def test_financial_decision_support(monkeypatch):
             assert len(kwargs["json"]["analyses"]) == 1
             assert kwargs["json"]["budget"] == 100
             assert kwargs["json"]["max_options"] == 3
+            assert kwargs["json"]["user_id"] == "alice"
+            assert kwargs["json"]["group_id"] == "g1"
             return DummyResponse(
                 {
                     "id": "da1",
@@ -66,9 +68,15 @@ def test_financial_decision_support(monkeypatch):
     def fake_dispatch(event, payload, user_id, group_id=None):
         dispatched.append((event, payload, user_id, group_id))
 
+    audit_logs = []
+
+    def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
+        audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
+
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
+    monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
 
     result = dispatch(
         "finance.decision.request",
@@ -120,6 +128,9 @@ def test_financial_decision_support(monkeypatch):
     assert result["analysis"] == "da1"
     assert result["summary"]["cost_of_deviation"] == 50
 
+    assert ("finance.decision", "workflow", "started", None, None, "alice", "g1") in audit_logs
+    assert ("finance.decision", "workflow", "completed", None, None, "alice", "g1") in audit_logs
+
 
 def test_financial_decision_support_group_id_mismatch(monkeypatch):
     def fake_request(*a, **k):
@@ -128,6 +139,7 @@ def test_financial_decision_support_group_id_mismatch(monkeypatch):
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", lambda *a, **k: None)
     monkeypatch.setattr(fds, "dispatch", lambda *a, **k: None)
+    monkeypatch.setattr(fds, "emit_audit_log", lambda *a, **k: None)
 
     with pytest.raises(ValueError):
         dispatch(
@@ -153,13 +165,17 @@ def test_financial_decision_support_time_horizon(monkeypatch):
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", lambda *a, **k: None)
     monkeypatch.setattr(fds, "dispatch", lambda *a, **k: None)
+    monkeypatch.setattr(fds, "emit_audit_log", lambda *a, **k: None)
 
     dispatch(
         "finance.decision.request",
         {"time_horizon": "6m", "budget": 0, "max_options": 0},
         user_id="alice",
+        group_id="g1",
     )
 
+    assert calls[1][2]["json"]["user_id"] == "alice"
+    assert calls[1][2]["json"]["group_id"] == "g1"
     assert calls[0][2]["params"]["time_horizon"] == "6m"
     persist = calls[2][2]["json"]
     analysis = next(n for n in persist["nodes"] if n["type"] == "DecisionAnalysis")
@@ -185,9 +201,15 @@ def test_financial_decision_support_ume_error(monkeypatch):
     def fake_dispatch(event, payload, user_id, group_id=None):
         dispatched.append(event)
 
+    audit_logs: list[tuple[str, str, str, str | None, str | None, str | None, str | None]] = []
+
+    def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
+        audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
+
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
+    monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
 
     with pytest.raises(requests.HTTPError):
         dispatch(
@@ -199,6 +221,10 @@ def test_financial_decision_support_ume_error(monkeypatch):
     assert len(calls) == 1
     assert emitted == [("finance.decision.result", "error", "alice", None)]
     assert "finance.decision.result" not in dispatched
+    assert any(
+        a[1] == "workflow" and a[2] == "error" and a[5] == "alice" and a[6] is None
+        for a in audit_logs
+    )
 
 
 def test_financial_decision_support_engine_failure(monkeypatch):
@@ -222,20 +248,102 @@ def test_financial_decision_support_engine_failure(monkeypatch):
     def fake_dispatch(event, payload, user_id, group_id=None):
         dispatched.append(event)
 
+    audit_logs: list[tuple[str, str, str, str | None, str | None, str | None, str | None]] = []
+
+    def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
+        audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
+
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
+    monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
 
     with pytest.raises(requests.HTTPError):
         dispatch(
             "finance.decision.request",
             {"budget": 100, "max_options": 3},
             user_id="alice",
+            group_id="g1",
         )
 
     assert len(calls) == 2
-    assert emitted == [("finance.decision.result", "error", "alice", None)]
+    assert calls[1][2]["json"]["user_id"] == "alice"
+    assert calls[1][2]["json"]["group_id"] == "g1"
+    assert emitted == [("finance.decision.result", "error", "alice", "g1")]
     assert "finance.decision.result" not in dispatched
+    assert any(
+        a[1] == "engine"
+        and a[2] == "error"
+        and "boom" in a[3]
+        and "budget" in a[4]
+        and a[5] == "alice"
+        and a[6] == "g1"
+        for a in audit_logs
+    )
+    assert any(
+        a[1] == "workflow" and a[2] == "error" and a[5] == "alice" and a[6] == "g1"
+        for a in audit_logs
+    )
+
+
+def test_financial_decision_support_persistence_failure(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append((method, url, kwargs))
+        if method == "GET":
+            return DummyResponse({"nodes": []})
+        elif url.endswith("/v1/simulations/debt"):
+            return DummyResponse({"id": "da1", "actions": []})
+        else:
+            raise requests.HTTPError("boom")
+
+    emitted = []
+
+    def fake_emit(name, stage, user_id=None, group_id=None, **_):
+        emitted.append((name, stage, user_id, group_id))
+
+    dispatched = []
+
+    def fake_dispatch(event, payload, user_id, group_id=None):
+        dispatched.append(event)
+
+    audit_logs = []
+
+    def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
+        audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
+
+    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
+    monkeypatch.setattr(fds, "dispatch", fake_dispatch)
+    monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
+
+    with pytest.raises(requests.HTTPError):
+        dispatch(
+            "finance.decision.request",
+            {"budget": 100, "max_options": 3},
+            user_id="alice",
+            group_id="g1",
+        )
+
+    assert len(calls) == 3
+    assert calls[1][2]["json"]["user_id"] == "alice"
+    assert calls[1][2]["json"]["group_id"] == "g1"
+    assert emitted == [("finance.decision.result", "error", "alice", "g1")]
+    assert "finance.decision.result" not in dispatched
+    assert any(
+        a[1] == "persistence"
+        and a[2] == "error"
+        and "boom" in a[3]
+        and "nodes" in a[4]
+        and a[5] == "alice"
+        and a[6] == "g1"
+        for a in audit_logs
+    )
+    assert any(
+        a[1] == "workflow" and a[2] == "error" and a[5] == "alice" and a[6] == "g1"
+        for a in audit_logs
+    )
 
 
 def test_financial_decision_support_missing_fields(monkeypatch):
@@ -258,6 +366,7 @@ def test_financial_decision_support_missing_fields(monkeypatch):
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
+    monkeypatch.setattr(fds, "emit_audit_log", lambda *a, **k: None)
 
     with pytest.raises(ValueError):
         dispatch("finance.decision.request", {}, user_id="alice")
