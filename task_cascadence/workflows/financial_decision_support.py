@@ -41,7 +41,10 @@ def financial_decision_support(
         )
         raise ValueError(f"Missing required fields: {', '.join(missing)}")
 
+    task_name = "finance.decision.workflow"
+    emit_audit_log(task_name, "workflow", "started", user_id=user_id, group_id=group_id)
     try:
+        emit_audit_log(task_name, "research", "started", user_id=user_id, group_id=group_id)
         url = f"{ume_base.rstrip('/')}/v1/nodes"
         params: Dict[str, Any] = {
             "types": "FinancialAccount,FinancialGoal,DecisionAnalysis",
@@ -51,8 +54,13 @@ def financial_decision_support(
             params["group_id"] = group_id
         if time_horizon is not None:
             params["time_horizon"] = time_horizon
-        resp = request_with_retry("GET", url, params=params, timeout=5)
-        data = resp.json()
+        try:
+            resp = request_with_retry("GET", url, params=params, timeout=5)
+            data = resp.json()
+        except Exception as exc:
+            emit_audit_log(task_name, "research", "error", reason=str(exc), user_id=user_id, group_id=group_id)
+            emit_audit_log(task_name, "workflow", "error", reason=str(exc), user_id=user_id, group_id=group_id)
+            raise
         nodes: List[Dict[str, Any]] = data.get("nodes", [])
 
         accounts = [n for n in nodes if n.get("type") == "FinancialAccount"]
@@ -82,18 +90,37 @@ def financial_decision_support(
                 json=engine_payload,
                 timeout=5,
             )
+            eng_result = eng_resp.json()
         except Exception as exc:
             emit_audit_log(
-                "finance.decision",
-                "engine",
+                task_name,
+                "research",
                 "error",
                 reason=str(exc),
-                output=str(engine_payload),
+                output=repr(engine_payload),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            emit_audit_log(
+                task_name,
+                "workflow",
+                "error",
+                reason=str(exc),
+                output=repr(engine_payload),
+
                 user_id=user_id,
                 group_id=group_id,
             )
             raise
-        eng_result = eng_resp.json()
+        emit_audit_log(
+            task_name,
+            "research",
+            "success",
+            output=repr(eng_result),
+            user_id=user_id,
+            group_id=group_id,
+        )
+
 
         analysis_id = eng_result.get("id", "analysis")
         actions: List[Dict[str, Any]] = eng_result.get("actions", [])
@@ -136,24 +163,34 @@ def financial_decision_support(
                     owned_edge["group_id"] = group_id
                 edges.append(owned_edge)
 
+        emit_audit_log(task_name, "persist", "started", user_id=user_id, group_id=group_id)
         try:
             request_with_retry(
-                "POST",
-                url,
-                json={"nodes": nodes_to_persist, "edges": edges},
-                timeout=5,
+                "POST", url, json={"nodes": nodes_to_persist, "edges": edges}, timeout=5
             )
         except Exception as exc:
+            payload_repr = repr({"nodes": nodes_to_persist, "edges": edges})
             emit_audit_log(
-                "finance.decision",
-                "persistence",
+                task_name,
+                "persist",
                 "error",
                 reason=str(exc),
-                output=str({"nodes": nodes_to_persist, "edges": edges}),
+                output=payload_repr,
+                user_id=user_id,
+                group_id=group_id,
+            )
+            emit_audit_log(
+                task_name,
+                "workflow",
+                "error",
+                reason=str(exc),
+                output=payload_repr,
+
                 user_id=user_id,
                 group_id=group_id,
             )
             raise
+        emit_audit_log(task_name, "persist", "success", user_id=user_id, group_id=group_id)
 
         summary = {"cost_of_deviation": eng_result.get("cost_of_deviation", 0)}
         context = {"analysis": analysis_id, "summary": summary}
@@ -179,18 +216,28 @@ def financial_decision_support(
             group_id=group_id,
         )
 
-        return {**context, "actions": actions}
-    except Exception as exc:
+        result = {**context, "actions": actions}
         emit_audit_log(
-            "finance.decision",
+            task_name,
+            "workflow",
+            "success",
+            output=repr(result),
+            user_id=user_id,
+            group_id=group_id,
+        )
+        return result
+    except Exception as exc:
+
+        emit_stage_update_event(
+            "finance.decision.result", "error", user_id=user_id, group_id=group_id
+        )
+        emit_audit_log(
+            task_name,
             "workflow",
             "error",
             reason=str(exc),
             user_id=user_id,
             group_id=group_id,
-        )
-        emit_stage_update_event(
-            "finance.decision.result", "error", user_id=user_id, group_id=group_id
         )
         raise
 

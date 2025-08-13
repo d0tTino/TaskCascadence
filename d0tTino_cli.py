@@ -10,8 +10,12 @@ app = typer.Typer(help="Interact with TaskCascadence intent API")
 
 def _post(base_url: str, payload: dict) -> dict:
     url = f"{base_url.rstrip('/')}/intent"
-    response = requests.post(url, json=payload, timeout=30)
-    response.raise_for_status()
+    try:
+        response = requests.post(url, json=payload, timeout=30)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        typer.echo(f"error contacting {url}: {exc}", err=True)
+        raise
     return response.json()
 
 

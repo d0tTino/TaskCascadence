@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
+
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -10,6 +9,7 @@ from . import dispatch, subscribe
 from ..http_utils import request_with_retry
 from .. import research
 from ..ume import emit_stage_update_event, emit_task_note, emit_audit_log
+from ..async_utils import run_coroutine
 from ..ume.models import TaskNote
 
 
@@ -60,25 +60,12 @@ def create_calendar_event(
     travel_info: Dict[str, Any] | None = None
     if payload.get("location"):
         try:
-            asyncio.get_running_loop()
-            with ThreadPoolExecutor() as executor:
-                travel_info = executor.submit(
-                    lambda: asyncio.run(
-                        research.async_gather(
-                            f"travel time to {payload['location']}",
-                            user_id=user_id,
-                            group_id=group_id,
-                        )
-                    )
-                ).result()
-        except RuntimeError:
-            try:
-                travel_info = asyncio.run(
-                    research.async_gather(
-                        f"travel time to {payload['location']}",
-                        user_id=user_id,
-                        group_id=group_id,
-                    )
+            travel_info = run_coroutine(
+                research.async_gather(
+                    f"travel time to {payload['location']}",
+                    user_id=user_id,
+                    group_id=group_id,
+
                 )
             except Exception:
                 travel_info = None

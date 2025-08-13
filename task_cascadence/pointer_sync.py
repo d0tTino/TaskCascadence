@@ -15,6 +15,7 @@ from .config import load_config
 from .pointer_store import PointerStore
 from .ume.models import PointerUpdate
 from .ume import emit_pointer_update
+from .async_utils import run_coroutine
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +114,7 @@ async def run_async() -> None:
 
 def run() -> None:
     """Synchronous wrapper for :func:`run_async`."""
-
-    asyncio.run(run_async())
+    run_coroutine(run_async())
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution

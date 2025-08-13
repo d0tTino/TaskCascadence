@@ -15,11 +15,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 import yaml
 from google.protobuf.timestamp_pb2 import Timestamp
-import asyncio
 import inspect
+from ..async_utils import run_coroutine
 
 
-from typing import Any, Dict, Iterable, Tuple, Optional, TYPE_CHECKING
+from typing import Any, Dict, Iterable, Tuple, Optional, TYPE_CHECKING, Coroutine, cast
 
 if TYPE_CHECKING:  # pragma: no cover - used for type hints only
     from ..plugins import BaseTask  # noqa: F401
@@ -122,30 +122,18 @@ class BaseScheduler:
                         add_pipeline(name, pipeline)
                         try:
                             result = pipeline.run(user_id=uid, group_id=group_id)
-                            if inspect.iscoroutine(result):
-                                try:
-                                    asyncio.get_running_loop()
-                                except RuntimeError:
-                                    result = asyncio.run(result)
-                                else:
-                                    _res = result
-                                    async def _await_result() -> Any:
-                                        return await _res
-                                    result = _await_result()
+                            if inspect.isawaitable(result):
+                                result = run_coroutine(
+                                    cast(Coroutine[Any, Any, Any], result)
+                                )
                         finally:
                             remove_pipeline(name)
                     else:
                         result = task.run()
-                        if inspect.iscoroutine(result):
-                            try:
-                                asyncio.get_running_loop()
-                            except RuntimeError:
-                                result = asyncio.run(result)
-                            else:
-                                _res = result
-                                async def _await_result() -> Any:
-                                    return await _res
-                                result = _await_result()
+                        if inspect.isawaitable(result):
+                            result = run_coroutine(
+                                cast(Coroutine[Any, Any, Any], result)
+                            )
                 except Exception:
                     status = "error"
                     raise

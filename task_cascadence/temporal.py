@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Optional
-import asyncio
+from .async_utils import run_coroutine
 
 from temporalio.client import Client
 from temporalio.worker import Replayer
@@ -31,7 +31,7 @@ class TemporalBackend:
 
     def run_workflow_sync(self, workflow: str, *args: Any, **kwargs: Any) -> Any:
         """Synchronously execute ``workflow`` and return its result."""
-        return asyncio.run(self.run_workflow(workflow, *args, **kwargs))
+        return run_coroutine(self.run_workflow(workflow, *args, **kwargs))
 
     def replay(self, history_path: str) -> None:
         """Replay a workflow history from ``history_path`` for debugging."""
