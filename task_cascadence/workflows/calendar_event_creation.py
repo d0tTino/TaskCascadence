@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
+import asyncio
+from concurrent.futures import Future, ThreadPoolExecutor
 
 from . import dispatch, subscribe
 
@@ -58,17 +60,47 @@ def create_calendar_event(
             raise ValueError(f"missing required field: {field}")
 
     travel_info: Dict[str, Any] | None = None
+    travel_future: Future | None = None
+    travel_executor: ThreadPoolExecutor | None = None
     if payload.get("location"):
+        query = f"travel time to {payload['location']}"
         try:
-            travel_info = run_coroutine(
-                research.async_gather(
-                    f"travel time to {payload['location']}",
+            asyncio.get_running_loop()
+            travel_executor = ThreadPoolExecutor(max_workers=1)
+            travel_future = travel_executor.submit(
+                lambda: run_coroutine(
+                    research.async_gather(
+                        query, user_id=user_id, group_id=group_id
+                    )
+                )
+            )
+        except RuntimeError:
+            try:
+                travel_info = run_coroutine(
+                    research.async_gather(
+                        query, user_id=user_id, group_id=group_id
+                    )
+                )
+                emit_audit_log(
+                    "calendar.event.create",
+                    "research",
+                    "success",
+                    user_id=user_id,
+                    group_id=group_id,
+                )
+            except Exception as exc:
+                emit_audit_log(
+                    "calendar.event.create",
+                    "research",
+                    "error",
+                    reason=str(exc),
                     user_id=user_id,
                     group_id=group_id,
                 )
             )
         except Exception:
             travel_info = None
+
 
     try:
         if not _has_permission(
@@ -85,6 +117,30 @@ def create_calendar_event(
             group_id=group_id,
         )
         raise
+
+    if travel_future is not None and travel_info is None:
+        try:
+            travel_info = travel_future.result()
+            emit_audit_log(
+                "calendar.event.create",
+                "research",
+                "success",
+                user_id=user_id,
+                group_id=group_id,
+            )
+        except Exception as exc:
+            emit_audit_log(
+                "calendar.event.create",
+                "research",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            travel_info = None
+        finally:
+            if travel_executor is not None:
+                travel_executor.shutdown(wait=False)
 
     invitees: List[str] = payload.get("invitees", []) or []
     for invitee in invitees:
