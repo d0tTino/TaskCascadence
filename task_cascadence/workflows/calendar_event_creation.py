@@ -67,13 +67,30 @@ def create_calendar_event(
         try:
             asyncio.get_running_loop()
             travel_executor = ThreadPoolExecutor(max_workers=1)
-            travel_future = travel_executor.submit(
-                lambda: run_coroutine(
+
+            async def _run() -> Dict[str, Any]:
+                task = asyncio.create_task(
                     research.async_gather(
                         query, user_id=user_id, group_id=group_id
                     )
                 )
-            )
+                return await task
+
+            def _exec() -> Dict[str, Any]:
+                try:
+                    return asyncio.run(_run())
+                except Exception as exc:
+                    emit_audit_log(
+                        "calendar.event.create",
+                        "research",
+                        "error",
+                        reason=str(exc),
+                        user_id=user_id,
+                        group_id=group_id,
+                    )
+                    raise
+
+            travel_future = travel_executor.submit(_exec)
         except RuntimeError:
             try:
                 travel_info = run_coroutine(
