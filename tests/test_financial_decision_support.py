@@ -4,11 +4,15 @@ from typing import Any
 
 import pytest
 import requests
+import types
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from task_cascadence.workflows import dispatch
-from task_cascadence.workflows import (
+sys.modules["task_cascadence.workflows.calendar_event_creation"] = types.ModuleType(
+    "calendar_event_creation"
+)
+from task_cascadence.workflows import dispatch  # noqa: E402
+from task_cascadence.workflows import (  # noqa: E402
     financial_decision_support as fds,
 )
 
@@ -136,10 +140,15 @@ def test_financial_decision_support_group_id_mismatch(monkeypatch):
     def fake_request(*a, **k):
         raise AssertionError("request should not be called")
 
+    audit_logs = []
+
+    def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
+        audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
+
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", lambda *a, **k: None)
     monkeypatch.setattr(fds, "dispatch", lambda *a, **k: None)
-    monkeypatch.setattr(fds, "emit_audit_log", lambda *a, **k: None)
+    monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
 
     with pytest.raises(ValueError):
         dispatch(
@@ -148,6 +157,15 @@ def test_financial_decision_support_group_id_mismatch(monkeypatch):
             user_id="alice",
             group_id="g1",
         )
+
+    assert any(
+        a[1] == "workflow"
+        and a[2] == "error"
+        and "Payload group_id does not match caller group_id" in (a[3] or "")
+        and a[5] == "alice"
+        and a[6] == "g1"
+        for a in audit_logs
+    )
 
 
 def test_financial_decision_support_time_horizon(monkeypatch):
@@ -346,7 +364,11 @@ def test_financial_decision_support_persistence_failure(monkeypatch):
     )
 
 
-def test_financial_decision_support_missing_fields(monkeypatch):
+@pytest.mark.parametrize(
+    "payload,missing",
+    [({"max_options": 3}, "budget"), ({"budget": 100}, "max_options")],
+)
+def test_financial_decision_support_missing_fields(monkeypatch, payload, missing):
     calls = []
 
     def fake_request(method, url, timeout, **kwargs):
@@ -363,14 +385,27 @@ def test_financial_decision_support_missing_fields(monkeypatch):
     def fake_dispatch(event, payload, user_id, group_id=None):
         dispatched.append(event)
 
+    audit_logs = []
+
+    def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
+        audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
+
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
-    monkeypatch.setattr(fds, "emit_audit_log", lambda *a, **k: None)
+    monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
 
     with pytest.raises(ValueError):
-        dispatch("finance.decision.request", {}, user_id="alice")
+        dispatch("finance.decision.request", payload, user_id="alice")
 
     assert calls == []
     assert emitted == [("finance.decision.result", "error", "alice", None)]
     assert "finance.decision.result" not in dispatched
+    assert any(
+        a[1] == "workflow"
+        and a[2] == "error"
+        and a[3] == f"Missing required fields: {missing}"
+        and a[5] == "alice"
+        and a[6] is None
+        for a in audit_logs
+    )
