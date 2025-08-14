@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
+import threading
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -44,27 +45,36 @@ class BaseScheduler:
     def __init__(self, temporal: Optional[TemporalBackend] = None) -> None:
         self._tasks: Dict[str, Dict[str, Any]] = {}
         self._temporal = temporal
+        self._schedules_lock = threading.Lock()
 
     def register_task(self, name: str, task: Any) -> None:
         """Register a task object under ``name``."""
 
-        self._tasks[name] = {"task": task, "disabled": False, "paused": False}
+        with self._schedules_lock:
+            self._tasks[name] = {
+                "task": task,
+                "disabled": False,
+                "paused": False,
+            }
 
     # ------------------------------------------------------------------
     # Query helpers
     def list_tasks(self) -> Iterable[Tuple[str, bool]]:
         """Return an iterable of ``(name, disabled)`` tuples."""
 
-        for name, info in self._tasks.items():
+        with self._schedules_lock:
+            items = list(self._tasks.items())
+        for name, info in items:
             yield name, info["disabled"]
 
     def is_async(self, name: str) -> bool:
         """Return ``True`` if the task registered under ``name`` is asynchronous."""
 
-        info = self._tasks.get(name)
-        if not info:
-            raise ValueError(f"Unknown task: {name}")
-        task = info["task"]
+        with self._schedules_lock:
+            info = self._tasks.get(name)
+            if not info:
+                raise ValueError(f"Unknown task: {name}")
+            task = info["task"]
         run = getattr(task, "run", None)
         return inspect.iscoroutinefunction(run)
 
@@ -78,17 +88,18 @@ class BaseScheduler:
     ) -> Any:
         """Run a task by name if it exists and is enabled."""
 
-        info = self._tasks.get(name)
-        if not info:
-            raise ValueError(f"Unknown task: {name}")
-        if info["disabled"]:
-            raise ValueError(f"Task '{name}' is disabled")
-        if info.get("paused"):
-            raise ValueError(f"Task '{name}' is paused")
-        if user_id is None:
-            raise ValueError("user_id is required")
-        uid = user_id
-        task = info["task"]
+        with self._schedules_lock:
+            info = self._tasks.get(name)
+            if not info:
+                raise ValueError(f"Unknown task: {name}")
+            if info["disabled"]:
+                raise ValueError(f"Task '{name}' is disabled")
+            if info.get("paused"):
+                raise ValueError(f"Task '{name}' is paused")
+            if user_id is None:
+                raise ValueError("user_id is required")
+            uid = user_id
+            task = info["task"]
 
         if (use_temporal or (use_temporal is None and self._temporal)):
             if not self._temporal:
@@ -170,23 +181,26 @@ class BaseScheduler:
     def disable_task(self, name: str) -> None:
         """Disable a registered task."""
 
-        if name not in self._tasks:
-            raise ValueError(f"Unknown task: {name}")
-        self._tasks[name]["disabled"] = True
+        with self._schedules_lock:
+            if name not in self._tasks:
+                raise ValueError(f"Unknown task: {name}")
+            self._tasks[name]["disabled"] = True
 
     def pause_task(self, name: str) -> None:
         """Temporarily pause a registered task."""
 
-        if name not in self._tasks:
-            raise ValueError(f"Unknown task: {name}")
-        self._tasks[name]["paused"] = True
+        with self._schedules_lock:
+            if name not in self._tasks:
+                raise ValueError(f"Unknown task: {name}")
+            self._tasks[name]["paused"] = True
 
     def resume_task(self, name: str) -> None:
         """Resume a previously paused task."""
 
-        if name not in self._tasks:
-            raise ValueError(f"Unknown task: {name}")
-        self._tasks[name]["paused"] = False
+        with self._schedules_lock:
+            if name not in self._tasks:
+                raise ValueError(f"Unknown task: {name}")
+            self._tasks[name]["paused"] = False
 
 
 class TemporalScheduler(BaseScheduler):
@@ -248,7 +262,9 @@ class CronScheduler(BaseScheduler):
         return {}
 
     def _restore_jobs(self, tasks):
-        for job_id, data in self.schedules.items():
+        with self._schedules_lock:
+            items = list(self.schedules.items())
+        for job_id, data in items:
             task = tasks.get(job_id)
             if not task:
                 continue
@@ -315,10 +331,11 @@ class CronScheduler(BaseScheduler):
                 task, event, user_id=user_id, group_id=group_id
             )
             job_id = task.__class__.__name__
-            sched_entry = self.schedules.get(job_id)
-            if isinstance(sched_entry, dict):
-                sched_entry["calendar_event"] = {"node": node, "poll": interval}
-                self._save_schedules()
+            with self._schedules_lock:
+                sched_entry = self.schedules.get(job_id)
+                if isinstance(sched_entry, dict):
+                    sched_entry["calendar_event"] = {"node": node, "poll": interval}
+                    self._save_schedules()
 
         self.scheduler.add_job(
             _poll,
@@ -333,8 +350,10 @@ class CronScheduler(BaseScheduler):
         self, task, user_id: str | None = None, group_id: str | None = None
     ):
         def runner():
-            info = self._tasks.get(task.__class__.__name__)
-            if info and info.get("paused"):
+            with self._schedules_lock:
+                info = self._tasks.get(task.__class__.__name__)
+                paused = bool(info and info.get("paused"))
+            if paused:
                 return
             self.run_task(
                 task.__class__.__name__, user_id=user_id, group_id=group_id
@@ -379,16 +398,17 @@ class CronScheduler(BaseScheduler):
         task, cron_expression = name_or_task, task_or_expr
         job_id = task.__class__.__name__
         super().register_task(job_id, task)
-        if user_id is None and group_id is None:
-            self.schedules[job_id] = cron_expression
-        else:
-            entry: dict[str, Any] = {"expr": cron_expression}
-            if user_id is not None:
-                entry["user_id"] = user_id
-            if group_id is not None:
-                entry["group_id"] = group_id
-            self.schedules[job_id] = entry
-        self._save_schedules()
+        with self._schedules_lock:
+            if user_id is None and group_id is None:
+                self.schedules[job_id] = cron_expression
+            else:
+                entry: dict[str, Any] = {"expr": cron_expression}
+                if user_id is not None:
+                    entry["user_id"] = user_id
+                if group_id is not None:
+                    entry["group_id"] = group_id
+                self.schedules[job_id] = entry
+            self._save_schedules()
 
         trigger = self._CronTrigger.from_crontab(
             cron_expression, timezone=self.scheduler.timezone
@@ -444,8 +464,10 @@ class CronScheduler(BaseScheduler):
                 info = dict(entry)
 
             task_obj = (tasks or {}).get(job_id)
-            if not task_obj and job_id in self._tasks:
-                task_obj = self._tasks[job_id]["task"]
+            if not task_obj:
+                with self._schedules_lock:
+                    if job_id in self._tasks:
+                        task_obj = self._tasks[job_id]["task"]
             if not task_obj:
                 continue
 
@@ -472,10 +494,11 @@ class CronScheduler(BaseScheduler):
                     self.schedule_from_event(
                         task_obj, event, user_id=user_id, group_id=group_id
                     )
-                    sched_entry = self.schedules.get(job_id)
-                    if isinstance(sched_entry, dict):
-                        sched_entry["calendar_event"] = {"node": node}
-                        self._save_schedules()
+                    with self._schedules_lock:
+                        sched_entry = self.schedules.get(job_id)
+                        if isinstance(sched_entry, dict):
+                            sched_entry["calendar_event"] = {"node": node}
+                            self._save_schedules()
                 continue
 
             self.register_task(
@@ -486,16 +509,19 @@ class CronScheduler(BaseScheduler):
             )
 
             if "recurrence" in info:
-                sched_entry = self.schedules.get(job_id)
-                if isinstance(sched_entry, dict):
-                    sched_entry["recurrence"] = info["recurrence"]
-                else:
-                    self.schedules[job_id] = {
-                        "expr": info["expr"],
-                        "recurrence": info["recurrence"],
-                    }
+                with self._schedules_lock:
+                    sched_entry = self.schedules.get(job_id)
+                    if isinstance(sched_entry, dict):
+                        sched_entry["recurrence"] = info["recurrence"]
+                    else:
+                        self.schedules[job_id] = {
+                            "expr": info["expr"],
+                            "recurrence": info["recurrence"],
+                        }
+                    self._save_schedules()
 
-        self._save_schedules()
+        with self._schedules_lock:
+            self._save_schedules()
 
     def schedule_from_event(
         self,
@@ -531,33 +557,39 @@ class CronScheduler(BaseScheduler):
         )
 
         job_id = task.__class__.__name__
-        sched_entry = self.schedules.get(job_id)
-        if isinstance(sched_entry, dict):
-            sched_entry["recurrence"] = recurrence
-            if user_id is not None:
-                sched_entry["user_id"] = user_id
-            if group_id is not None:
-                sched_entry["group_id"] = group_id
-        else:
-            entry: dict[str, Any] = {"expr": expr, "recurrence": recurrence}
-            if user_id is not None:
-                entry["user_id"] = user_id
-            if group_id is not None:
-                entry["group_id"] = group_id
-            self.schedules[job_id] = entry
-        self._save_schedules()
+        with self._schedules_lock:
+            sched_entry = self.schedules.get(job_id)
+            if isinstance(sched_entry, dict):
+                sched_entry["recurrence"] = recurrence
+                if user_id is not None:
+                    sched_entry["user_id"] = user_id
+                if group_id is not None:
+                    sched_entry["group_id"] = group_id
+            else:
+                entry: dict[str, Any] = {"expr": expr, "recurrence": recurrence}
+                if user_id is not None:
+                    entry["user_id"] = user_id
+                if group_id is not None:
+                    entry["group_id"] = group_id
+                self.schedules[job_id] = entry
+            self._save_schedules()
 
     def unschedule(self, name: str) -> None:
         """Remove the cron schedule for ``name``."""
 
-        if name not in self.schedules:
-            raise ValueError(f"Unknown schedule: {name}")
-        try:
-            self.scheduler.remove_job(name)
-        except Exception:  # pragma: no cover - passthrough
-            pass
-        self.schedules.pop(name, None)
-        self._save_schedules()
+        with self._schedules_lock:
+            if name not in self.schedules:
+                raise ValueError(f"Unknown schedule: {name}")
+            try:
+                self.scheduler.remove_job(name)
+            except Exception:  # pragma: no cover - passthrough
+                pass
+            self.schedules.pop(name, None)
+            self._save_schedules()
+        # Ensure stage events are persisted even when no transport is configured
+        from ..stage_store import StageStore
+        StageStore().add_event(name, "unschedule", None, None)
+
         from ..ume import emit_stage_update_event
 
         emit_stage_update_event(name, "unschedule")
