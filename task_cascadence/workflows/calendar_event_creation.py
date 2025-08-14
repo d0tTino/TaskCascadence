@@ -97,16 +97,10 @@ def create_calendar_event(
                     user_id=user_id,
                     group_id=group_id,
                 )
-                travel_info = None
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "research",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
             )
+        except Exception:
+            travel_info = None
+
 
     try:
         if not _has_permission(

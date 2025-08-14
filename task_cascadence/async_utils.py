@@ -3,26 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Coroutine
 
 
 def run_coroutine(coro: Coroutine[Any, Any, Any]) -> Any:
-    """Run ``coro`` using the current event loop if available.
+    """Synchronously execute *coro* and return its result.
 
-    If no event loop is running, a temporary loop is created and closed after
-    execution. When a loop is running, the coroutine is scheduled using
-    :func:`asyncio.create_task` and the resulting task is returned for the
-    caller to await.
+    When no event loop is running ``asyncio.run`` is used. If a loop is already
+    running (e.g. when called from synchronous code within an async test) the
+    coroutine is executed in a dedicated thread with its own event loop so the
+    current loop is not blocked.
     """
     try:
-        loop = asyncio.get_running_loop()
+        asyncio.get_running_loop()
     except RuntimeError:
-        loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(loop)
-            return loop.run_until_complete(coro)
-        finally:
-            asyncio.set_event_loop(None)
-            loop.close()
+        return asyncio.run(coro)
     else:
-        return loop.create_task(coro)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            return executor.submit(lambda: asyncio.run(coro)).result()
