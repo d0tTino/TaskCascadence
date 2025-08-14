@@ -65,10 +65,8 @@ def create_calendar_event(
                     f"travel time to {payload['location']}",
                     user_id=user_id,
                     group_id=group_id,
-
                 )
-            except Exception:
-                travel_info = None
+            )
         except Exception:
             travel_info = None
 
