@@ -97,7 +97,6 @@ def create_calendar_event(
                     user_id=user_id,
                     group_id=group_id,
                 )
-            )
         except Exception:
             travel_info = None
 
