@@ -7,7 +7,7 @@ from ..http_utils import request_with_retry
 from ..ume import emit_stage_update_event, emit_audit_log
 
 
-TASK_NAME = "finance.decision"
+task_name = "finance.decision"
 
 
 @subscribe("finance.decision.request")
@@ -20,42 +20,43 @@ def financial_decision_support(
     engine_base: str = "http://finance-engine",
 ) -> Dict[str, Any]:
     """Aggregate financial data, run a debt simulation, and persist results."""
-    emit_audit_log(TASK_NAME, "workflow", "started", user_id=user_id, group_id=group_id)
+    emit_audit_log(task_name, "workflow", "started", user_id=user_id, group_id=group_id)
 
     payload_group_id = payload.get("group_id")
     if payload_group_id is not None and payload_group_id != group_id:
-        emit_stage_update_event(
-            "finance.decision.result", "error", user_id=user_id, group_id=group_id
-        )
+        reason = "Payload group_id does not match caller group_id"
         emit_audit_log(
-            TASK_NAME,
-            "workflow",
-            "error",
-            reason="Payload group_id does not match caller group_id",
-            user_id=user_id,
-            group_id=group_id,
-        )
-        raise ValueError("Payload group_id does not match caller group_id")
-    time_horizon = payload.get("time_horizon")
-
-    required_fields = {"budget", "max_options"}
-    missing = [f for f in required_fields if f not in payload]
-    if missing:
-        emit_stage_update_event(
-            "finance.decision.result", "error", user_id=user_id, group_id=group_id
-        )
-        reason = f"Missing required fields: {', '.join(missing)}"
-        emit_audit_log(
-            TASK_NAME,
+            task_name,
             "workflow",
             "error",
             reason=reason,
             user_id=user_id,
             group_id=group_id,
         )
+        emit_stage_update_event(
+            "finance.decision.result", "error", user_id=user_id, group_id=group_id
+        )
+        raise ValueError(reason)
+    time_horizon = payload.get("time_horizon")
+
+    required_fields = {"budget", "max_options"}
+    missing = [f for f in required_fields if f not in payload]
+    if missing:
+        reason = f"Missing required fields: {', '.join(missing)}"
+        emit_audit_log(
+            task_name,
+            "workflow",
+            "error",
+            reason=reason,
+            user_id=user_id,
+            group_id=group_id,
+        )
+        emit_stage_update_event(
+            "finance.decision.result", "error", user_id=user_id, group_id=group_id
+        )
         raise ValueError(reason)
     try:
-        emit_audit_log(TASK_NAME, "research", "started", user_id=user_id, group_id=group_id)
+        emit_audit_log(task_name, "research", "started", user_id=user_id, group_id=group_id)
         url = f"{ume_base.rstrip('/')}/v1/nodes"
         params: Dict[str, Any] = {
             "types": "FinancialAccount,FinancialGoal,DecisionAnalysis",
@@ -69,8 +70,8 @@ def financial_decision_support(
             resp = request_with_retry("GET", url, params=params, timeout=5)
             data = resp.json()
         except Exception as exc:
-            emit_audit_log(TASK_NAME, "research", "error", reason=str(exc), user_id=user_id, group_id=group_id)
-            emit_audit_log(TASK_NAME, "workflow", "error", reason=str(exc), user_id=user_id, group_id=group_id)
+            emit_audit_log(task_name, "research", "error", reason=str(exc), user_id=user_id, group_id=group_id)
+            emit_audit_log(task_name, "workflow", "error", reason=str(exc), user_id=user_id, group_id=group_id)
             raise
         nodes: List[Dict[str, Any]] = data.get("nodes", [])
 
@@ -94,7 +95,7 @@ def financial_decision_support(
         if "max_options" in payload:
             engine_payload["max_options"] = payload["max_options"]
 
-        emit_audit_log(TASK_NAME, "engine", "started", user_id=user_id, group_id=group_id)
+        emit_audit_log(task_name, "engine", "started", user_id=user_id, group_id=group_id)
         try:
             eng_resp = request_with_retry(
                 "POST",
@@ -105,7 +106,7 @@ def financial_decision_support(
             eng_result = eng_resp.json()
         except Exception as exc:
             emit_audit_log(
-                TASK_NAME,
+                task_name,
                 "engine",
                 "error",
                 reason=str(exc),
@@ -114,7 +115,7 @@ def financial_decision_support(
                 group_id=group_id,
             )
             emit_audit_log(
-                TASK_NAME,
+                task_name,
                 "workflow",
                 "error",
                 reason=str(exc),
@@ -124,7 +125,7 @@ def financial_decision_support(
             )
             raise
         emit_audit_log(
-            TASK_NAME,
+            task_name,
             "engine",
             "success",
             output=repr(eng_result),
@@ -174,7 +175,7 @@ def financial_decision_support(
                     owned_edge["group_id"] = group_id
                 edges.append(owned_edge)
 
-            emit_audit_log(TASK_NAME, "persistence", "started", user_id=user_id, group_id=group_id)
+        emit_audit_log(task_name, "persistence", "started", user_id=user_id, group_id=group_id)
         try:
             request_with_retry(
                 "POST", url, json={"nodes": nodes_to_persist, "edges": edges}, timeout=5
@@ -182,7 +183,7 @@ def financial_decision_support(
         except Exception as exc:
             payload_repr = repr({"nodes": nodes_to_persist, "edges": edges})
             emit_audit_log(
-                TASK_NAME,
+                task_name,
                 "persistence",
                 "error",
                 reason=str(exc),
@@ -191,7 +192,7 @@ def financial_decision_support(
                 group_id=group_id,
             )
             emit_audit_log(
-                TASK_NAME,
+                task_name,
                 "workflow",
                 "error",
                 reason=str(exc),
@@ -200,7 +201,7 @@ def financial_decision_support(
                 group_id=group_id,
             )
             raise
-        emit_audit_log(TASK_NAME, "persistence", "success", user_id=user_id, group_id=group_id)
+        emit_audit_log(task_name, "persistence", "success", user_id=user_id, group_id=group_id)
 
         summary = {"cost_of_deviation": eng_result.get("cost_of_deviation", 0)}
         context = {"analysis": analysis_id, "summary": summary}
@@ -219,7 +220,7 @@ def financial_decision_support(
             "finance.decision.result", "completed", user_id=user_id, group_id=group_id
         )
         emit_audit_log(
-            TASK_NAME,
+            task_name,
             "workflow",
             "completed",
             user_id=user_id,
@@ -228,7 +229,7 @@ def financial_decision_support(
 
         result = {**context, "actions": actions}
         emit_audit_log(
-            TASK_NAME,
+            task_name,
             "workflow",
             "success",
             output=repr(result),
@@ -242,7 +243,7 @@ def financial_decision_support(
             "finance.decision.result", "error", user_id=user_id, group_id=group_id
         )
         emit_audit_log(
-            TASK_NAME,
+            task_name,
             "workflow",
             "error",
             reason=str(exc),
