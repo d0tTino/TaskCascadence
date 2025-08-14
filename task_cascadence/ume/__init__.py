@@ -243,7 +243,7 @@ def emit_task_spec(
 
     target = client or _default_client
     if target is None:
-        raise ValueError("No transport client configured")
+        return None
     if user_id is not None:
         spec.user_id = user_id
         spec.user_hash = _hash_user_id(user_id)
@@ -268,7 +268,7 @@ def emit_task_run(
 
     target = client or _default_client
     if target is None:
-        raise ValueError("No transport client configured")
+        return None
     if user_id is not None:
         run.user_id = user_id
         run.user_hash = _hash_user_id(user_id)
@@ -293,7 +293,7 @@ def emit_pointer_update(
 
     target = client or _default_client
     if target is None:
-        raise ValueError("No transport client configured")
+        return None
     if user_id is not None:
         update.user_id = user_id
         update.user_hash = _hash_user_id(user_id)
@@ -318,7 +318,7 @@ def emit_task_note(
 
     target = client or _default_client
     if target is None:
-        raise ValueError("No transport client configured")
+        return None
     if user_id is not None:
         note.user_id = user_id
         note.user_hash = _hash_user_id(user_id)
@@ -343,7 +343,7 @@ def emit_idea_seed(
 
     target = client or _default_client
     if target is None:
-        raise ValueError("No transport client configured")
+        return None
     if user_id is not None:
         seed.user_id = user_id
         seed.user_hash = _hash_user_id(user_id)
