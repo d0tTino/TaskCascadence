@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+from threading import RLock
 from typing import Any, Callable, Dict
 
 _registry: Dict[str, Callable[..., Any]] = {}
+_registry_lock = RLock()
 
 
 def subscribe(event: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to register a workflow for *event*."""
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        _registry[event] = func
+        with _registry_lock:
+            _registry[event] = func
         return func
 
     return decorator
@@ -26,7 +29,8 @@ def dispatch(
 
     if user_id is None:
         raise ValueError("user_id is required")
-    handler = _registry.get(event)
+    with _registry_lock:
+        handler = _registry.get(event)
     if not handler:
         raise ValueError(f"No workflow registered for {event}")
     if group_id is None:
