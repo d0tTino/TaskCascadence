@@ -178,7 +178,13 @@ class BaseScheduler:
             raise RuntimeError("Temporal backend not configured")
         self._temporal.replay(history_path)
 
-    def disable_task(self, name: str) -> None:
+    def disable_task(
+        self,
+        name: str,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         """Disable a registered task."""
 
         with self._schedules_lock:
@@ -186,7 +192,13 @@ class BaseScheduler:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["disabled"] = True
 
-    def pause_task(self, name: str) -> None:
+    def pause_task(
+        self,
+        name: str,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         """Temporarily pause a registered task."""
 
         with self._schedules_lock:
@@ -194,7 +206,13 @@ class BaseScheduler:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["paused"] = True
 
-    def resume_task(self, name: str) -> None:
+    def resume_task(
+        self,
+        name: str,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         """Resume a previously paused task."""
 
         with self._schedules_lock:
@@ -595,21 +613,47 @@ class CronScheduler(BaseScheduler):
 
         emit_stage_update_event(name, "unschedule")
 
-    def pause_task(self, name: str) -> None:
+    def disable_task(
+        self,
+        name: str,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
+        """Disable ``name`` and emit a stage event."""
+
+        super().disable_task(name, user_id=user_id, group_id=group_id)
+        from ..ume import emit_stage_update_event
+
+        emit_stage_update_event(name, "disabled", user_id=user_id, group_id=group_id)
+
+    def pause_task(
+        self,
+        name: str,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         """Pause ``name`` and emit a stage event."""
 
-        super().pause_task(name)
+        super().pause_task(name, user_id=user_id, group_id=group_id)
         from ..ume import emit_stage_update_event
 
-        emit_stage_update_event(name, "paused")
+        emit_stage_update_event(name, "paused", user_id=user_id, group_id=group_id)
 
-    def resume_task(self, name: str) -> None:
+    def resume_task(
+        self,
+        name: str,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         """Resume ``name`` and emit a stage event."""
 
-        super().resume_task(name)
+        super().resume_task(name, user_id=user_id, group_id=group_id)
         from ..ume import emit_stage_update_event
 
-        emit_stage_update_event(name, "resumed")
+        emit_stage_update_event(name, "resumed", user_id=user_id, group_id=group_id)
 
 
 # ---------------------------------------------------------------------------

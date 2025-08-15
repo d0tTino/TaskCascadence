@@ -149,11 +149,17 @@ def schedule_task(
 
 
 @app.post("/tasks/{name}/disable")
-def disable_task(name: str):
+def disable_task(
+    name: str,
+    user_id: str = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
+):
     """Disable ``name``."""
     sched = get_default_scheduler()
     try:
-        sched.disable_task(name)
+        if user_id is None:
+            raise HTTPException(400, "user_id is required")
+        sched.disable_task(name, user_id=user_id, group_id=group_id)
         return {"status": "disabled"}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -162,7 +168,7 @@ def disable_task(name: str):
 @app.post("/tasks/{name}/pause")
 def pause_task(
     name: str,
-    user_id: str | None = Depends(get_user_id),
+    user_id: str = Depends(get_user_id),
     group_id: str | None = Depends(get_group_id),
 ):
     """Pause ``name`` so it temporarily stops running."""
@@ -174,7 +180,9 @@ def pause_task(
                 raise HTTPException(400, "user_id is required")
             pipeline.pause(user_id=user_id, group_id=group_id)
         else:
-            sched.pause_task(name)
+            if user_id is None:
+                raise HTTPException(400, "user_id is required")
+            sched.pause_task(name, user_id=user_id, group_id=group_id)
         return {"status": "paused"}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -183,7 +191,7 @@ def pause_task(
 @app.post("/tasks/{name}/resume")
 def resume_task(
     name: str,
-    user_id: str | None = Depends(get_user_id),
+    user_id: str = Depends(get_user_id),
     group_id: str | None = Depends(get_group_id),
 ):
     """Resume a previously paused task."""
@@ -195,7 +203,9 @@ def resume_task(
                 raise HTTPException(400, "user_id is required")
             pipeline.resume(user_id=user_id, group_id=group_id)
         else:
-            sched.resume_task(name)
+            if user_id is None:
+                raise HTTPException(400, "user_id is required")
+            sched.resume_task(name, user_id=user_id, group_id=group_id)
         return {"status": "resumed"}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
