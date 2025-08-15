@@ -250,7 +250,8 @@ class CronScheduler(BaseScheduler):
         self.scheduler = BackgroundScheduler(timezone=tz)
         self.storage_path = Path(storage_path)
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
-        self.schedules = self._load_schedules()
+        with self._schedules_lock:
+            self.schedules = self._load_schedules()
         self._restore_jobs(tasks or {})
 
     def _load_schedules(self):
