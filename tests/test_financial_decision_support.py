@@ -158,6 +158,15 @@ def test_financial_decision_support_group_id_mismatch(monkeypatch):
             group_id="g1",
         )
 
+    assert (
+        "finance.decision",
+        "workflow",
+        "started",
+        None,
+        None,
+        "alice",
+        "g1",
+    ) in audit_logs
     assert any(
         a[1] == "workflow"
         and a[2] == "error"
@@ -401,6 +410,15 @@ def test_financial_decision_support_missing_fields(monkeypatch, payload, missing
     assert calls == []
     assert emitted == [("finance.decision.result", "error", "alice", None)]
     assert "finance.decision.result" not in dispatched
+    assert (
+        "finance.decision",
+        "workflow",
+        "started",
+        None,
+        None,
+        "alice",
+        None,
+    ) in audit_logs
     assert any(
         a[1] == "workflow"
         and a[2] == "error"
