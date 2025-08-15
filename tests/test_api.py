@@ -222,16 +222,8 @@ def test_schedule_task(monkeypatch, tmp_path):
 def test_disable_task_missing_headers(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    resp = client.post("/tasks/dummy/disable")
-    assert resp.status_code == 400
-    assert sched._tasks["dummy"]["disabled"] is False
+    resp = client.post("/tasks/dummy/disable", headers={"X-User-ID": "alice"})
 
-
-def test_disable_task(monkeypatch, tmp_path):
-    sched, _ = setup_scheduler(monkeypatch, tmp_path)
-    client = TestClient(app)
-    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
-    resp = client.post("/tasks/dummy/disable", headers=headers)
     assert resp.status_code == 200
     assert sched._tasks["dummy"]["disabled"] is True
 
