@@ -149,7 +149,11 @@ def schedule_task(
 
 
 @app.post("/tasks/{name}/disable")
-def disable_task(name: str):
+def disable_task(
+    name: str,
+    user_id: str = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
+):
     """Disable ``name``."""
     sched = get_default_scheduler()
     try:
