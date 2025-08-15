@@ -219,12 +219,50 @@ def test_schedule_task(monkeypatch, tmp_path):
     assert job is not None
 
 
-def test_disable_task(monkeypatch, tmp_path):
+def test_disable_task_missing_headers(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
     resp = client.post("/tasks/dummy/disable", headers={"X-User-ID": "alice"})
+
     assert resp.status_code == 200
     assert sched._tasks["dummy"]["disabled"] is True
+
+
+def test_pause_task_missing_headers(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.post("/tasks/dummy/pause")
+    assert resp.status_code == 400
+    assert sched._tasks["dummy"]["paused"] is False
+
+
+def test_pause_task(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
+    resp = client.post("/tasks/dummy/pause", headers=headers)
+    assert resp.status_code == 200
+    assert sched._tasks["dummy"]["paused"] is True
+
+
+def test_resume_task_missing_headers(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
+    client.post("/tasks/dummy/pause", headers=headers)
+    resp = client.post("/tasks/dummy/resume")
+    assert resp.status_code == 400
+    assert sched._tasks["dummy"]["paused"] is True
+
+
+def test_resume_task(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
+    client.post("/tasks/dummy/pause", headers=headers)
+    resp = client.post("/tasks/dummy/resume", headers=headers)
+    assert resp.status_code == 200
+    assert sched._tasks["dummy"]["paused"] is False
 
 
 def test_register_task(monkeypatch, tmp_path):
