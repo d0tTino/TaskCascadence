@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from threading import RLock
+from threading import Lock
 from typing import Any, Callable, Dict
 
 _registry: Dict[str, Callable[..., Any]] = {}
-_registry_lock = RLock()
+_registry_lock = Lock()
 
 
 def subscribe(event: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
