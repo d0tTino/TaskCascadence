@@ -24,6 +24,12 @@ class DummyResponse:
         return self._data
 
 
+def test_calendar_event_creation_module_imports():
+    import task_cascadence.workflows.calendar_event_creation as mod
+
+    assert mod is not None
+
+
 def test_calendar_event_creation_importable():
     import importlib
     import sys
@@ -350,6 +356,71 @@ async def test_calendar_event_creation_in_event_loop(monkeypatch):
         "calendar.event.create",
         "workflow",
         "completed",
+    ) in audit_logs
+
+
+@pytest.mark.asyncio
+async def test_calendar_event_research_failure_in_event_loop(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append((method, url, kwargs))
+        if method == "GET":
+            return DummyResponse({"allowed": True})
+        if url.endswith("/edges"):
+            return DummyResponse({"ok": True})
+        return DummyResponse({"id": "evt1"})
+
+    async def failing_async_gather(query, user_id=None, group_id=None):
+        raise RuntimeError("research down")
+
+    audit_logs: list[tuple[str, str, str, str | None]] = []
+
+    def fake_emit_audit_log(task, stage, status, *, reason=None, user_id=None, group_id=None, **_):
+        audit_logs.append((task, stage, status, reason))
+
+    emitted_notes: list[str] = []
+
+    def fake_emit_note(note, user_id=None, group_id=None):
+        emitted_notes.append(note.note)
+
+    monkeypatch.setattr(cec, "request_with_retry", fake_request)
+    monkeypatch.setattr(cec.research, "async_gather", failing_async_gather)
+    monkeypatch.setattr(cec, "emit_stage_update_event", lambda *a, **k: None)
+    monkeypatch.setattr(cec, "emit_task_note", fake_emit_note)
+    monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
+    monkeypatch.setattr(cec, "dispatch", lambda *a, **k: None)
+
+    payload = {
+        "title": "Lunch",
+        "start_time": "2024-01-01T12:00:00Z",
+        "location": "Cafe",
+    }
+
+    result = dispatch(
+        "calendar.event.create_request", payload, user_id="alice", base_url="http://svc"
+    )
+
+    assert result == {"event_id": "evt1"}
+    assert "travel_time" not in calls[1][2]["json"]
+    assert emitted_notes == ["No travel details"]
+    assert (
+        "calendar.event.create",
+        "research",
+        "error",
+        "research down",
+    ) in audit_logs
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "started",
+        None,
+    ) in audit_logs
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "completed",
+        None,
     ) in audit_logs
 
 
