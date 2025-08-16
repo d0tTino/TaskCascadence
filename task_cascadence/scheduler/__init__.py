@@ -193,6 +193,14 @@ class BaseScheduler:
             if name not in self._tasks:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["disabled"] = True
+        from ..ume import emit_audit_log
+        emit_audit_log(
+            name,
+            "scheduler",
+            "disabled",
+            user_id=user_id,
+            group_id=group_id,
+        )
 
     def pause_task(
         self,
@@ -207,6 +215,14 @@ class BaseScheduler:
             if name not in self._tasks:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["paused"] = True
+        from ..ume import emit_audit_log
+        emit_audit_log(
+            name,
+            "scheduler",
+            "paused",
+            user_id=user_id,
+            group_id=group_id,
+        )
 
     def resume_task(
         self,
@@ -221,6 +237,14 @@ class BaseScheduler:
             if name not in self._tasks:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["paused"] = False
+        from ..ume import emit_audit_log
+        emit_audit_log(
+            name,
+            "scheduler",
+            "resumed",
+            user_id=user_id,
+            group_id=group_id,
+        )
 
 
 class TemporalScheduler(BaseScheduler):
@@ -618,19 +642,31 @@ class CronScheduler(BaseScheduler):
         with self._schedules_lock:
             if name not in self.schedules:
                 raise ValueError(f"Unknown schedule: {name}")
+            entry = self.schedules.get(name)
             try:
                 self.scheduler.remove_job(name)
             except Exception:  # pragma: no cover - passthrough
                 pass
             self.schedules.pop(name, None)
             self._save_schedules()
+        user_id = group_id = None
+        if isinstance(entry, dict):
+            user_id = entry.get("user_id")
+            group_id = entry.get("group_id")
         # Ensure stage events are persisted even when no transport is configured
         from ..stage_store import StageStore
         StageStore().add_event(name, "unschedule", None, None)
 
-        from ..ume import emit_stage_update_event
+        from ..ume import emit_stage_update_event, emit_audit_log
 
-        emit_stage_update_event(name, "unschedule")
+        emit_stage_update_event(name, "unschedule", user_id=user_id, group_id=group_id)
+        emit_audit_log(
+            name,
+            "scheduler",
+            "unschedule",
+            user_id=user_id,
+            group_id=group_id,
+        )
 
     def disable_task(
         self,
