@@ -59,6 +59,18 @@ def create_calendar_event(
         if field not in payload or not payload[field]:
             raise ValueError(f"missing required field: {field}")
 
+    payload_group_id = payload.get("group_id")
+    if payload_group_id is not None and payload_group_id != group_id:
+        emit_audit_log(
+            "calendar.event.create",
+            "workflow",
+            "error",
+            reason="group_id mismatch",
+            user_id=user_id,
+            group_id=group_id,
+        )
+        raise ValueError("group_id mismatch")
+
     travel_info: Dict[str, Any] | None = None
     travel_future: Future | None = None
     travel_executor: ThreadPoolExecutor | None = None

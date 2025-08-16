@@ -175,6 +175,35 @@ def test_calendar_event_permission_error(monkeypatch):
     ) in audit_logs
 
 
+def test_calendar_event_group_id_mismatch(monkeypatch):
+    audit_logs: list[tuple[str, str, str, str | None, str | None, str | None]] = []
+
+    def fake_emit_audit_log(
+        task, stage, status, *, reason=None, user_id=None, group_id=None, **_
+    ):
+        audit_logs.append((task, stage, status, reason, user_id, group_id))
+
+    monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
+
+    payload = {
+        "title": "Lunch",
+        "start_time": "2024-01-01T12:00:00Z",
+        "group_id": "g2",
+    }
+
+    with pytest.raises(ValueError):
+        dispatch("calendar.event.create_request", payload, user_id="alice", group_id="g1")
+
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "error",
+        "group_id mismatch",
+        "alice",
+        "g1",
+    ) in audit_logs
+
+
 def test_calendar_event_ume_failure(monkeypatch):
     calls = []
     counter = {"post": 0}
