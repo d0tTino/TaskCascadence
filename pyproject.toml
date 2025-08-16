@@ -31,7 +31,8 @@ dependencies = [
     "temporalio",
     "httpx<0.28",  # pinned for compatibility with temporalio
     "watchdog",
-    "protobuf>=5.31,<6",
+    "protobuf>=6.31,<7",
+    "python-multipart",
     "filelock",
 ]
 
@@ -43,6 +44,7 @@ dev = [
     "ruff",
     "pytest",
     "pytest-cov",
+    "pytest-asyncio",
     "mypy",
     "types-requests",
     "types-PyYAML",
@@ -50,6 +52,9 @@ dev = [
 research = [
     "tino_storm",
 ]
+
+[tool.setuptools.packages.find]
+include = ["task_cascadence*"]
 
 [tool.mypy]
 python_version = "3.10"
