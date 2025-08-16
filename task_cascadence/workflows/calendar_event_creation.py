@@ -173,7 +173,9 @@ def create_calendar_event(
     invitees: List[str] = payload.get("invitees", []) or []
     for invitee in invitees:
         try:
-            if not _has_permission(user_id, ume_base=ume_base, invitee=invitee):
+            if not _has_permission(
+                user_id, ume_base=ume_base, group_id=group_id, invitee=invitee
+            ):
                 raise PermissionError(f"user lacks permission to invite {invitee}")
         except Exception as exc:  # pragma: no cover - network failures
             emit_audit_log(
