@@ -449,35 +449,71 @@ class CronScheduler(BaseScheduler):
             Register ``task`` and schedule it using ``cron_expression``.
         """
 
+        try:  # pragma: no cover - ensure audit logging is optional for tests
+            from ..ume import emit_audit_log
+        except Exception:  # pragma: no cover - fallback when not available
+            from typing import Any  # noqa: F401
+
+            def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
+                return None
+
         if isinstance(name_or_task, str):
             # Called with ``name`` and ``task``
             name, task = name_or_task, task_or_expr
-            super().register_task(name, task)
+            try:
+                super().register_task(name, task)
+            except Exception as exc:  # pragma: no cover - passthrough
+                emit_audit_log(
+                    name,
+                    "register",
+                    "error",
+                    reason=str(exc),
+                    user_id=user_id,
+                    group_id=group_id,
+                )
+                raise
+            emit_audit_log(
+                name, "register", "success", user_id=user_id, group_id=group_id
+            )
             return
 
         task, cron_expression = name_or_task, task_or_expr
         job_id = task.__class__.__name__
-        super().register_task(job_id, task)
-        with self._schedules_lock:
-            if user_id is None and group_id is None:
-                self.schedules[job_id] = cron_expression
-            else:
-                entry: dict[str, Any] = {"expr": cron_expression}
-                if user_id is not None:
-                    entry["user_id"] = user_id
-                if group_id is not None:
-                    entry["group_id"] = group_id
-                self.schedules[job_id] = entry
-            self._save_schedules()
+        try:
+            super().register_task(job_id, task)
+            with self._schedules_lock:
+                if user_id is None and group_id is None:
+                    self.schedules[job_id] = cron_expression
+                else:
+                    entry: dict[str, Any] = {"expr": cron_expression}
+                    if user_id is not None:
+                        entry["user_id"] = user_id
+                    if group_id is not None:
+                        entry["group_id"] = group_id
+                    self.schedules[job_id] = entry
+                self._save_schedules()
 
-        trigger = self._CronTrigger.from_crontab(
-            cron_expression, timezone=self.scheduler.timezone
-        )
-        self.scheduler.add_job(
-            self._wrap_task(task, user_id=user_id, group_id=group_id),
-            trigger=trigger,
-            id=job_id,
-            replace_existing=True,
+            trigger = self._CronTrigger.from_crontab(
+                cron_expression, timezone=self.scheduler.timezone
+            )
+            self.scheduler.add_job(
+                self._wrap_task(task, user_id=user_id, group_id=group_id),
+                trigger=trigger,
+                id=job_id,
+                replace_existing=True,
+            )
+        except Exception as exc:  # pragma: no cover - passthrough
+            emit_audit_log(
+                job_id,
+                "schedule",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
+        emit_audit_log(
+            job_id, "schedule", "success", user_id=user_id, group_id=group_id
         )
 
     def schedule_task(
@@ -606,47 +642,104 @@ class CronScheduler(BaseScheduler):
             alongside the schedule metadata.
         """
 
+        try:  # pragma: no cover - allow tests to omit audit logging
+            from ..ume import emit_audit_log
+        except Exception:  # pragma: no cover - fallback when not available
+            from typing import Any  # noqa: F401
+
+            def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
+                return None
+
+        job_id = task.__class__.__name__
         recurrence = event.get("recurrence", {})
         expr = recurrence.get("cron")
         if not expr:
+            emit_audit_log(
+                job_id,
+                "schedule",
+                "error",
+                reason="event missing recurrence cron",
+                user_id=user_id,
+                group_id=group_id,
+            )
             raise ValueError("event missing recurrence cron")
 
-        self.register_task(
-            task,
-            expr,
-            user_id=user_id,
-            group_id=group_id,
-        )
+        try:
+            self.register_task(
+                task,
+                expr,
+                user_id=user_id,
+                group_id=group_id,
+            )
 
-        job_id = task.__class__.__name__
-        with self._schedules_lock:
-            sched_entry = self.schedules.get(job_id)
-            if isinstance(sched_entry, dict):
-                sched_entry["recurrence"] = recurrence
-                if user_id is not None:
-                    sched_entry["user_id"] = user_id
-                if group_id is not None:
-                    sched_entry["group_id"] = group_id
-            else:
-                entry: dict[str, Any] = {"expr": expr, "recurrence": recurrence}
-                if user_id is not None:
-                    entry["user_id"] = user_id
-                if group_id is not None:
-                    entry["group_id"] = group_id
-                self.schedules[job_id] = entry
-            self._save_schedules()
+            with self._schedules_lock:
+                sched_entry = self.schedules.get(job_id)
+                if isinstance(sched_entry, dict):
+                    sched_entry["recurrence"] = recurrence
+                    if user_id is not None:
+                        sched_entry["user_id"] = user_id
+                    if group_id is not None:
+                        sched_entry["group_id"] = group_id
+                else:
+                    entry: dict[str, Any] = {"expr": expr, "recurrence": recurrence}
+                    if user_id is not None:
+                        entry["user_id"] = user_id
+                    if group_id is not None:
+                        entry["group_id"] = group_id
+                    self.schedules[job_id] = entry
+                self._save_schedules()
+        except Exception as exc:  # pragma: no cover - passthrough
+            emit_audit_log(
+                job_id,
+                "schedule",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
+        emit_audit_log(
+            job_id, "schedule", "success", user_id=user_id, group_id=group_id
+        )
 
     def unschedule(self, name: str) -> None:
         """Remove the cron schedule for ``name``."""
 
+        try:  # pragma: no cover - allow tests to omit audit logging
+            from ..ume import emit_audit_log
+        except Exception:  # pragma: no cover - fallback when not available
+            from typing import Any  # noqa: F401
+
+            def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
+                return None
+
         with self._schedules_lock:
-            if name not in self.schedules:
+            sched_entry = self.schedules.get(name)
+            if not sched_entry:
+                emit_audit_log(
+                    name,
+                    "unschedule",
+                    "error",
+                    reason="unknown schedule",
+                )
                 raise ValueError(f"Unknown schedule: {name}")
-            entry = self.schedules.get(name)
+            if isinstance(sched_entry, dict):
+                user_id = sched_entry.get("user_id")
+                group_id = sched_entry.get("group_id")
+            else:
+                user_id = group_id = None
+
             try:
                 self.scheduler.remove_job(name)
-            except Exception:  # pragma: no cover - passthrough
-                pass
+            except Exception as exc:  # pragma: no cover - passthrough
+                emit_audit_log(
+                    name,
+                    "unschedule",
+                    "error",
+                    reason=str(exc),
+                    user_id=user_id,
+                    group_id=group_id,
+                )
             self.schedules.pop(name, None)
             self._save_schedules()
         user_id = group_id = None
@@ -659,13 +752,10 @@ class CronScheduler(BaseScheduler):
 
         from ..ume import emit_stage_update_event, emit_audit_log
 
-        emit_stage_update_event(name, "unschedule", user_id=user_id, group_id=group_id)
+        emit_stage_update_event(name, "unschedule")
         emit_audit_log(
-            name,
-            "scheduler",
-            "unschedule",
-            user_id=user_id,
-            group_id=group_id,
+            name, "unschedule", "success", user_id=user_id, group_id=group_id
+
         )
 
     def disable_task(
@@ -677,10 +767,31 @@ class CronScheduler(BaseScheduler):
     ) -> None:
         """Disable ``name`` and emit a stage event."""
 
-        super().disable_task(name, user_id=user_id, group_id=group_id)
         from ..ume import emit_stage_update_event
+        try:  # pragma: no cover - allow tests to omit audit logging
+            from ..ume import emit_audit_log
+        except Exception:  # pragma: no cover - fallback when not available
+            from typing import Any  # noqa: F401
 
+            def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
+                return None
+
+        try:
+            super().disable_task(name, user_id=user_id, group_id=group_id)
+        except Exception as exc:  # pragma: no cover - passthrough
+            emit_audit_log(
+                name,
+                "disabled",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
         emit_stage_update_event(name, "disabled", user_id=user_id, group_id=group_id)
+        emit_audit_log(
+            name, "disabled", "success", user_id=user_id, group_id=group_id
+        )
 
     def pause_task(
         self,
@@ -691,10 +802,31 @@ class CronScheduler(BaseScheduler):
     ) -> None:
         """Pause ``name`` and emit a stage event."""
 
-        super().pause_task(name, user_id=user_id, group_id=group_id)
         from ..ume import emit_stage_update_event
+        try:  # pragma: no cover - allow tests to omit audit logging
+            from ..ume import emit_audit_log
+        except Exception:  # pragma: no cover - fallback when not available
+            from typing import Any  # noqa: F401
 
+            def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
+                return None
+
+        try:
+            super().pause_task(name, user_id=user_id, group_id=group_id)
+        except Exception as exc:  # pragma: no cover - passthrough
+            emit_audit_log(
+                name,
+                "paused",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
         emit_stage_update_event(name, "paused", user_id=user_id, group_id=group_id)
+        emit_audit_log(
+            name, "paused", "success", user_id=user_id, group_id=group_id
+        )
 
     def resume_task(
         self,
@@ -705,10 +837,31 @@ class CronScheduler(BaseScheduler):
     ) -> None:
         """Resume ``name`` and emit a stage event."""
 
-        super().resume_task(name, user_id=user_id, group_id=group_id)
         from ..ume import emit_stage_update_event
+        try:  # pragma: no cover - allow tests to omit audit logging
+            from ..ume import emit_audit_log
+        except Exception:  # pragma: no cover - fallback when not available
+            from typing import Any  # noqa: F401
 
+            def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
+                return None
+
+        try:
+            super().resume_task(name, user_id=user_id, group_id=group_id)
+        except Exception as exc:  # pragma: no cover - passthrough
+            emit_audit_log(
+                name,
+                "resumed",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
         emit_stage_update_event(name, "resumed", user_id=user_id, group_id=group_id)
+        emit_audit_log(
+            name, "resumed", "success", user_id=user_id, group_id=group_id
+        )
 
 
 # ---------------------------------------------------------------------------
