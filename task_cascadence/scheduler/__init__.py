@@ -140,6 +140,8 @@ class BaseScheduler:
                         finally:
                             remove_pipeline(name)
                     else:
+                        task.user_id = uid
+                        task.group_id = group_id
                         result = task.run()
                         if inspect.isawaitable(result):
                             result = run_coroutine(
@@ -313,12 +315,20 @@ class CronScheduler(BaseScheduler):
     # ------------------------------------------------------------------
     # Calendar event integration
 
-    def _fetch_calendar_event(self, node: str) -> dict[str, Any]:
+    def _fetch_calendar_event(
+        self,
+        node: str,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> dict[str, Any]:
         """Retrieve calendar event metadata from UME.
 
         The default implementation performs an HTTP ``GET`` against the
-        ``UME_BASE_URL`` environment variable.  Tests and consumers may
-        monkeypatch this method for custom behaviour.
+        ``UME_BASE_URL`` environment variable. ``user_id`` and ``group_id``
+        are forwarded as query parameters so the service can apply
+        authorisation or filtering.  Tests and consumers may monkeypatch this
+        method for custom behaviour.
         """
 
         base = os.environ.get("UME_BASE_URL")
@@ -326,7 +336,12 @@ class CronScheduler(BaseScheduler):
             raise RuntimeError("UME_BASE_URL not configured")
         node = node.lstrip("/")
         url = f"{base.rstrip('/')}/v1/calendar/nodes/{node}"
-        response = request_with_retry("GET", url, timeout=5)
+        params: dict[str, str] = {}
+        if user_id is not None:
+            params["user_id"] = user_id
+        if group_id is not None:
+            params["group_id"] = group_id
+        response = request_with_retry("GET", url, timeout=5, params=params or None)
         return response.json()
 
     def poll_calendar_event(
@@ -345,7 +360,9 @@ class CronScheduler(BaseScheduler):
         """
 
         def _poll() -> None:
-            event = self._fetch_calendar_event(node)
+            event = self._fetch_calendar_event(
+                node, user_id=user_id, group_id=group_id
+            )
             self.schedule_from_event(
                 task, event, user_id=user_id, group_id=group_id
             )
@@ -509,7 +526,9 @@ class CronScheduler(BaseScheduler):
                         task_obj, node, interval=poll, user_id=user_id, group_id=group_id
                     )
                 else:
-                    event = self._fetch_calendar_event(node)
+                    event = self._fetch_calendar_event(
+                        node, user_id=user_id, group_id=group_id
+                    )
                     self.schedule_from_event(
                         task_obj, event, user_id=user_id, group_id=group_id
                     )

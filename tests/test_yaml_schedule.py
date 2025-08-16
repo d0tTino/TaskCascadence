@@ -63,8 +63,9 @@ def test_yaml_calendar_event_daily(tmp_path, monkeypatch):
     sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
     task = DummyTask()
 
-    def fake_fetch(self, node):
+    def fake_fetch(self, node, *, user_id=None, group_id=None):
         assert node == "evt1"
+        assert user_id is None and group_id is None
         return {"recurrence": {"cron": "0 9 * * *"}}
 
     monkeypatch.setattr(CronScheduler, "_fetch_calendar_event", fake_fetch)
@@ -84,8 +85,9 @@ def test_yaml_calendar_event_weekly(tmp_path, monkeypatch):
     sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
     task = DummyTask()
 
-    def fake_fetch(self, node):
+    def fake_fetch(self, node, *, user_id=None, group_id=None):
         assert node == "evt2"
+        assert user_id is None and group_id is None
         return {"recurrence": {"cron": "30 10 * * 1"}}
 
     monkeypatch.setattr(CronScheduler, "_fetch_calendar_event", fake_fetch)
@@ -111,8 +113,10 @@ def test_yaml_calendar_event_multiple_recurrences(tmp_path, monkeypatch):
     sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
     task = DummyTask()
 
-    def fake_fetch(self, node):
+    def fake_fetch(self, node, *, user_id=None, group_id=None):
         assert node == "evt3"
+        assert user_id == "alice"
+        assert group_id == "engineering"
         return {"recurrence": {"cron": "*/2 * * * *"}}
 
     monkeypatch.setattr(CronScheduler, "_fetch_calendar_event", fake_fetch)

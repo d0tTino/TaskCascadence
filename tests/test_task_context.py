@@ -47,3 +47,25 @@ async def test_task_pipeline_context_async(monkeypatch):
     assert task.seen_group_id == "team2"
     assert task.user_id == "bob"
     assert task.group_id == "team2"
+
+
+def test_scheduler_sets_task_context(monkeypatch):
+    from task_cascadence.scheduler import BaseScheduler
+
+    class SimpleTask:
+        def run(self):
+            self.seen_user_id = self.user_id
+            self.seen_group_id = self.group_id
+            return "ok"
+
+    monkeypatch.setattr(
+        "task_cascadence.ume.emit_task_run", lambda *a, **k: None
+    )
+    sched = BaseScheduler()
+    sched.register_task("simple", SimpleTask())
+    sched.run_task("simple", user_id="alice", group_id="team1")
+    task = sched._tasks["simple"]["task"]
+    assert task.seen_user_id == "alice"
+    assert task.seen_group_id == "team1"
+    assert task.user_id == "alice"
+    assert task.group_id == "team1"
