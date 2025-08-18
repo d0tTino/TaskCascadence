@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from threading import Lock
 from typing import Any, Callable, Dict
+import inspect
+
+from ..async_utils import run_coroutine
 
 _registry: Dict[str, Callable[..., Any]] = {}
 _registry_lock = Lock()
@@ -34,8 +37,12 @@ def dispatch(
     if not handler:
         raise ValueError(f"No workflow registered for {event}")
     if group_id is None:
-        return handler(*args, user_id=user_id, **kwargs)
-    return handler(*args, user_id=user_id, group_id=group_id, **kwargs)
+        result = handler(*args, user_id=user_id, **kwargs)
+    else:
+        result = handler(*args, user_id=user_id, group_id=group_id, **kwargs)
+    if inspect.isawaitable(result):
+        return run_coroutine(result)
+    return result
 
 
 # Import built-in workflows so they register themselves

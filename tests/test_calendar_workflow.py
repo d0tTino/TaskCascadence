@@ -373,7 +373,7 @@ async def test_calendar_event_creation_in_event_loop(monkeypatch):
         "location": "Cafe",
     }
 
-    result = dispatch("calendar.event.create_request", payload, user_id="alice")
+    result = await cec.create_calendar_event(payload, user_id="alice")
 
     assert result == {"event_id": "evt1", "related_event_id": "evt2"}
     assert (
@@ -426,8 +426,8 @@ async def test_calendar_event_research_failure_in_event_loop(monkeypatch):
         "location": "Cafe",
     }
 
-    result = dispatch(
-        "calendar.event.create_request", payload, user_id="alice", base_url="http://svc"
+    result = await cec.create_calendar_event(
+        payload, user_id="alice", base_url="http://svc"
     )
 
     assert result == {"event_id": "evt1"}

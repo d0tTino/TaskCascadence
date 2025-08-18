@@ -4,14 +4,13 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 import asyncio
-from concurrent.futures import Future, ThreadPoolExecutor
+from contextlib import suppress
 
 from . import dispatch, subscribe
 
 from ..http_utils import request_with_retry
 from .. import research
 from ..ume import emit_stage_update_event, emit_task_note, emit_audit_log
-from ..async_utils import run_coroutine
 from ..ume.models import TaskNote
 
 
@@ -38,7 +37,7 @@ def _has_permission(
 
 
 @subscribe("calendar.event.create_request")
-def create_calendar_event(
+async def create_calendar_event(
     payload: Dict[str, Any],
     *,
     user_id: str,
@@ -72,63 +71,23 @@ def create_calendar_event(
         raise ValueError("group_id mismatch")
 
     travel_info: Dict[str, Any] | None = None
-    travel_future: Future | None = None
-    travel_executor: ThreadPoolExecutor | None = None
+    travel_task: asyncio.Task | None = None
     if payload.get("location"):
         query = f"travel time to {payload['location']}"
         try:
-            asyncio.get_running_loop()
-            travel_executor = ThreadPoolExecutor(max_workers=1)
-
-            async def _run() -> Dict[str, Any]:
-                task = asyncio.create_task(
-                    research.async_gather(
-                        query, user_id=user_id, group_id=group_id
-                    )
-                )
-                return await task
-
-            def _exec() -> Dict[str, Any]:
-                try:
-                    return asyncio.run(_run())
-                except Exception as exc:
-                    emit_audit_log(
-                        "calendar.event.create",
-                        "research",
-                        "error",
-                        reason=str(exc),
-                        user_id=user_id,
-                        group_id=group_id,
-                    )
-                    raise
-
-            travel_future = travel_executor.submit(_exec)
-        except RuntimeError:
-            try:
-                travel_info = run_coroutine(
-                    research.async_gather(
-                        query, user_id=user_id, group_id=group_id
-                    )
-                )
-                emit_audit_log(
-                    "calendar.event.create",
-                    "research",
-                    "success",
-                    user_id=user_id,
-                    group_id=group_id,
-                )
-            except Exception as exc:
-                emit_audit_log(
-                    "calendar.event.create",
-                    "research",
-                    "error",
-                    reason=str(exc),
-                    user_id=user_id,
-                    group_id=group_id,
-                )
-        except Exception:
-            travel_info = None
-
+            travel_task = asyncio.create_task(
+                research.async_gather(query, user_id=user_id, group_id=group_id)
+            )
+        except Exception as exc:
+            emit_audit_log(
+                "calendar.event.create",
+                "research",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            travel_task = None
 
     try:
         if not _has_permission(
@@ -144,11 +103,23 @@ def create_calendar_event(
             user_id=user_id,
             group_id=group_id,
         )
+        if travel_task is not None:
+            travel_task.cancel()
+            with suppress(Exception, asyncio.CancelledError):
+                await travel_task
+            emit_audit_log(
+                "calendar.event.create",
+                "research",
+                "error",
+                reason="cancelled",
+                user_id=user_id,
+                group_id=group_id,
+            )
         raise
 
-    if travel_future is not None and travel_info is None:
+    if travel_task is not None:
         try:
-            travel_info = travel_future.result()
+            travel_info = await travel_task
             emit_audit_log(
                 "calendar.event.create",
                 "research",
@@ -166,9 +137,6 @@ def create_calendar_event(
                 group_id=group_id,
             )
             travel_info = None
-        finally:
-            if travel_executor is not None:
-                travel_executor.shutdown(wait=False)
 
     invitees: List[str] = payload.get("invitees", []) or []
     for invitee in invitees:
