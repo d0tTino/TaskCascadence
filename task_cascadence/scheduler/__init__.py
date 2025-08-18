@@ -11,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 import os
 import threading
+import re
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -30,6 +31,16 @@ if TYPE_CHECKING:  # pragma: no cover - used for type hints only
 from ..temporal import TemporalBackend
 from .. import metrics
 from ..http_utils import request_with_retry
+from ..ume import _hash_user_id
+
+
+_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _maybe_hash_user_id(user_id: str) -> str:
+    """Return ``user_id`` hashed unless it already appears hashed."""
+
+    return user_id if _HASH_RE.match(user_id) else _hash_user_id(user_id)
 
 
 class BaseScheduler:
@@ -303,6 +314,17 @@ class CronScheduler(BaseScheduler):
             with open(self.storage_path, "r") as fh:
                 data = self._yaml.safe_load(fh) or {}
                 if isinstance(data, dict):
+                    modified = False
+                    for info in data.values():
+                        if isinstance(info, dict) and "user_id" in info:
+                            uid = info["user_id"]
+                            hashed = _maybe_hash_user_id(uid)
+                            if hashed != uid:
+                                info["user_id"] = hashed
+                                modified = True
+                    if modified:
+                        with open(self.storage_path, "w") as out:
+                            self._yaml.safe_dump(data, out)
                     return data
         return {}
 
@@ -481,13 +503,14 @@ class CronScheduler(BaseScheduler):
         job_id = task.__class__.__name__
         try:
             super().register_task(job_id, task)
+            user_hash = _maybe_hash_user_id(user_id) if user_id is not None else None
             with self._schedules_lock:
                 if user_id is None and group_id is None:
                     self.schedules[job_id] = cron_expression
                 else:
                     entry: dict[str, Any] = {"expr": cron_expression}
-                    if user_id is not None:
-                        entry["user_id"] = user_id
+                    if user_hash is not None:
+                        entry["user_id"] = user_hash
                     if group_id is not None:
                         entry["group_id"] = group_id
                     self.schedules[job_id] = entry
@@ -671,19 +694,19 @@ class CronScheduler(BaseScheduler):
                 user_id=user_id,
                 group_id=group_id,
             )
-
+            user_hash = _maybe_hash_user_id(user_id) if user_id is not None else None
             with self._schedules_lock:
                 sched_entry = self.schedules.get(job_id)
                 if isinstance(sched_entry, dict):
                     sched_entry["recurrence"] = recurrence
-                    if user_id is not None:
-                        sched_entry["user_id"] = user_id
+                    if user_hash is not None:
+                        sched_entry["user_id"] = user_hash
                     if group_id is not None:
                         sched_entry["group_id"] = group_id
                 else:
                     entry: dict[str, Any] = {"expr": expr, "recurrence": recurrence}
-                    if user_id is not None:
-                        entry["user_id"] = user_id
+                    if user_hash is not None:
+                        entry["user_id"] = user_hash
                     if group_id is not None:
                         entry["group_id"] = group_id
                     self.schedules[job_id] = entry
@@ -742,10 +765,6 @@ class CronScheduler(BaseScheduler):
                 )
             self.schedules.pop(name, None)
             self._save_schedules()
-        user_id = group_id = None
-        if isinstance(entry, dict):
-            user_id = entry.get("user_id")
-            group_id = entry.get("group_id")
         # Ensure stage events are persisted even when no transport is configured
         from ..stage_store import StageStore
         StageStore().add_event(name, "unschedule", None, None)
