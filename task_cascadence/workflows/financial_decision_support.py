@@ -55,6 +55,28 @@ def financial_decision_support(
             "finance.decision.result", "error", user_id=user_id, group_id=group_id
         )
         raise ValueError(reason)
+
+    budget = payload.get("budget")
+    max_options = payload.get("max_options")
+    invalid = []
+    if not isinstance(budget, (int, float)) or budget < 0:
+        invalid.append("budget")
+    if not isinstance(max_options, (int, float)) or max_options < 0:
+        invalid.append("max_options")
+    if invalid:
+        reason = f"Invalid {', '.join(invalid)}: must be non-negative numbers"
+        emit_audit_log(
+            task_name,
+            "workflow",
+            "error",
+            reason=reason,
+            user_id=user_id,
+            group_id=group_id,
+        )
+        emit_stage_update_event(
+            "finance.decision.result", "error", user_id=user_id, group_id=group_id
+        )
+        raise ValueError(reason)
     try:
         emit_audit_log(task_name, "research", "started", user_id=user_id, group_id=group_id)
         url = f"{ume_base.rstrip('/')}/v1/nodes"
@@ -90,10 +112,10 @@ def financial_decision_support(
         if group_id is not None:
             engine_payload["group_id"] = group_id
 
-        if "budget" in payload:
-            engine_payload["budget"] = payload["budget"]
-        if "max_options" in payload:
-            engine_payload["max_options"] = payload["max_options"]
+        if budget is not None:
+            engine_payload["budget"] = budget
+        if max_options is not None:
+            engine_payload["max_options"] = max_options
 
         emit_audit_log(task_name, "engine", "started", user_id=user_id, group_id=group_id)
         try:

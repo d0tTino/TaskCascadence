@@ -427,3 +427,64 @@ def test_financial_decision_support_missing_fields(monkeypatch, payload, missing
         and a[6] is None
         for a in audit_logs
     )
+
+
+@pytest.mark.parametrize(
+    "payload,field",
+    [
+        ({"budget": -1, "max_options": 1}, "budget"),
+        ({"budget": "100", "max_options": 1}, "budget"),
+        ({"budget": 100, "max_options": -1}, "max_options"),
+        ({"budget": 100, "max_options": "3"}, "max_options"),
+    ],
+)
+def test_financial_decision_support_invalid_values(monkeypatch, payload, field):
+    calls = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append((method, url, kwargs))
+        return DummyResponse({})
+
+    emitted = []
+
+    def fake_emit(name, stage, user_id=None, group_id=None, **_):
+        emitted.append((name, stage, user_id, group_id))
+
+    dispatched = []
+
+    def fake_dispatch(event, payload, user_id, group_id=None):
+        dispatched.append(event)
+
+    audit_logs = []
+
+    def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
+        audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
+
+    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
+    monkeypatch.setattr(fds, "dispatch", fake_dispatch)
+    monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
+
+    with pytest.raises(ValueError):
+        dispatch("finance.decision.request", payload, user_id="alice")
+
+    assert calls == []
+    assert emitted == [("finance.decision.result", "error", "alice", None)]
+    assert "finance.decision.result" not in dispatched
+    assert (
+        "finance.decision",
+        "workflow",
+        "started",
+        None,
+        None,
+        "alice",
+        None,
+    ) in audit_logs
+    assert any(
+        a[1] == "workflow"
+        and a[2] == "error"
+        and field in (a[3] or "")
+        and a[5] == "alice"
+        and a[6] is None
+        for a in audit_logs
+    )
