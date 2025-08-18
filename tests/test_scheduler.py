@@ -57,9 +57,12 @@ def test_schedule_persistence(tmp_path):
     storage = tmp_path / "sched.yml"
     sched = CronScheduler(timezone="UTC", storage_path=storage)
     task = DummyTask()
-    sched.register_task(name_or_task=task, task_or_expr="*/5 * * * *")
+    sched.register_task(name_or_task=task, task_or_expr="*/5 * * * *", user_id="alice")
     data = yaml.safe_load(storage.read_text())
-    assert data["DummyTask"] == "*/5 * * * *"
+    from task_cascadence.ume import _hash_user_id
+
+    assert data["DummyTask"]["expr"] == "*/5 * * * *"
+    assert data["DummyTask"]["user_id"] == _hash_user_id("alice")
 
 
 def test_run_emits_result(monkeypatch, tmp_path):
@@ -97,6 +100,8 @@ def test_restore_schedules_on_init(tmp_path, monkeypatch):
 
     captured = {}
 
+    from task_cascadence.ume import _hash_user_id
+
     def fake_emit(run, user_id=None):
         captured["user_id"] = user_id
 
@@ -110,7 +115,7 @@ def test_restore_schedules_on_init(tmp_path, monkeypatch):
     assert job is not None
     job.func()
     assert new_task.count == 1
-    assert captured["user_id"] == "alice"
+    assert captured["user_id"] == _hash_user_id("alice")
 
 
 def test_schedule_task(tmp_path):
@@ -130,8 +135,10 @@ def test_schedule_task_user_id(tmp_path):
     task = DummyTask()
     sched.schedule_task(task, "*/2 * * * *", user_id="bob")
     data = yaml.safe_load(storage.read_text())
+    from task_cascadence.ume import _hash_user_id
+
     assert data["DummyTask"]["expr"] == "*/2 * * * *"
-    assert data["DummyTask"]["user_id"] == "bob"
+    assert data["DummyTask"]["user_id"] == _hash_user_id("bob")
 
 
 def test_base_scheduler_has_no_schedule_task():
