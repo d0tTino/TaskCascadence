@@ -308,14 +308,15 @@ This endpoint returns the chronological audit trail for ``MyTask``.
 
 ``CronScheduler`` persists recurrence rules in ``schedules.yml``.  The file is
 created next to the running application unless ``storage_path`` is overridden
-and maps task names to cron expressions and optional context.  Schedules may be
-specified directly with an ``expr`` field or by referencing a UME calendar
-event:
+and maps task names to cron expressions and optional context. For privacy,
+user identifiers are stored as hashes when schedules are persisted.
+Schedules may be specified directly with an ``expr`` field or by referencing a
+UME calendar event:
 
 ```yaml
 ExampleTask:
   expr: "0 12 * * *"
-  user_id: alice
+  user_id: alice  # stored hashed on disk
   group_id: ops
   recurrence:
     note: "every day at noon"
