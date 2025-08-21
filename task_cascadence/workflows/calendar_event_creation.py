@@ -42,7 +42,6 @@ async def create_calendar_event(
     *,
     user_id: str,
     group_id: str | None = None,
-    base_url: str = "http://localhost",
     ume_base: str = "http://ume",
 ) -> Dict[str, Any]:
     """Persist calendar events after validation and permission checks."""
@@ -188,7 +187,7 @@ async def create_calendar_event(
         note_text = f"Travel time to {payload['location']}: {duration}"
     note = TaskNote(note=note_text)
 
-    url = f"{base_url.rstrip('/')}/v1/calendar/events"
+    url = f"{ume_base.rstrip('/')}/v1/calendar/events"
     try:
         resp = request_with_retry("POST", url, json=event_data, timeout=5)
     except Exception as exc:
@@ -212,7 +211,7 @@ async def create_calendar_event(
         main_event = resp.json()
         main_id = main_event.get("id")
 
-    edge_url = f"{base_url.rstrip('/')}/v1/calendar/edges"
+    edge_url = f"{ume_base.rstrip('/')}/v1/calendar/edges"
 
     related_id = None
     if related_event is not None:

@@ -96,7 +96,7 @@ def test_calendar_event_creation(monkeypatch):
     }
 
     result = dispatch(
-        "calendar.event.create_request", payload, user_id="alice", group_id="g1", base_url="http://svc"
+        "calendar.event.create_request", payload, user_id="alice", group_id="g1", ume_base="http://svc"
     )
 
     assert result == {"event_id": "evt1", "related_event_id": "evt2"}
@@ -249,7 +249,7 @@ def test_calendar_event_ume_failure(monkeypatch):
     }
 
     result = dispatch(
-        "calendar.event.create_request", payload, user_id="alice", base_url="http://svc"
+        "calendar.event.create_request", payload, user_id="alice", ume_base="http://svc"
     )
 
     assert result == {"event_id": "evt1", "related_event_id": "evt2"}
@@ -311,7 +311,7 @@ def test_calendar_event_research_failure(monkeypatch):
     }
 
     result = dispatch(
-        "calendar.event.create_request", payload, user_id="alice", base_url="http://svc"
+        "calendar.event.create_request", payload, user_id="alice", ume_base="http://svc"
     )
 
     assert result == {"event_id": "evt1"}
@@ -427,7 +427,7 @@ async def test_calendar_event_research_failure_in_event_loop(monkeypatch):
     }
 
     result = await cec.create_calendar_event(
-        payload, user_id="alice", base_url="http://svc"
+        payload, user_id="alice", ume_base="http://svc"
     )
 
     assert result == {"event_id": "evt1"}
