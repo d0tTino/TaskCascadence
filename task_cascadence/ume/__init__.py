@@ -91,7 +91,7 @@ def emit_stage_update(
 
     store = _get_stage_store()
     user_hash = _hash_user_id(user_id) if user_id is not None else None
-    store.add_event(task_name, stage, user_hash, group_id)
+    store.add_event(task_name, stage, user_hash=user_hash, group_id=group_id)
 
 
 def emit_stage_update_event(
@@ -143,8 +143,8 @@ def emit_audit_log(
     store.add_event(
         task_name,
         stage,
-        user_hash,
-        group_id,
+        user_hash=user_hash,
+        group_id=group_id,
         status=status,
         reason=reason,
         output=output,

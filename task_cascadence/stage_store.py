@@ -35,9 +35,9 @@ class StageStore:
                             normalized = []
                             for event in events:
                                 if isinstance(event, dict):
-                                    # migrate legacy "user_hash" field
-                                    if "user_hash" in event and "user_id" not in event:
-                                        event["user_id"] = event.pop("user_hash")
+                                    # migrate legacy "user_id" field
+                                    if "user_id" in event and "user_hash" not in event:
+                                        event["user_hash"] = event.pop("user_id")
                                     normalized.append(event)
                                 else:
                                     # legacy string entry
@@ -73,7 +73,7 @@ class StageStore:
         self,
         task_name: str,
         stage: str,
-        user_id: str | None,
+        user_hash: str | None,
         group_id: str | None = None,
         *,
         status: str | None = None,
@@ -91,8 +91,8 @@ class StageStore:
             entry["reason"] = reason
         if output is not None:
             entry["output"] = output
-        if user_id is not None:
-            entry["user_id"] = user_id
+        if user_hash is not None:
+            entry["user_hash"] = user_hash
         if group_id is not None:
             entry["group_id"] = group_id
         key = task_name if category == "stage" else f"{task_name}:{category}"
@@ -103,7 +103,7 @@ class StageStore:
     def get_events(
         self,
         task_name: str,
-        user_id: str | None = None,
+        user_hash: str | None = None,
         group_id: str | None = None,
         *,
         category: str = "stage",
@@ -113,6 +113,6 @@ class StageStore:
         return [
             e
             for e in events
-            if (user_id is None or e.get("user_id") == user_id)
+            if (user_hash is None or e.get("user_hash") == user_hash)
             and (group_id is None or e.get("group_id") == group_id)
         ]

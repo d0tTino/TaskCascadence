@@ -50,10 +50,12 @@ def test_schedule_from_calendar_event(tmp_path):
     assert job is not None
     entry = sched.schedules["DummyTask"]
     assert entry["recurrence"] == {"cron": "*/2 * * * *"}
-    assert entry["user_id"] == "alice"
+    from task_cascadence.ume import _hash_user_id
+
+    assert entry["user_id"] == _hash_user_id("alice")
     assert entry["group_id"] == "engineering"
     persisted = yaml.safe_load((tmp_path / "sched.yml").read_text())
-    assert persisted["DummyTask"]["user_id"] == "alice"
+    assert persisted["DummyTask"]["user_id"] == _hash_user_id("alice")
     assert persisted["DummyTask"]["group_id"] == "engineering"
     assert persisted["DummyTask"]["recurrence"] == {"cron": "*/2 * * * *"}
 
@@ -184,7 +186,7 @@ def test_yaml_calendar_event_multiple_recurrences(tmp_path, monkeypatch):
 
     models_mod.TaskSpec = TaskSpec
     models_mod.TaskRun = TaskRun
-    sys.modules["task_cascadence.ume.models"] = models_mod
+    monkeypatch.setitem(sys.modules, "task_cascadence.ume.models", models_mod)
     ume_mod.models = models_mod
 
     orch_mod = types.ModuleType("task_cascadence.orchestrator")
@@ -197,7 +199,7 @@ def test_yaml_calendar_event_multiple_recurrences(tmp_path, monkeypatch):
             return self._task.run()
 
     orch_mod.TaskPipeline = TaskPipeline
-    sys.modules["task_cascadence.orchestrator"] = orch_mod
+    monkeypatch.setitem(sys.modules, "task_cascadence.orchestrator", orch_mod)
 
     pr_mod = types.ModuleType("task_cascadence.pipeline_registry")
 
@@ -209,13 +211,13 @@ def test_yaml_calendar_event_multiple_recurrences(tmp_path, monkeypatch):
 
     pr_mod.add_pipeline = add_pipeline
     pr_mod.remove_pipeline = remove_pipeline
-    sys.modules["task_cascadence.pipeline_registry"] = pr_mod
+    monkeypatch.setitem(sys.modules, "task_cascadence.pipeline_registry", pr_mod)
 
     def fake_emit(run, user_id=None, group_id=None):
         captured.append((run.user_hash, user_id, group_id))
 
     ume_mod.emit_task_run = fake_emit
-    sys.modules["task_cascadence.ume"] = ume_mod
+    monkeypatch.setitem(sys.modules, "task_cascadence.ume", ume_mod)
 
     sched.load_yaml(cfg, {"DummyTask": task})
     job = sched.scheduler.get_job("DummyTask")

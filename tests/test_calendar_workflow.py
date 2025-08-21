@@ -361,7 +361,7 @@ async def test_calendar_event_creation_in_event_loop(monkeypatch):
     monkeypatch.setattr(
         cec,
         "emit_audit_log",
-        lambda task, stage, status, *, reason=None, user_id=None, group_id=None, **_: audit_logs.append(
+        lambda task, stage, status, *, reason=None, user_id=None, group_id=None, user_hash=None, **_: audit_logs.append(
             (task, stage, status)
         ),
     )
@@ -405,7 +405,7 @@ async def test_calendar_event_research_failure_in_event_loop(monkeypatch):
 
     audit_logs: list[tuple[str, str, str, str | None]] = []
 
-    def fake_emit_audit_log(task, stage, status, *, reason=None, user_id=None, group_id=None, **_):
+    def fake_emit_audit_log(task, stage, status, *, reason=None, user_id=None, group_id=None, user_hash=None, **_):
         audit_logs.append((task, stage, status, reason))
 
     emitted_notes: list[str] = []

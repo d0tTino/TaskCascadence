@@ -118,9 +118,11 @@ def test_cli_schedule_creates_entry(monkeypatch, tmp_path):
     )
 
     assert result.exit_code == 0
+    from task_cascadence.ume import _hash_user_id
+
     data = yaml.safe_load((tmp_path / "sched.yml").read_text())
     assert data["ExampleTask"]["expr"] == "0 12 * * *"
-    assert data["ExampleTask"]["user_id"] == "alice"
+    assert data["ExampleTask"]["user_id"] == _hash_user_id("alice")
 
 
 def test_cli_schedule_user_id(monkeypatch, tmp_path):
@@ -139,9 +141,11 @@ def test_cli_schedule_user_id(monkeypatch, tmp_path):
     )
 
     assert result.exit_code == 0
+    from task_cascadence.ume import _hash_user_id
+
     data = yaml.safe_load((tmp_path / "sched.yml").read_text())
     assert data["ExampleTask"]["expr"] == "0 12 * * *"
-    assert data["ExampleTask"]["user_id"] == "charlie"
+    assert data["ExampleTask"]["user_id"] == _hash_user_id("charlie")
 
 
 def test_cli_schedule_unknown_task(monkeypatch):
