@@ -30,5 +30,7 @@ def test_poll_calendar_event(monkeypatch, tmp_path):
     entry = sched.schedules["DummyTask"]
     assert entry["recurrence"] == {"cron": "*/5 * * * *"}
     assert entry["calendar_event"] == {"node": "node42", "poll": 1}
-    assert entry["user_id"] == "alice"
+    from task_cascadence.ume import _hash_user_id
+
+    assert entry["user_id"] == _hash_user_id("alice")
     assert entry["group_id"] == "engineering"

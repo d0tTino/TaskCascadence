@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from threading import Lock
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Coroutine, cast
 import inspect
 
 from ..async_utils import run_coroutine
@@ -41,7 +41,7 @@ def dispatch(
     else:
         result = handler(*args, user_id=user_id, group_id=group_id, **kwargs)
     if inspect.isawaitable(result):
-        return run_coroutine(result)
+        return run_coroutine(cast(Coroutine[Any, Any, Any], result))
     return result
 
 

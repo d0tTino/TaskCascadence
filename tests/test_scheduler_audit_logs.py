@@ -39,7 +39,8 @@ def test_scheduler_audit_logs(monkeypatch, tmp_path):
     calls = []
 
     def fake_emit(task, stage, status, *, user_id=None, group_id=None, **_):
-        calls.append((task, stage, status, user_id, group_id))
+        if stage in {"scheduler", "unschedule"}:
+            calls.append((task, stage, status, user_id, group_id))
 
     monkeypatch.setattr(ume_mod, "emit_audit_log", fake_emit)
 
@@ -59,6 +60,12 @@ def test_scheduler_audit_logs(monkeypatch, tmp_path):
         ("Dummy", "scheduler", "disabled", "alice", "team"),
         ("Dummy", "scheduler", "paused", "alice", "team"),
         ("Dummy", "scheduler", "resumed", "alice", "team"),
-        ("Dummy", "scheduler", "unschedule", "alice", "team"),
+        (
+            "Dummy",
+            "unschedule",
+            "success",
+            ume_mod._hash_user_id("alice"),
+            "team",
+        ),
     ]
 

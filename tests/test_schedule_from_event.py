@@ -22,7 +22,9 @@ def test_schedule_from_event_registers_metadata(tmp_path):
     assert str(job.trigger) == str(expected)
     entry = sched.schedules["DummyTask"]
     assert entry["recurrence"] == {"cron": "*/5 * * * *"}
-    assert entry["user_id"] == "alice"
+    from task_cascadence.ume import _hash_user_id
+
+    assert entry["user_id"] == _hash_user_id("alice")
     assert entry["group_id"] == "engineering"
 
 
