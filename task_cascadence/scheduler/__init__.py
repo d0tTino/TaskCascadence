@@ -579,8 +579,10 @@ class CronScheduler(BaseScheduler):
         for job_id, entry in data.items():
             if isinstance(entry, str):
                 info: dict[str, Any] = {"expr": entry}
-            else:
+            elif isinstance(entry, dict):
                 info = dict(entry)
+            else:
+                raise ValueError(f"{job_id}: entry must be a string or mapping")
 
             task_obj = (tasks or {}).get(job_id)
             if not task_obj:
@@ -590,20 +592,35 @@ class CronScheduler(BaseScheduler):
             if not task_obj:
                 continue
 
-            if "calendar_event" in info:
+            has_ce = "calendar_event" in info
+            has_expr = "expr" in info
+            if not has_ce and not has_expr:
+                raise ValueError(f"{job_id}: missing 'expr' or 'calendar_event'")
+
+            if has_ce:
                 ce = info["calendar_event"]
                 if isinstance(ce, dict):
                     node = ce.get("node")
+                    if not node or not isinstance(node, str):
+                        raise ValueError(
+                            f"{job_id}: calendar_event missing 'node'"
+                        )
                     poll = ce.get("poll")
                     user_id = ce.get("user_id", info.get("user_id"))
                     group_id = ce.get("group_id", info.get("group_id"))
-                else:
+                elif isinstance(ce, str):
+                    if not ce:
+                        raise ValueError(
+                            f"{job_id}: calendar_event node is required"
+                        )
                     node = ce
                     poll = info.get("poll")
                     user_id = info.get("user_id")
                     group_id = info.get("group_id")
-                if not node:
-                    continue
+                else:
+                    raise ValueError(
+                        f"{job_id}: 'calendar_event' must be string or mapping"
+                    )
                 if poll:
                     self.poll_calendar_event(
                         task_obj, node, interval=poll, user_id=user_id, group_id=group_id
@@ -622,9 +639,12 @@ class CronScheduler(BaseScheduler):
                             self._save_schedules()
                 continue
 
+            expr = info.get("expr")
+            if not isinstance(expr, str) or not expr:
+                raise ValueError(f"{job_id}: 'expr' must be a non-empty string")
             self.register_task(
                 name_or_task=task_obj,
-                task_or_expr=info["expr"],
+                task_or_expr=expr,
                 user_id=info.get("user_id"),
                 group_id=info.get("group_id"),
             )
@@ -636,7 +656,7 @@ class CronScheduler(BaseScheduler):
                         sched_entry["recurrence"] = info["recurrence"]
                     else:
                         self.schedules[job_id] = {
-                            "expr": info["expr"],
+                            "expr": expr,
                             "recurrence": info["recurrence"],
                         }
                     self._save_schedules()
