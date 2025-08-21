@@ -38,6 +38,50 @@ def test_load_yaml_malformed(tmp_path):
         sched.load_yaml(cfg, {"DummyTask": DummyTask()})
 
 
+def test_load_yaml_missing_required_fields(tmp_path):
+    data = {"DummyTask": {}}
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(yaml.safe_dump(data))
+    sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
+    with pytest.raises(
+        ValueError, match="DummyTask: missing 'expr' or 'calendar_event'"
+    ):
+        sched.load_yaml(cfg, {"DummyTask": DummyTask()})
+
+
+def test_load_yaml_calendar_event_missing_node(tmp_path):
+    data = {"DummyTask": {"calendar_event": {}}}
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(yaml.safe_dump(data))
+    sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
+    with pytest.raises(
+        ValueError, match="calendar_event missing 'node'"
+    ):
+        sched.load_yaml(cfg, {"DummyTask": DummyTask()})
+
+
+def test_load_yaml_calendar_event_invalid_type(tmp_path):
+    data = {"DummyTask": {"calendar_event": 123}}
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(yaml.safe_dump(data))
+    sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
+    with pytest.raises(
+        ValueError, match="'calendar_event' must be string or mapping"
+    ):
+        sched.load_yaml(cfg, {"DummyTask": DummyTask()})
+
+
+def test_load_yaml_expr_invalid_type(tmp_path):
+    data = {"DummyTask": {"expr": 123}}
+    cfg = tmp_path / "config.yml"
+    cfg.write_text(yaml.safe_dump(data))
+    sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
+    with pytest.raises(
+        ValueError, match="'expr' must be a non-empty string"
+    ):
+        sched.load_yaml(cfg, {"DummyTask": DummyTask()})
+
+
 def test_schedule_from_calendar_event(tmp_path):
     sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
     sched.start()
