@@ -175,6 +175,51 @@ def test_calendar_event_permission_error(monkeypatch):
     ) in audit_logs
 
 
+def test_calendar_event_invitee_permission_error(monkeypatch):
+    calls = []
+
+    def fake_request(method, url, timeout, **kwargs):
+        calls.append((method, url, kwargs))
+        return DummyResponse({"id": "evt1"})
+
+    audit_logs: list[tuple[str, str, str, str]] = []
+
+    def fake_emit_audit_log(
+        task_name, stage, status, *, reason=None, user_id=None, group_id=None, **_
+    ):
+        audit_logs.append((task_name, stage, status, reason))
+
+    perms_checked: list[tuple[str, str | None]] = []
+
+    def fake_has_permission(
+        user_id, *, ume_base="http://ume", group_id=None, invitee=None
+    ):
+        perms_checked.append((user_id, invitee))
+        return invitee is None
+
+    monkeypatch.setattr(cec, "request_with_retry", fake_request)
+    monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
+    monkeypatch.setattr(cec, "_has_permission", fake_has_permission)
+
+    payload = {
+        "title": "Lunch",
+        "start_time": "2024-01-01T12:00:00Z",
+        "invitees": ["bob"],
+    }
+
+    with pytest.raises(PermissionError):
+        dispatch("calendar.event.create_request", payload, user_id="alice")
+
+    assert (
+        "calendar.event.create",
+        "permission",
+        "error",
+        "user lacks permission to invite bob",
+    ) in audit_logs
+    assert calls == []
+    assert perms_checked == [("alice", None), ("alice", "bob")]
+
+
 def test_calendar_event_group_id_mismatch(monkeypatch):
     audit_logs: list[tuple[str, str, str, str | None, str | None, str | None]] = []
 
