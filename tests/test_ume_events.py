@@ -213,3 +213,51 @@ def test_emit_audit_log_emits_event(monkeypatch, tmp_path):
     key = "demo:audit"
     assert data[key][0]["user_hash"] == _hash_user_id("carol")
     assert data[key][0]["status"] == "success"
+
+
+def test_emit_audit_log_records_failure(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    path = tmp_path / "audit.yml"
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(path))
+
+    class Client:
+        def __init__(self) -> None:
+            self.events = []
+
+        def enqueue(self, obj) -> None:
+            self.events.append(obj)
+
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+    client = Client()
+
+    ume.emit_audit_log(
+        "demo",
+        "run",
+        "failure",
+        client,
+        user_id="dave",
+        group_id="ops",
+        reason="bad",
+        output="oops",
+    )
+
+    assert isinstance(client.events[0], AuditEvent)
+    assert client.events[0].status == "failure"
+    assert client.events[0].reason == "bad"
+    assert client.events[0].output == "oops"
+    assert client.events[0].user_hash == _hash_user_id("dave")
+    assert client.events[0].group_id == "ops"
+
+    from task_cascadence.stage_store import StageStore
+
+    store = StageStore(path=path)
+    events = store.get_events(
+        "demo",
+        _hash_user_id("dave"),
+        "ops",
+        category="audit",
+    )
+    assert events[0]["status"] == "failure"
+    assert events[0]["reason"] == "bad"
+    assert events[0]["output"] == "oops"
