@@ -382,6 +382,8 @@ class CronScheduler(BaseScheduler):
             raise RuntimeError("UME_BASE_URL not configured")
         node = node.lstrip("/")
         url = f"{base.rstrip('/')}/v1/calendar/nodes/{node}"
+        if user_id is not None:
+            user_id = _maybe_hash_user_id(user_id)
         params: dict[str, str] = {}
         if user_id is not None:
             params["user_id"] = user_id
