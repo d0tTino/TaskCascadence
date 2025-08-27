@@ -36,22 +36,13 @@ def _has_permission(
     return bool(data.get("allowed"))
 
 
-@subscribe("calendar.event.create_request")
-async def create_calendar_event(
+def validate_payload(
     payload: Dict[str, Any],
     *,
     user_id: str,
     group_id: str | None = None,
-    ume_base: str = "http://ume",
-) -> Dict[str, Any]:
-    """Persist calendar events after validation and permission checks."""
-    emit_audit_log(
-        "calendar.event.create",
-        "workflow",
-        "started",
-        user_id=user_id,
-        group_id=group_id,
-    )
+) -> None:
+    """Ensure required fields are present and ``group_id`` matches."""
 
     for field in ("title", "start_time"):
         if field not in payload or not payload[field]:
@@ -69,29 +60,22 @@ async def create_calendar_event(
         )
         raise ValueError("group_id mismatch")
 
-    travel_info: Dict[str, Any] | None = None
-    travel_task: asyncio.Task | None = None
-    if payload.get("location"):
-        query = f"travel time to {payload['location']}"
-        try:
-            travel_task = asyncio.create_task(
-                research.async_gather(query, user_id=user_id, group_id=group_id)
-            )
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "research",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            travel_task = None
+
+async def check_permissions(
+    user_id: str,
+    invitees: List[str],
+    *,
+    ume_base: str = "http://ume",
+    group_id: str | None = None,
+    travel_task: asyncio.Task | None = None,
+) -> None:
+    """Validate that ``user_id`` may create events and invite others."""
 
     try:
-        if not _has_permission(
-            user_id, ume_base=ume_base, group_id=group_id
-        ):
+        allowed = await asyncio.to_thread(
+            _has_permission, user_id, ume_base=ume_base, group_id=group_id
+        )
+        if not allowed:
             raise PermissionError("user lacks calendar:create permission")
     except Exception as exc:  # pragma: no cover - network failures
         emit_audit_log(
@@ -116,34 +100,19 @@ async def create_calendar_event(
             )
         raise
 
-    if travel_task is not None:
+    async def _check_invitee(invitee: str) -> None:
         try:
-            travel_info = await travel_task
-            emit_audit_log(
-                "calendar.event.create",
-                "research",
-                "success",
-                user_id=user_id,
+            allowed = await asyncio.to_thread(
+                _has_permission,
+                user_id,
+                ume_base=ume_base,
                 group_id=group_id,
+                invitee=invitee,
             )
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "research",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            travel_info = None
-
-    invitees: List[str] = payload.get("invitees", []) or []
-    for invitee in invitees:
-        try:
-            if not _has_permission(
-                user_id, ume_base=ume_base, group_id=group_id, invitee=invitee
-            ):
-                raise PermissionError(f"user lacks permission to invite {invitee}")
+            if not allowed:
+                raise PermissionError(
+                    f"user lacks permission to invite {invitee}"
+                )
         except Exception as exc:  # pragma: no cover - network failures
             emit_audit_log(
                 "calendar.event.create",
@@ -155,37 +124,20 @@ async def create_calendar_event(
             )
             raise
 
-    event_data = dict(payload)
-    event_data["user_id"] = user_id
-    if group_id:
-        event_data["group_id"] = group_id
+    await asyncio.gather(*(_check_invitee(i) for i in invitees))
 
-    related_event: Dict[str, Any] | None = None
-    if travel_info is not None:
-        try:
-            event_data["travel_time"] = travel_info
-            start_dt = datetime.fromisoformat(
-                payload["start_time"].replace("Z", "+00:00")
-            )
-            duration = travel_info.get("duration")
-            leave_dt = start_dt
-            if isinstance(duration, str) and duration.endswith("m"):
-                leave_dt = start_dt - timedelta(minutes=int(duration[:-1]))
-            related_event = {
-                "title": f"Leave by {payload['title']}",
-                "start_time": leave_dt.isoformat(),
-                "user_id": user_id,
-            }
-            if group_id:
-                related_event["group_id"] = group_id
-        except Exception:
-            travel_info = None
 
-    note_text = "No travel details"
-    if travel_info:
-        duration = travel_info.get("duration")
-        note_text = f"Travel time to {payload['location']}: {duration}"
-    note = TaskNote(note=note_text)
+def persist_events(
+    event_data: Dict[str, Any],
+    invitees: List[str],
+    layers: List[str],
+    *,
+    ume_base: str,
+    user_id: str,
+    group_id: str | None = None,
+    related_event: Dict[str, Any] | None = None,
+) -> tuple[str | None, str | None]:
+    """Persist the calendar event and related edges."""
 
     url = f"{ume_base.rstrip('/')}/v1/calendar/events"
     try:
@@ -216,7 +168,9 @@ async def create_calendar_event(
     related_id = None
     if related_event is not None:
         try:
-            rel_resp = request_with_retry("POST", url, json=related_event, timeout=5)
+            rel_resp = request_with_retry(
+                "POST", url, json=related_event, timeout=5
+            )
         except Exception as exc:
             emit_audit_log(
                 "calendar.event.create",
@@ -246,7 +200,9 @@ async def create_calendar_event(
             if group_id:
                 edge_payload["group_id"] = group_id
             try:
-                request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
+                request_with_retry(
+                    "POST", edge_url, json=edge_payload, timeout=5
+                )
             except Exception as exc:
                 emit_audit_log(
                     "calendar.event.create",
@@ -296,7 +252,7 @@ async def create_calendar_event(
                 group_id=group_id,
             )
 
-    for layer in payload.get("layers", []) or []:
+    for layer in layers:
         edge_payload = {
             "src": main_id,
             "dst": layer,
@@ -325,6 +281,120 @@ async def create_calendar_event(
                 user_id=user_id,
                 group_id=group_id,
             )
+
+    return main_id, related_id
+
+
+@subscribe("calendar.event.create_request")
+async def create_calendar_event(
+    payload: Dict[str, Any],
+    *,
+    user_id: str,
+    group_id: str | None = None,
+    ume_base: str = "http://ume",
+) -> Dict[str, Any]:
+    """Persist calendar events after validation and permission checks."""
+    emit_audit_log(
+        "calendar.event.create",
+        "workflow",
+        "started",
+        user_id=user_id,
+        group_id=group_id,
+    )
+
+    validate_payload(payload, user_id=user_id, group_id=group_id)
+
+    travel_info: Dict[str, Any] | None = None
+    travel_task: asyncio.Task | None = None
+    if payload.get("location"):
+        query = f"travel time to {payload['location']}"
+        try:
+            travel_task = asyncio.create_task(
+                research.async_gather(query, user_id=user_id, group_id=group_id)
+            )
+        except Exception as exc:
+            emit_audit_log(
+                "calendar.event.create",
+                "research",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            travel_task = None
+
+    invitees: List[str] = payload.get("invitees", []) or []
+    await check_permissions(
+        user_id,
+        invitees,
+        ume_base=ume_base,
+        group_id=group_id,
+        travel_task=travel_task,
+    )
+
+    if travel_task is not None:
+        try:
+            travel_info = await travel_task
+            emit_audit_log(
+                "calendar.event.create",
+                "research",
+                "success",
+                user_id=user_id,
+                group_id=group_id,
+            )
+        except Exception as exc:
+            emit_audit_log(
+                "calendar.event.create",
+                "research",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            travel_info = None
+
+    event_data = dict(payload)
+    event_data["user_id"] = user_id
+    if group_id:
+        event_data["group_id"] = group_id
+
+    related_event: Dict[str, Any] | None = None
+    if travel_info is not None:
+        try:
+            event_data["travel_time"] = travel_info
+            start_dt = datetime.fromisoformat(
+                payload["start_time"].replace("Z", "+00:00")
+            )
+            duration = travel_info.get("duration")
+            leave_dt = start_dt
+            if isinstance(duration, str) and duration.endswith("m"):
+                leave_dt = start_dt - timedelta(minutes=int(duration[:-1]))
+            related_event = {
+                "title": f"Leave by {payload['title']}",
+                "start_time": leave_dt.isoformat(),
+                "user_id": user_id,
+            }
+            if group_id:
+                related_event["group_id"] = group_id
+        except Exception:
+            travel_info = None
+
+    note_text = "No travel details"
+    if travel_info:
+        duration = travel_info.get("duration")
+        note_text = f"Travel time to {payload['location']}: {duration}"
+
+    note = TaskNote(note=note_text)
+
+    main_id, related_id = persist_events(
+        event_data,
+        invitees,
+        payload.get("layers", []) or [],
+        ume_base=ume_base,
+        user_id=user_id,
+        group_id=group_id,
+        related_event=related_event,
+    )
 
     try:
         emit_stage_update_event(
