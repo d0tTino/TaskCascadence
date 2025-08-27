@@ -131,12 +131,18 @@ def emit_audit_log(
     *,
     reason: str | None = None,
     output: str | None = None,
+    partial: Any | None = None,
     user_id: str | None = None,
     group_id: str | None = None,
 
     use_asyncio: bool = False,
 ) -> asyncio.Task | threading.Thread | None:
-    """Persist and emit an audit log entry using the configured transport."""
+    """Persist and emit an audit log entry using the configured transport.
+
+    ``partial`` can be supplied with a serialized representation of any data
+    produced before a failure.  This payload is persisted so that execution can
+    recover or resume later.
+    """
 
     store = _get_stage_store()
     user_hash = _hash_user_id(user_id) if user_id is not None else None
@@ -148,6 +154,7 @@ def emit_audit_log(
         status=status,
         reason=reason,
         output=output,
+        partial=partial,
         category="audit",
     )
     target = client or _default_client
@@ -158,6 +165,8 @@ def emit_audit_log(
         event.reason = reason
     if output is not None:
         event.output = output
+    if partial is not None:
+        event.partial = partial
     if user_id is not None:
         event.user_id = user_id
         event.user_hash = _hash_user_id(user_id)

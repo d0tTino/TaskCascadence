@@ -80,6 +80,7 @@ class StageStore:
         status: str | None = None,
         reason: str | None = None,
         output: str | None = None,
+        partial: Any | None = None,
         category: str = "stage",
     ) -> None:
         entry: Dict[str, Any] = {
@@ -92,6 +93,8 @@ class StageStore:
             entry["reason"] = reason
         if output is not None:
             entry["output"] = output
+        if partial is not None:
+            entry["partial"] = partial
         if user_hash is not None:
             entry["user_hash"] = user_hash
         if group_id is not None:
