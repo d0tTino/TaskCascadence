@@ -386,7 +386,7 @@ class CronScheduler(BaseScheduler):
             user_id = _maybe_hash_user_id(user_id)
         params: dict[str, str] = {}
         if user_id is not None:
-            params["user_id"] = user_id
+            params["user_id"] = _maybe_hash_user_id(user_id)
         if group_id is not None:
             params["group_id"] = group_id
         response = request_with_retry("GET", url, timeout=5, params=params or None)
