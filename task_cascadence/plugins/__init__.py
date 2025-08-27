@@ -15,7 +15,10 @@ from ..ume.models import TaskPointer
 from ..pointer_store import PointerStore
 
 
-from ..scheduler import get_default_scheduler
+def _scheduler_module():
+    from .. import scheduler
+
+    return scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +168,7 @@ def load_entrypoint_plugins() -> None:
     for ep in metadata.entry_points().select(group="task_cascadence.plugins"):
         task = load_plugin(ep.value)
         registered_tasks[task.name] = task
-        get_default_scheduler().register_task(task.name, task)
+        _scheduler_module().get_default_scheduler().register_task(task.name, task)
 
 
 def load_cronyx_plugins(base_url: str) -> None:
@@ -178,14 +181,14 @@ def load_cronyx_plugins(base_url: str) -> None:
         data = loader.load_task(info["id"])
         task = load_plugin(data["path"])
         registered_tasks[task.name] = task
-        get_default_scheduler().register_task(task.name, task)
+        _scheduler_module().get_default_scheduler().register_task(task.name, task)
 
 
 def initialize() -> None:
     """Register built-in tasks and load any external plugins."""
 
     for _name, _task in registered_tasks.items():
-        get_default_scheduler().register_task(_name, _task)
+        _scheduler_module().get_default_scheduler().register_task(_name, _task)
 
     load_entrypoint_plugins()
 
@@ -215,7 +218,7 @@ def load_cronyx_tasks() -> None:
             cls = getattr(mod, cls_name)
             obj = cls()
             registered_tasks[obj.name] = obj
-            get_default_scheduler().register_task(obj.name, obj)
+            _scheduler_module().get_default_scheduler().register_task(obj.name, obj)
     except Exception:  # pragma: no cover - best effort loading
         pass
 

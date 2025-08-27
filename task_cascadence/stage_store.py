@@ -23,6 +23,7 @@ class StageStore:
             path = Path.home() / ".cascadence" / "stages.yml"
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.touch(exist_ok=True)
         self._data: Dict[str, List[Dict[str, Any]]] = self._load()
 
     def _load(self) -> Dict[str, List[Dict[str, Any]]]:
