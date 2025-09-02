@@ -249,7 +249,11 @@ def test_financial_decision_support_ume_error(monkeypatch):
     assert emitted == [("finance.decision.result", "error", "alice", None)]
     assert "finance.decision.result" not in dispatched
     assert any(
-        a[1] == "workflow" and a[2] == "error" and a[5] == "alice" and a[6] is None
+        a[1] == "workflow"
+        and a[2] == "error"
+        and a[4] is None
+        and a[5] == "alice"
+        and a[6] is None
         for a in audit_logs
     )
 
@@ -308,7 +312,11 @@ def test_financial_decision_support_engine_failure(monkeypatch):
         for a in audit_logs
     )
     assert any(
-        a[1] == "workflow" and a[2] == "error" and a[5] == "alice" and a[6] == "g1"
+        a[1] == "workflow"
+        and a[2] == "error"
+        and "budget" in (a[4] or "")
+        and a[5] == "alice"
+        and a[6] == "g1"
         for a in audit_logs
     )
 
@@ -368,7 +376,11 @@ def test_financial_decision_support_persistence_failure(monkeypatch):
         for a in audit_logs
     )
     assert any(
-        a[1] == "workflow" and a[2] == "error" and a[5] == "alice" and a[6] == "g1"
+        a[1] == "workflow"
+        and a[2] == "error"
+        and "nodes" in (a[4] or "")
+        and a[5] == "alice"
+        and a[6] == "g1"
         for a in audit_logs
     )
 
