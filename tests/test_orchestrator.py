@@ -450,3 +450,36 @@ def test_run_async_parallel_plan(monkeypatch, tmp_path):
 
     events = StageStore(path=tmp_path / "stages.yml").get_events("Parent")
     assert [e["stage"] for e in events] == ["intake", "research", "planning", "run", "verification"]
+
+
+def test_run_error_logs(monkeypatch):
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_stage_update_event", lambda *a, **k: None
+    )
+
+    calls = []
+
+    def fake_emit(task, stage, status, *, reason=None, user_id=None, group_id=None, **_):
+        calls.append((task, stage, status, reason))
+
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_audit_log", fake_emit
+    )
+
+    class BoomTask:
+        def run(self):
+            raise RuntimeError("boom")
+
+    pipeline = TaskPipeline(BoomTask())
+    with pytest.raises(RuntimeError, match="boom"):
+        pipeline.run(user_id="alice")
+
+    assert any(
+        c[1] == "execute" and c[2] == "error" and c[3] == "boom" for c in calls
+    )

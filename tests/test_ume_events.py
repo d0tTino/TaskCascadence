@@ -35,7 +35,16 @@ def test_pipeline_stage_events(monkeypatch, tmp_path):
         "task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None
     )
     import task_cascadence.ume as ume
-    ume._stage_store = None
+    from task_cascadence.stage_store import StageStore
+
+    # Ensure the stage store uses our temporary path and the file exists, and
+    # restore the orchestrator's stage event emitter in case earlier tests
+    # patched it.
+    ume._stage_store = StageStore(path)
+    monkeypatch.setattr(
+        "task_cascadence.orchestrator.emit_stage_update_event",
+        ume.emit_stage_update_event,
+    )
 
     pipeline = TaskPipeline(DemoTask())
     pipeline.run(user_id="alice")
