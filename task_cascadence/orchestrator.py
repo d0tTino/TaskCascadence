@@ -83,12 +83,13 @@ class TaskPipeline:
                 result = self.task.intake()
         except Exception as exc:
             self._emit_stage("intake", user_id, group_id)
+            partial = result if result is not None else getattr(exc, "partial", None)
             emit_audit_log(
                 task_name,
                 "intake",
                 "error",
                 reason=str(exc),
-                output=repr(result) if result is not None else None,
+                output=repr(partial) if partial is not None else None,
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -137,13 +138,15 @@ class TaskPipeline:
             )
             return res
 
-        def _log_error(exc: Exception) -> Any:
+        def _log_error(exc: Exception, partial: Any | None = None) -> Any:
             self._emit_stage("research", user_id, group_id)
+            audit_partial = partial if partial is not None else getattr(exc, "partial", None)
             emit_audit_log(
                 task_name,
                 "research",
                 "error",
                 reason=str(exc),
+                output=repr(audit_partial) if audit_partial is not None else None,
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -152,6 +155,8 @@ class TaskPipeline:
         if inspect.isawaitable(query):
 
             async def _await_query() -> Any:
+                q: Any | None = None
+                result: Any | None = None
                 try:
                     q = await query
                     if inspect.isawaitable(q):
@@ -160,7 +165,7 @@ class TaskPipeline:
                         q, user_id=user_id, group_id=group_id
                     )
                 except Exception as exc:  # pragma: no cover - network errors
-                    return _log_error(exc)
+                    return _log_error(exc, result if result is not None else q)
                 return _log_success(result)
 
             if loop_running:
@@ -170,20 +175,22 @@ class TaskPipeline:
         if loop_running:
 
             async def _async_call() -> Any:
+                result: Any | None = None
                 try:
                     result = await research.async_gather(
                         query, user_id=user_id, group_id=group_id
                     )
                 except Exception as exc:  # pragma: no cover - network errors
-                    return _log_error(exc)
+                    return _log_error(exc, result)
                 return _log_success(result)
 
             return _async_call()
 
+        result: Any | None = None
         try:
             result = research.gather(query, user_id=user_id, group_id=group_id)
         except Exception as exc:  # pragma: no cover - network errors
-            return _log_error(exc)
+            return _log_error(exc, result)
         return _log_success(result)
 
     def plan(self, *, user_id: str, group_id: str | None = None) -> Any:
@@ -198,12 +205,17 @@ class TaskPipeline:
                 plan_result = ai_plan.plan(self.task)
         except Exception as exc:
             self._emit_stage("planning", user_id, group_id)
+            partial = (
+                plan_result
+                if plan_result is not None
+                else getattr(exc, "partial", None)
+            )
             emit_audit_log(
                 task_name,
                 "plan",
                 "error",
                 reason=str(exc),
-                output=repr(plan_result) if plan_result is not None else None,
+                output=repr(partial) if partial is not None else None,
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -382,12 +394,13 @@ class TaskPipeline:
                     )
         except Exception as exc:
             status = "error"
+            partial = result if result is not None else getattr(exc, "partial", None)
             emit_audit_log(
                 self.task.__class__.__name__,
                 "execute",
                 "error",
                 reason=str(exc),
-                output=repr(result) if result is not None else None,
+                output=repr(partial) if partial is not None else None,
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -448,12 +461,15 @@ class TaskPipeline:
                         verify_result = _await_verify()
         except Exception as exc:
             self._emit_stage("verification", user_id, group_id)
+            partial = getattr(exc, "partial", None)
+            if partial is None and verify_result is not None and verify_result is not exec_result:
+                partial = verify_result
             emit_audit_log(
                 task_name,
                 "verify",
                 "error",
                 reason=str(exc),
-                output=repr(verify_result) if verify_result is not None else None,
+                output=repr(partial) if partial is not None else None,
                 user_id=user_id,
                 group_id=group_id,
             )
