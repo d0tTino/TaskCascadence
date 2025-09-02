@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 import asyncio
+import contextlib
 
 from . import dispatch, subscribe
 
@@ -325,27 +326,65 @@ async def create_calendar_event(
 
     validate_payload(payload, user_id=user_id, group_id=group_id)
 
-    travel_info = await gather_travel_info(
-        payload, user_id=user_id, group_id=group_id
+    travel_task = asyncio.create_task(
+        gather_travel_info(payload, user_id=user_id, group_id=group_id)
     )
-
     invitees: List[str] = payload.get("invitees", []) or []
-    await check_permissions(
-        user_id,
-        invitees,
-        ume_base=ume_base,
-        group_id=group_id,
+    layers: List[str] = payload.get("layers", []) or []
+    perm_task = asyncio.create_task(
+        check_permissions(
+            user_id,
+            invitees,
+            ume_base=ume_base,
+            group_id=group_id,
+        )
     )
+    try:
+        await perm_task
+        emit_audit_log(
+            "calendar.event.create",
+            "permission",
+            "success",
+            user_id=user_id,
+            group_id=group_id,
+        )
+    except Exception:
+        travel_task.cancel()
+        with contextlib.suppress(Exception):
+            await travel_task
+        raise
 
     event_data = dict(payload)
     event_data["user_id"] = user_id
     if group_id:
         event_data["group_id"] = group_id
+    if travel_task.done():
+        early_info = travel_task.result()
+        if early_info is not None:
+            event_data["travel_time"] = early_info
 
-    related_event: Dict[str, Any] | None = None
+    main_id, _ = persist_events(
+        event_data,
+        [],
+        [],
+        ume_base=ume_base,
+        user_id=user_id,
+        group_id=group_id,
+        related_event=None,
+    )
+
+    travel_info = await travel_task
+    emit_audit_log(
+        "calendar.event.create",
+        "research",
+        "completed",
+        user_id=user_id,
+        group_id=group_id,
+    )
+
+    related_id = None
     if travel_info is not None:
         try:
-            event_data["travel_time"] = travel_info
             start_dt = datetime.fromisoformat(
                 payload["start_time"].replace("Z", "+00:00")
             )
@@ -360,8 +399,109 @@ async def create_calendar_event(
             }
             if group_id:
                 related_event["group_id"] = group_id
-        except Exception:
-            travel_info = None
+            event_url = f"{ume_base.rstrip('/')}/v1/calendar/events"
+            rel_resp = request_with_retry(
+                "POST", event_url, json=related_event, timeout=5
+            )
+            emit_audit_log(
+                "calendar.event.create",
+                "persistence",
+                "success",
+                user_id=user_id,
+                group_id=group_id,
+            )
+            related_data = rel_resp.json()
+            related_id = related_data.get("id")
+            edge_payload = {
+                "src": related_id,
+                "dst": main_id,
+                "type": "RELATES_TO",
+                "user_id": user_id,
+            }
+            if group_id:
+                edge_payload["group_id"] = group_id
+            edge_url = f"{ume_base.rstrip('/')}/v1/calendar/edges"
+            request_with_retry(
+                "POST", edge_url, json=edge_payload, timeout=5
+            )
+            emit_audit_log(
+                "calendar.event.create",
+                "persistence",
+                "success",
+                user_id=user_id,
+                group_id=group_id,
+            )
+        except Exception as exc:
+            emit_audit_log(
+                "calendar.event.create",
+                "persistence",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
+
+    edge_url = f"{ume_base.rstrip('/')}/v1/calendar/edges"
+    for invitee in invitees:
+        edge_payload = {
+            "src": main_id,
+            "dst": invitee,
+            "type": "INVITED",
+            "user_id": user_id,
+        }
+        if group_id:
+            edge_payload["group_id"] = group_id
+        try:
+            request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
+        except Exception as exc:
+            emit_audit_log(
+                "calendar.event.create",
+                "persistence",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
+        else:
+            emit_audit_log(
+                "calendar.event.create",
+                "persistence",
+                "success",
+                user_id=user_id,
+                group_id=group_id,
+            )
+
+    for layer in layers:
+        edge_payload = {
+            "src": main_id,
+            "dst": layer,
+            "type": "LAYER",
+            "user_id": user_id,
+        }
+        if group_id:
+            edge_payload["group_id"] = group_id
+        try:
+            request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
+        except Exception as exc:
+            emit_audit_log(
+                "calendar.event.create",
+                "persistence",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
+        else:
+            emit_audit_log(
+                "calendar.event.create",
+                "persistence",
+                "success",
+                user_id=user_id,
+                group_id=group_id,
+            )
 
     note_text = "No travel details"
     if travel_info:
@@ -370,15 +510,9 @@ async def create_calendar_event(
 
     note = TaskNote(note=note_text)
 
-    main_id, related_id = persist_events(
-        event_data,
-        invitees,
-        payload.get("layers", []) or [],
-        ume_base=ume_base,
-        user_id=user_id,
-        group_id=group_id,
-        related_event=related_event,
-    )
+    result: Dict[str, Any] = {"event_id": main_id}
+    if related_id:
+        result["related_event_id"] = related_id
 
     try:
         emit_stage_update_event(
@@ -409,10 +543,6 @@ async def create_calendar_event(
             user_id=user_id,
             group_id=group_id,
         )
-
-    result: Dict[str, Any] = {"event_id": main_id}
-    if related_id:
-        result["related_event_id"] = related_id
 
     dispatch("calendar.event.created", result, user_id=user_id, group_id=group_id)
     emit_audit_log(
