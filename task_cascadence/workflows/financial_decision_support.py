@@ -95,13 +95,14 @@ def financial_decision_support(
             resp = request_with_retry("GET", url, params=params, timeout=5)
             data = resp.json()
         except Exception as exc:
-            output = repr(engine_payload) if engine_payload is not None else None
+            partial = repr({"url": url, "params": params})
             emit_audit_log(
                 task_name,
                 "research",
                 "error",
                 reason=str(exc),
-                output=output,
+                output=None,
+                partial=partial,
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -110,7 +111,8 @@ def financial_decision_support(
                 "workflow",
                 "error",
                 reason=str(exc),
-                output=output,
+                output=None,
+                partial=partial,
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -147,12 +149,14 @@ def financial_decision_support(
             )
             eng_result = eng_resp.json()
         except Exception as exc:
+            payload_repr = repr(engine_payload)
             emit_audit_log(
                 task_name,
                 "engine",
                 "error",
                 reason=str(exc),
-                output=repr(engine_payload),
+                output=payload_repr,
+                partial=payload_repr,
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -161,7 +165,8 @@ def financial_decision_support(
                 "workflow",
                 "error",
                 reason=str(exc),
-                output=repr(engine_payload),
+                output=payload_repr,
+                partial=payload_repr,
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -230,6 +235,7 @@ def financial_decision_support(
                 "error",
                 reason=str(exc),
                 output=payload_repr,
+                partial=payload_repr,
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -239,6 +245,7 @@ def financial_decision_support(
                 "error",
                 reason=str(exc),
                 output=payload_repr,
+                partial=payload_repr,
                 user_id=user_id,
                 group_id=group_id,
             )
@@ -296,6 +303,7 @@ def financial_decision_support(
             "error",
             reason=str(exc),
             output=output,
+            partial=output,
             user_id=user_id,
             group_id=group_id,
         )
