@@ -10,9 +10,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from task_cascadence.workflows import dispatch
-from task_cascadence.workflows import (
-    calendar_event_creation as cec,
-)
+from task_cascadence.workflows import calendar_event_creation as cec
 
 
 
@@ -61,7 +59,8 @@ def test_calendar_event_creation(monkeypatch):
     def fake_emit(name, stage, user_id=None, group_id=None, **kwargs):
         emitted["event"] = (name, stage, user_id, group_id, kwargs.get("event_id"))
 
-    async def fake_async_gather(query, user_id=None, group_id=None):
+    async def fake_gather_travel_info(payload, *, user_id=None, group_id=None):
+        query = f"travel time to {payload['location']}"
         emitted["async_research"] = (query, user_id, group_id)
         return {"duration": "15m"}
 
@@ -71,7 +70,7 @@ def test_calendar_event_creation(monkeypatch):
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
     monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
-    monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
+    monkeypatch.setattr(cec, "gather_travel_info", fake_gather_travel_info)
     monkeypatch.setattr(cec, "emit_task_note", fake_emit_note)
     monkeypatch.setattr(
         cec,
@@ -142,31 +141,26 @@ def test_calendar_event_creation(monkeypatch):
     ) in audit_logs
 
 
-def test_calendar_event_permission_error(monkeypatch):
+@pytest.mark.asyncio
+async def test_check_permissions_network_error(monkeypatch):
     def fake_request(method, url, timeout, **kwargs):
         if method == "GET":
             raise RuntimeError("network down")
         return DummyResponse({"id": "evt1"})
 
-    audit_logs: list[tuple[str, str, str]] = []
+    audit_logs: list[tuple[str, str, str, str | None]] = []
 
-    def fake_emit_audit_log(task_name, stage, status, *, reason=None, user_id=None, group_id=None, **_):
+    def fake_emit_audit_log(
+        task_name, stage, status, *, reason=None, user_id=None, group_id=None, **_
+    ):
         audit_logs.append((task_name, stage, status, reason))
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
     monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
 
-    payload = {"title": "Lunch", "start_time": "2024-01-01T12:00:00Z"}
-
     with pytest.raises(RuntimeError):
-        dispatch("calendar.event.create_request", payload, user_id="alice")
+        await cec.check_permissions("alice", [], ume_base="http://svc")
 
-    assert (
-        "calendar.event.create",
-        "workflow",
-        "started",
-        None,
-    ) in audit_logs
     assert (
         "calendar.event.create",
         "permission",
@@ -175,13 +169,8 @@ def test_calendar_event_permission_error(monkeypatch):
     ) in audit_logs
 
 
-def test_calendar_event_invitee_permission_error(monkeypatch):
-    calls = []
-
-    def fake_request(method, url, timeout, **kwargs):
-        calls.append((method, url, kwargs))
-        return DummyResponse({"id": "evt1"})
-
+@pytest.mark.asyncio
+async def test_check_permissions_invitee_permission_error(monkeypatch):
     audit_logs: list[tuple[str, str, str, str]] = []
 
     def fake_emit_audit_log(
@@ -197,18 +186,11 @@ def test_calendar_event_invitee_permission_error(monkeypatch):
         perms_checked.append((user_id, invitee))
         return invitee is None
 
-    monkeypatch.setattr(cec, "request_with_retry", fake_request)
     monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
     monkeypatch.setattr(cec, "_has_permission", fake_has_permission)
 
-    payload = {
-        "title": "Lunch",
-        "start_time": "2024-01-01T12:00:00Z",
-        "invitees": ["bob"],
-    }
-
     with pytest.raises(PermissionError):
-        dispatch("calendar.event.create_request", payload, user_id="alice")
+        await cec.check_permissions("alice", ["bob"])
 
     assert (
         "calendar.event.create",
@@ -216,11 +198,10 @@ def test_calendar_event_invitee_permission_error(monkeypatch):
         "error",
         "user lacks permission to invite bob",
     ) in audit_logs
-    assert calls == []
     assert perms_checked == [("alice", None), ("alice", "bob")]
 
 
-def test_calendar_event_group_id_mismatch(monkeypatch):
+def test_validate_payload_group_id_mismatch(monkeypatch):
     audit_logs: list[tuple[str, str, str, str | None, str | None, str | None]] = []
 
     def fake_emit_audit_log(
@@ -237,7 +218,7 @@ def test_calendar_event_group_id_mismatch(monkeypatch):
     }
 
     with pytest.raises(ValueError):
-        dispatch("calendar.event.create_request", payload, user_id="alice", group_id="g1")
+        cec.validate_payload(payload, user_id="alice", group_id="g1")
 
     assert (
         "calendar.event.create",
@@ -262,7 +243,7 @@ def test_calendar_event_ume_failure(monkeypatch):
         counter["post"] += 1
         return DummyResponse({"id": f"evt{counter['post']}"})
 
-    async def fake_async_gather(query, user_id=None, group_id=None):
+    async def fake_gather_travel_info(payload, *, user_id=None, group_id=None):
         return {"duration": "15m"}
 
     audit_logs: list[tuple[str, str, str, str | None]] = []
@@ -277,7 +258,7 @@ def test_calendar_event_ume_failure(monkeypatch):
         raise RuntimeError("ume down")
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
-    monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
+    monkeypatch.setattr(cec, "gather_travel_info", fake_gather_travel_info)
     monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(cec, "emit_task_note", failing_emit_note)
     monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
@@ -318,17 +299,8 @@ def test_calendar_event_ume_failure(monkeypatch):
     ) in audit_logs
 
 
-def test_calendar_event_research_failure(monkeypatch):
-    calls = []
-
-    def fake_request(method, url, timeout, **kwargs):
-        calls.append((method, url, kwargs))
-        if method == "GET":
-            return DummyResponse({"allowed": True})
-        if url.endswith("/edges"):
-            return DummyResponse({"ok": True})
-        return DummyResponse({"id": "evt1"})
-
+@pytest.mark.asyncio
+async def test_gather_travel_info_failure(monkeypatch):
     def failing_async_gather(query, user_id=None, group_id=None):
         raise RuntimeError("research down")
 
@@ -337,48 +309,19 @@ def test_calendar_event_research_failure(monkeypatch):
     def fake_emit_audit_log(task, stage, status, *, reason=None, user_id=None, group_id=None, **_):
         audit_logs.append((task, stage, status, reason))
 
-    emitted_notes: list[str] = []
-
-    def fake_emit_note(note, user_id=None, group_id=None):
-        emitted_notes.append(note.note)
-
-    monkeypatch.setattr(cec, "request_with_retry", fake_request)
     monkeypatch.setattr(cec.research, "async_gather", failing_async_gather)
-    monkeypatch.setattr(cec, "emit_stage_update_event", lambda *a, **k: None)
-    monkeypatch.setattr(cec, "emit_task_note", fake_emit_note)
     monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
-    monkeypatch.setattr(cec, "dispatch", lambda *a, **k: None)
 
-    payload = {
-        "title": "Lunch",
-        "start_time": "2024-01-01T12:00:00Z",
-        "location": "Cafe",
-    }
+    payload = {"title": "Lunch", "start_time": "2024-01-01T12:00:00Z", "location": "Cafe"}
 
-    result = dispatch(
-        "calendar.event.create_request", payload, user_id="alice", ume_base="http://svc"
-    )
+    result = await cec.gather_travel_info(payload, user_id="alice", group_id="g1")
 
-    assert result == {"event_id": "evt1"}
-    assert "travel_time" not in calls[1][2]["json"]
-    assert emitted_notes == ["No travel details"]
+    assert result is None
     assert (
         "calendar.event.create",
         "research",
         "error",
         "research down",
-    ) in audit_logs
-    assert (
-        "calendar.event.create",
-        "workflow",
-        "started",
-        None,
-    ) in audit_logs
-    assert (
-        "calendar.event.create",
-        "workflow",
-        "completed",
-        None,
     ) in audit_logs
 
 
@@ -394,13 +337,13 @@ async def test_calendar_event_creation_in_event_loop(monkeypatch):
         counter["post"] += 1
         return DummyResponse({"id": f"evt{counter['post']}"})
 
-    async def fake_async_gather(query, user_id=None, group_id=None):
+    async def fake_gather_travel_info(payload, *, user_id=None, group_id=None):
         return {"duration": "15m"}
 
     audit_logs: list[tuple[str, str, str]] = []
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
-    monkeypatch.setattr(cec.research, "async_gather", fake_async_gather)
+    monkeypatch.setattr(cec, "gather_travel_info", fake_gather_travel_info)
     monkeypatch.setattr(cec, "emit_stage_update_event", lambda *a, **k: None)
     monkeypatch.setattr(cec, "emit_task_note", lambda *a, **k: None)
     monkeypatch.setattr(

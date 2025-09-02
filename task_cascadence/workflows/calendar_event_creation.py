@@ -4,7 +4,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 import asyncio
-from contextlib import suppress
 
 from . import dispatch, subscribe
 
@@ -61,13 +60,47 @@ def validate_payload(
         raise ValueError("group_id mismatch")
 
 
+async def gather_travel_info(
+    payload: Dict[str, Any],
+    *,
+    user_id: str,
+    group_id: str | None = None,
+) -> Dict[str, Any] | None:
+    """Return travel research info if ``location`` is provided."""
+
+    if not payload.get("location"):
+        return None
+    query = f"travel time to {payload['location']}"
+    try:
+        info = await research.async_gather(
+            query, user_id=user_id, group_id=group_id
+        )
+        emit_audit_log(
+            "calendar.event.create",
+            "research",
+            "success",
+            user_id=user_id,
+            group_id=group_id,
+        )
+        return info
+    except Exception as exc:  # pragma: no cover - network failures
+        emit_audit_log(
+            "calendar.event.create",
+            "research",
+            "error",
+            reason=str(exc),
+            user_id=user_id,
+            group_id=group_id,
+        )
+        return None
+
+
 async def check_permissions(
     user_id: str,
     invitees: List[str],
     *,
     ume_base: str = "http://ume",
     group_id: str | None = None,
-    travel_task: asyncio.Task | None = None,
 ) -> None:
     """Validate that ``user_id`` may create events and invite others."""
 
@@ -86,18 +119,6 @@ async def check_permissions(
             user_id=user_id,
             group_id=group_id,
         )
-        if travel_task is not None:
-            travel_task.cancel()
-            with suppress(Exception, asyncio.CancelledError):
-                await travel_task
-            emit_audit_log(
-                "calendar.event.create",
-                "research",
-                "error",
-                reason="cancelled",
-                user_id=user_id,
-                group_id=group_id,
-            )
         raise
 
     async def _check_invitee(invitee: str) -> None:
@@ -304,24 +325,9 @@ async def create_calendar_event(
 
     validate_payload(payload, user_id=user_id, group_id=group_id)
 
-    travel_info: Dict[str, Any] | None = None
-    travel_task: asyncio.Task | None = None
-    if payload.get("location"):
-        query = f"travel time to {payload['location']}"
-        try:
-            travel_task = asyncio.create_task(
-                research.async_gather(query, user_id=user_id, group_id=group_id)
-            )
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "research",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            travel_task = None
+    travel_info = await gather_travel_info(
+        payload, user_id=user_id, group_id=group_id
+    )
 
     invitees: List[str] = payload.get("invitees", []) or []
     await check_permissions(
@@ -329,29 +335,7 @@ async def create_calendar_event(
         invitees,
         ume_base=ume_base,
         group_id=group_id,
-        travel_task=travel_task,
     )
-
-    if travel_task is not None:
-        try:
-            travel_info = await travel_task
-            emit_audit_log(
-                "calendar.event.create",
-                "research",
-                "success",
-                user_id=user_id,
-                group_id=group_id,
-            )
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "research",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            travel_info = None
 
     event_data = dict(payload)
     event_data["user_id"] = user_id
