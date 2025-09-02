@@ -80,6 +80,35 @@ class PartialOutputTask:
         return {"partial": True}
 
 
+class IntakePartialErrorTask:
+    def intake(self):
+        exc = RuntimeError("intake fail")
+        exc.partial = {"stage": "intake"}
+        raise exc
+
+
+class ResearchPartialErrorTask:
+    def research(self):
+        return "topic"
+
+
+class PlanPartialErrorTask:
+    def plan(self):
+        exc = RuntimeError("plan fail")
+        exc.partial = ["step1"]
+        raise exc
+
+
+class VerifyPartialErrorTask:
+    def run(self):
+        return "result"
+
+    def verify(self, exec_result):
+        exc = RuntimeError("verify fail")
+        exc.partial = {"verified": False}
+        raise exc
+
+
 def _init_store(monkeypatch, tmp_path):
     monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
     import task_cascadence.ume as ume
@@ -176,3 +205,60 @@ def test_audit_log_records_partial_output_on_failure(monkeypatch, tmp_path):
     failure = [e for e in events if e.get("status") == "error"]
     assert failure and failure[0]["reason"] == "emit fail"
     assert "partial" in failure[0]["output"]
+
+
+def test_audit_log_records_partial_output_on_intake_failure(monkeypatch, tmp_path):
+    _init_store(monkeypatch, tmp_path)
+    pipeline = TaskPipeline(IntakePartialErrorTask())
+    with pytest.raises(RuntimeError, match="intake fail"):
+        pipeline.intake(user_id="alice")
+
+    store = StageStore()
+    events = store.get_events("IntakePartialErrorTask", category="audit")
+    failure = [e for e in events if e.get("status") == "error"]
+    assert failure and "intake" in failure[0]["output"]
+
+
+def test_audit_log_records_partial_output_on_research_failure(monkeypatch, tmp_path):
+    _init_store(monkeypatch, tmp_path)
+
+    def failing_gather(query, *, user_id=None, group_id=None):
+        exc = RuntimeError("gather fail")
+        exc.partial = {"topic": query}
+        raise exc
+
+    monkeypatch.setattr(
+        "task_cascadence.research.gather", failing_gather
+    )
+
+    pipeline = TaskPipeline(ResearchPartialErrorTask())
+    pipeline.research(user_id="alice")
+
+    store = StageStore()
+    events = store.get_events("ResearchPartialErrorTask", category="audit")
+    failure = [e for e in events if e.get("status") == "error"]
+    assert failure and "topic" in failure[0]["output"]
+
+
+def test_audit_log_records_partial_output_on_plan_failure(monkeypatch, tmp_path):
+    _init_store(monkeypatch, tmp_path)
+    pipeline = TaskPipeline(PlanPartialErrorTask())
+    with pytest.raises(RuntimeError, match="plan fail"):
+        pipeline.plan(user_id="alice")
+
+    store = StageStore()
+    events = store.get_events("PlanPartialErrorTask", category="audit")
+    failure = [e for e in events if e.get("status") == "error"]
+    assert failure and "step1" in failure[0]["output"]
+
+
+def test_audit_log_records_partial_output_on_verify_failure(monkeypatch, tmp_path):
+    _init_store(monkeypatch, tmp_path)
+    pipeline = TaskPipeline(VerifyPartialErrorTask())
+    with pytest.raises(RuntimeError, match="verify fail"):
+        pipeline.verify("result", user_id="alice")
+
+    store = StageStore()
+    events = store.get_events("VerifyPartialErrorTask", category="audit")
+    failure = [e for e in events if e.get("status") == "error"]
+    assert failure and "verified" in failure[0]["output"]
