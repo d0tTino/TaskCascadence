@@ -77,6 +77,9 @@ def financial_decision_support(
             "finance.decision.result", "error", user_id=user_id, group_id=group_id
         )
         raise ValueError(reason)
+    engine_payload: Dict[str, Any] | None = None
+    nodes_to_persist: List[Dict[str, Any]] | None = None
+    edges: List[Dict[str, Any]] | None = None
     try:
         emit_audit_log(task_name, "research", "started", user_id=user_id, group_id=group_id)
         url = f"{ume_base.rstrip('/')}/v1/nodes"
@@ -92,8 +95,25 @@ def financial_decision_support(
             resp = request_with_retry("GET", url, params=params, timeout=5)
             data = resp.json()
         except Exception as exc:
-            emit_audit_log(task_name, "research", "error", reason=str(exc), user_id=user_id, group_id=group_id)
-            emit_audit_log(task_name, "workflow", "error", reason=str(exc), user_id=user_id, group_id=group_id)
+            output = repr(engine_payload) if engine_payload is not None else None
+            emit_audit_log(
+                task_name,
+                "research",
+                "error",
+                reason=str(exc),
+                output=output,
+                user_id=user_id,
+                group_id=group_id,
+            )
+            emit_audit_log(
+                task_name,
+                "workflow",
+                "error",
+                reason=str(exc),
+                output=output,
+                user_id=user_id,
+                group_id=group_id,
+            )
             raise
         nodes: List[Dict[str, Any]] = data.get("nodes", [])
 
@@ -260,6 +280,12 @@ def financial_decision_support(
         )
         return result
     except Exception as exc:
+        if nodes_to_persist is not None and edges is not None:
+            output = repr({"nodes": nodes_to_persist, "edges": edges})
+        elif engine_payload is not None:
+            output = repr(engine_payload)
+        else:
+            output = None
 
         emit_stage_update_event(
             "finance.decision.result", "error", user_id=user_id, group_id=group_id
@@ -269,6 +295,7 @@ def financial_decision_support(
             "workflow",
             "error",
             reason=str(exc),
+            output=output,
             user_id=user_id,
             group_id=group_id,
         )
