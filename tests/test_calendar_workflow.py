@@ -206,7 +206,7 @@ async def test_check_permissions_invitee_permission_error(monkeypatch):
     monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
     monkeypatch.setattr(cec, "_has_permission", fake_has_permission)
 
-    with pytest.raises(PermissionError):
+    with pytest.raises(ValueError):
         await cec.check_permissions("alice", ["bob"])
 
     assert (
@@ -216,6 +216,34 @@ async def test_check_permissions_invitee_permission_error(monkeypatch):
         "user lacks permission to invite bob",
     ) in audit_logs
     assert perms_checked == [("alice", None), ("alice", "bob")]
+
+
+@pytest.mark.asyncio
+async def test_check_permissions_permission_denied(monkeypatch):
+    audit_logs: list[tuple[str, str, str, str]] = []
+
+    def fake_emit_audit_log(
+        task_name, stage, status, *, reason=None, user_id=None, group_id=None, **_
+    ):
+        audit_logs.append((task_name, stage, status, reason))
+
+    def fake_has_permission(
+        user_id, *, ume_base="http://ume", group_id=None, invitee=None
+    ):
+        return False
+
+    monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
+    monkeypatch.setattr(cec, "_has_permission", fake_has_permission)
+
+    with pytest.raises(ValueError):
+        await cec.check_permissions("alice", [])
+
+    assert (
+        "calendar.event.create",
+        "permission",
+        "error",
+        "user lacks calendar:create permission",
+    ) in audit_logs
 
 
 def test_validate_payload_group_id_mismatch(monkeypatch):
@@ -244,6 +272,36 @@ def test_validate_payload_group_id_mismatch(monkeypatch):
         "group_id mismatch",
         "alice",
         "g1",
+    ) in audit_logs
+
+
+@pytest.mark.parametrize(
+    "payload, missing",
+    [
+        ({"start_time": "2024-01-01T12:00:00Z"}, "title"),
+        ({"title": "Lunch"}, "start_time"),
+    ],
+)
+def test_validate_payload_missing_required_fields(monkeypatch, payload, missing):
+    audit_logs: list[tuple[str, str, str, str | None, str | None, str | None]] = []
+
+    def fake_emit_audit_log(
+        task, stage, status, *, reason=None, user_id=None, group_id=None, **_
+    ):
+        audit_logs.append((task, stage, status, reason, user_id, group_id))
+
+    monkeypatch.setattr(cec, "emit_audit_log", fake_emit_audit_log)
+
+    with pytest.raises(ValueError):
+        cec.validate_payload(payload, user_id="alice")
+
+    assert (
+        "calendar.event.create",
+        "workflow",
+        "error",
+        f"missing required field: {missing}",
+        "alice",
+        None,
     ) in audit_logs
 
 

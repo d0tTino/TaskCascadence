@@ -46,6 +46,14 @@ def validate_payload(
 
     for field in ("title", "start_time"):
         if field not in payload or not payload[field]:
+            emit_audit_log(
+                "calendar.event.create",
+                "workflow",
+                "error",
+                reason=f"missing required field: {field}",
+                user_id=user_id,
+                group_id=group_id,
+            )
             raise ValueError(f"missing required field: {field}")
 
     payload_group_id = payload.get("group_id")
@@ -110,7 +118,7 @@ async def check_permissions(
             _has_permission, user_id, ume_base=ume_base, group_id=group_id
         )
         if not allowed:
-            raise PermissionError("user lacks calendar:create permission")
+            raise ValueError("user lacks calendar:create permission")
     except Exception as exc:  # pragma: no cover - network failures
         emit_audit_log(
             "calendar.event.create",
@@ -132,7 +140,7 @@ async def check_permissions(
                 invitee=invitee,
             )
             if not allowed:
-                raise PermissionError(
+                raise ValueError(
                     f"user lacks permission to invite {invitee}"
                 )
         except Exception as exc:  # pragma: no cover - network failures
