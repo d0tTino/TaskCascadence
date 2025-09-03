@@ -97,24 +97,33 @@ def test_schedule_from_calendar_event(tmp_path):
     from task_cascadence.ume import _hash_user_id
 
     assert entry["user_id"] == _hash_user_id("alice")
-    assert entry["group_id"] == "engineering"
+    assert entry["group_id"] == _hash_user_id("engineering")
     persisted = yaml.safe_load((tmp_path / "sched.yml").read_text())
     assert persisted["DummyTask"]["user_id"] == _hash_user_id("alice")
-    assert persisted["DummyTask"]["group_id"] == "engineering"
+    assert persisted["DummyTask"]["group_id"] == _hash_user_id("engineering")
     assert persisted["DummyTask"]["recurrence"] == {"cron": "*/2 * * * *"}
 
 
-def test_loads_plain_user_id_and_rewrites(tmp_path):
+def test_loads_plain_identifiers_and_rewrites(tmp_path):
     sched_file = tmp_path / "sched.yml"
-    data = {"DummyTask": {"expr": "* * * * *", "user_id": "alice"}}
+    data = {
+        "DummyTask": {
+            "expr": "* * * * *",
+            "user_id": "alice",
+            "group_id": "engineering",
+        }
+    }
     sched_file.write_text(yaml.safe_dump(data))
     sched = CronScheduler(timezone="UTC", storage_path=sched_file)
     from task_cascadence.ume import _hash_user_id
 
-    expected = _hash_user_id("alice")
-    assert sched.schedules["DummyTask"]["user_id"] == expected
+    expected_user = _hash_user_id("alice")
+    expected_group = _hash_user_id("engineering")
+    assert sched.schedules["DummyTask"]["user_id"] == expected_user
+    assert sched.schedules["DummyTask"]["group_id"] == expected_group
     persisted = yaml.safe_load(sched_file.read_text())
-    assert persisted["DummyTask"]["user_id"] == expected
+    assert persisted["DummyTask"]["user_id"] == expected_user
+    assert persisted["DummyTask"]["group_id"] == expected_group
 
 
 def test_yaml_calendar_event_daily(tmp_path, monkeypatch):

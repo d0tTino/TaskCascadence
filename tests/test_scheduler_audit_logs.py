@@ -57,15 +57,33 @@ def test_scheduler_audit_logs(monkeypatch, tmp_path):
     sched.unschedule("Dummy")
 
     assert calls == [
-        ("Dummy", "scheduler", "disabled", "alice", "team"),
-        ("Dummy", "scheduler", "paused", "alice", "team"),
-        ("Dummy", "scheduler", "resumed", "alice", "team"),
+        (
+            "Dummy",
+            "scheduler",
+            "disabled",
+            "alice",
+            ume_mod._hash_user_id("team"),
+        ),
+        (
+            "Dummy",
+            "scheduler",
+            "paused",
+            "alice",
+            ume_mod._hash_user_id("team"),
+        ),
+        (
+            "Dummy",
+            "scheduler",
+            "resumed",
+            "alice",
+            ume_mod._hash_user_id("team"),
+        ),
         (
             "Dummy",
             "unschedule",
             "success",
             ume_mod._hash_user_id("alice"),
-            "team",
+            ume_mod._hash_user_id("team"),
         ),
     ]
 

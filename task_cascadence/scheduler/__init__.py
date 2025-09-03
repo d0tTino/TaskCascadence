@@ -43,6 +43,12 @@ def _maybe_hash_user_id(user_id: str) -> str:
     return user_id if _HASH_RE.match(user_id) else _hash_user_id(user_id)
 
 
+def _maybe_hash_group_id(group_id: str) -> str:
+    """Return ``group_id`` hashed unless it already appears hashed."""
+
+    return group_id if _HASH_RE.match(group_id) else _hash_user_id(group_id)
+
+
 class BaseScheduler:
     """Very small task scheduler used by the CLI.
 
@@ -205,12 +211,13 @@ class BaseScheduler:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["disabled"] = True
         from ..ume import emit_audit_log
+        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
         emit_audit_log(
             name,
             "scheduler",
             "disabled",
             user_id=user_id,
-            group_id=group_id,
+            group_id=group_hash,
         )
 
     def pause_task(
@@ -227,12 +234,13 @@ class BaseScheduler:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["paused"] = True
         from ..ume import emit_audit_log
+        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
         emit_audit_log(
             name,
             "scheduler",
             "paused",
             user_id=user_id,
-            group_id=group_id,
+            group_id=group_hash,
         )
 
     def resume_task(
@@ -249,12 +257,13 @@ class BaseScheduler:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["paused"] = False
         from ..ume import emit_audit_log
+        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
         emit_audit_log(
             name,
             "scheduler",
             "resumed",
             user_id=user_id,
-            group_id=group_id,
+            group_id=group_hash,
         )
 
 
@@ -316,12 +325,19 @@ class CronScheduler(BaseScheduler):
                 if isinstance(data, dict):
                     modified = False
                     for info in data.values():
-                        if isinstance(info, dict) and "user_id" in info:
-                            uid = info["user_id"]
-                            hashed = _maybe_hash_user_id(uid)
-                            if hashed != uid:
-                                info["user_id"] = hashed
-                                modified = True
+                        if isinstance(info, dict):
+                            if "user_id" in info:
+                                uid = info["user_id"]
+                                hashed = _maybe_hash_user_id(uid)
+                                if hashed != uid:
+                                    info["user_id"] = hashed
+                                    modified = True
+                            if "group_id" in info:
+                                gid = info["group_id"]
+                                ghashed = _maybe_hash_group_id(gid)
+                                if ghashed != gid:
+                                    info["group_id"] = ghashed
+                                    modified = True
                     if modified:
                         with open(self.storage_path, "w") as out:
                             self._yaml.safe_dump(data, out)
@@ -384,11 +400,13 @@ class CronScheduler(BaseScheduler):
         url = f"{base.rstrip('/')}/v1/calendar/nodes/{node}"
         if user_id is not None:
             user_id = _maybe_hash_user_id(user_id)
+        if group_id is not None:
+            group_id = _maybe_hash_group_id(group_id)
         params: dict[str, str] = {}
         if user_id is not None:
             params["user_id"] = _maybe_hash_user_id(user_id)
         if group_id is not None:
-            params["group_id"] = group_id
+            params["group_id"] = _maybe_hash_group_id(group_id)
         response = request_with_retry("GET", url, timeout=5, params=params or None)
         return response.json()
 
@@ -481,6 +499,8 @@ class CronScheduler(BaseScheduler):
             def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
                 return None
 
+        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
+
         if isinstance(name_or_task, str):
             # Called with ``name`` and ``task``
             name, task = name_or_task, task_or_expr
@@ -493,11 +513,11 @@ class CronScheduler(BaseScheduler):
                     "error",
                     reason=str(exc),
                     user_id=user_id,
-                    group_id=group_id,
+                    group_id=group_hash,
                 )
                 raise
             emit_audit_log(
-                name, "register", "success", user_id=user_id, group_id=group_id
+                name, "register", "success", user_id=user_id, group_id=group_hash
             )
             return
 
@@ -507,14 +527,14 @@ class CronScheduler(BaseScheduler):
             super().register_task(job_id, task)
             user_hash = _maybe_hash_user_id(user_id) if user_id is not None else None
             with self._schedules_lock:
-                if user_id is None and group_id is None:
+                if user_id is None and group_hash is None:
                     self.schedules[job_id] = cron_expression
                 else:
                     entry: dict[str, Any] = {"expr": cron_expression}
                     if user_hash is not None:
                         entry["user_id"] = user_hash
-                    if group_id is not None:
-                        entry["group_id"] = group_id
+                    if group_hash is not None:
+                        entry["group_id"] = group_hash
                     self.schedules[job_id] = entry
                 self._save_schedules()
 
@@ -534,11 +554,11 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason=str(exc),
                 user_id=user_id,
-                group_id=group_id,
+                group_id=group_hash,
             )
             raise
         emit_audit_log(
-            job_id, "schedule", "success", user_id=user_id, group_id=group_id
+            job_id, "schedule", "success", user_id=user_id, group_id=group_hash
         )
 
     def schedule_task(
@@ -698,6 +718,7 @@ class CronScheduler(BaseScheduler):
         job_id = task.__class__.__name__
         recurrence = event.get("recurrence", {})
         expr = recurrence.get("cron")
+        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
         if not expr:
             emit_audit_log(
                 job_id,
@@ -705,7 +726,7 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason="event missing recurrence cron",
                 user_id=user_id,
-                group_id=group_id,
+                group_id=group_hash,
             )
             raise ValueError("event missing recurrence cron")
 
@@ -723,14 +744,14 @@ class CronScheduler(BaseScheduler):
                     sched_entry["recurrence"] = recurrence
                     if user_hash is not None:
                         sched_entry["user_id"] = user_hash
-                    if group_id is not None:
-                        sched_entry["group_id"] = group_id
+                    if group_hash is not None:
+                        sched_entry["group_id"] = group_hash
                 else:
                     entry: dict[str, Any] = {"expr": expr, "recurrence": recurrence}
                     if user_hash is not None:
                         entry["user_id"] = user_hash
-                    if group_id is not None:
-                        entry["group_id"] = group_id
+                    if group_hash is not None:
+                        entry["group_id"] = group_hash
                     self.schedules[job_id] = entry
                 self._save_schedules()
         except Exception as exc:  # pragma: no cover - passthrough
@@ -740,11 +761,11 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason=str(exc),
                 user_id=user_id,
-                group_id=group_id,
+                group_id=group_hash,
             )
             raise
         emit_audit_log(
-            job_id, "schedule", "success", user_id=user_id, group_id=group_id
+            job_id, "schedule", "success", user_id=user_id, group_id=group_hash
         )
 
     def unschedule(self, name: str) -> None:
@@ -773,6 +794,12 @@ class CronScheduler(BaseScheduler):
                 group_id = sched_entry.get("group_id")
             else:
                 user_id = group_id = None
+            user_id = (
+                _maybe_hash_user_id(user_id) if user_id is not None else None
+            )
+            group_id = (
+                _maybe_hash_group_id(group_id) if group_id is not None else None
+            )
 
             try:
                 self.scheduler.remove_job(name)
@@ -796,7 +823,6 @@ class CronScheduler(BaseScheduler):
         emit_stage_update_event(name, "unschedule")
         emit_audit_log(
             name, "unschedule", "success", user_id=user_id, group_id=group_id
-
         )
 
     def disable_task(
@@ -817,8 +843,10 @@ class CronScheduler(BaseScheduler):
             def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
                 return None
 
+        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
+
         try:
-            super().disable_task(name, user_id=user_id, group_id=group_id)
+            super().disable_task(name, user_id=user_id, group_id=group_hash)
         except Exception as exc:  # pragma: no cover - passthrough
             emit_audit_log(
                 name,
@@ -826,12 +854,14 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason=str(exc),
                 user_id=user_id,
-                group_id=group_id,
+                group_id=group_hash,
             )
             raise
-        emit_stage_update_event(name, "disabled", user_id=user_id, group_id=group_id)
+        emit_stage_update_event(
+            name, "disabled", user_id=user_id, group_id=group_hash
+        )
         emit_audit_log(
-            name, "disabled", "success", user_id=user_id, group_id=group_id
+            name, "disabled", "success", user_id=user_id, group_id=group_hash
         )
 
     def pause_task(
@@ -852,8 +882,10 @@ class CronScheduler(BaseScheduler):
             def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
                 return None
 
+        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
+
         try:
-            super().pause_task(name, user_id=user_id, group_id=group_id)
+            super().pause_task(name, user_id=user_id, group_id=group_hash)
         except Exception as exc:  # pragma: no cover - passthrough
             emit_audit_log(
                 name,
@@ -861,12 +893,14 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason=str(exc),
                 user_id=user_id,
-                group_id=group_id,
+                group_id=group_hash,
             )
             raise
-        emit_stage_update_event(name, "paused", user_id=user_id, group_id=group_id)
+        emit_stage_update_event(
+            name, "paused", user_id=user_id, group_id=group_hash
+        )
         emit_audit_log(
-            name, "paused", "success", user_id=user_id, group_id=group_id
+            name, "paused", "success", user_id=user_id, group_id=group_hash
         )
 
     def resume_task(
@@ -887,8 +921,10 @@ class CronScheduler(BaseScheduler):
             def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
                 return None
 
+        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
+
         try:
-            super().resume_task(name, user_id=user_id, group_id=group_id)
+            super().resume_task(name, user_id=user_id, group_id=group_hash)
         except Exception as exc:  # pragma: no cover - passthrough
             emit_audit_log(
                 name,
@@ -896,12 +932,14 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason=str(exc),
                 user_id=user_id,
-                group_id=group_id,
+                group_id=group_hash,
             )
             raise
-        emit_stage_update_event(name, "resumed", user_id=user_id, group_id=group_id)
+        emit_stage_update_event(
+            name, "resumed", user_id=user_id, group_id=group_hash
+        )
         emit_audit_log(
-            name, "resumed", "success", user_id=user_id, group_id=group_id
+            name, "resumed", "success", user_id=user_id, group_id=group_hash
         )
 
 
