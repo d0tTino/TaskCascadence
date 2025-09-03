@@ -352,6 +352,15 @@ def test_financial_decision_support_engine_failure(monkeypatch):
     assert parsed["max_options"] == 3
     assert "balance" in parsed
 
+    engine_errors = [a for a in audit_logs if a[1] == "engine" and a[2] == "error"]
+    assert engine_errors
+    engine_output = engine_errors[0][4]
+    engine_partial = engine_errors[0][5]
+    assert engine_output == engine_partial
+    parsed_engine = ast.literal_eval(engine_partial)
+    assert parsed_engine["budget"] == 100
+    assert parsed_engine["max_options"] == 3
+
 
 def test_financial_decision_support_persistence_failure(monkeypatch):
     calls = []
