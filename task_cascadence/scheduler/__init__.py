@@ -177,14 +177,17 @@ class BaseScheduler:
                         started_at=started,
                         finished_at=finished,
                     )
-                    if user_id is None and group_id is None:
+                    group_hash = (
+                        _maybe_hash_group_id(group_id) if group_id is not None else None
+                    )
+                    if user_id is None and group_hash is None:
                         emit_task_run(run)
-                    elif group_id is None:
+                    elif group_hash is None:
                         emit_task_run(run, user_id=user_id)
                     elif user_id is None:
-                        emit_task_run(run, group_id=group_id)
+                        emit_task_run(run, group_id=group_hash)
                     else:
-                        emit_task_run(run, user_id=user_id, group_id=group_id)
+                        emit_task_run(run, user_id=user_id, group_id=group_hash)
                 return result
 
             return runner()
