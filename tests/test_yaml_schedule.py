@@ -2,6 +2,11 @@ import yaml
 import pytest
 from apscheduler.triggers.cron import CronTrigger
 from task_cascadence.scheduler import CronScheduler
+from task_cascadence.ume import _hash_user_id
+
+
+def expected_hash(value: str) -> str:
+    return _hash_user_id(value)
 
 
 class DummyTask:
@@ -94,13 +99,13 @@ def test_schedule_from_calendar_event(tmp_path):
     assert job is not None
     entry = sched.schedules["DummyTask"]
     assert entry["recurrence"] == {"cron": "*/2 * * * *"}
-    from task_cascadence.ume import _hash_user_id
-
-    assert entry["user_id"] == _hash_user_id("alice")
-    assert entry["group_id"] == _hash_user_id("engineering")
+    expected_user = expected_hash("alice")
+    expected_group = expected_hash("engineering")
+    assert entry["user_id"] == expected_user
+    assert entry["group_id"] == expected_group
     persisted = yaml.safe_load((tmp_path / "sched.yml").read_text())
-    assert persisted["DummyTask"]["user_id"] == _hash_user_id("alice")
-    assert persisted["DummyTask"]["group_id"] == _hash_user_id("engineering")
+    assert persisted["DummyTask"]["user_id"] == expected_user
+    assert persisted["DummyTask"]["group_id"] == expected_group
     assert persisted["DummyTask"]["recurrence"] == {"cron": "*/2 * * * *"}
 
 
@@ -115,10 +120,8 @@ def test_loads_plain_identifiers_and_rewrites(tmp_path):
     }
     sched_file.write_text(yaml.safe_dump(data))
     sched = CronScheduler(timezone="UTC", storage_path=sched_file)
-    from task_cascadence.ume import _hash_user_id
-
-    expected_user = _hash_user_id("alice")
-    expected_group = _hash_user_id("engineering")
+    expected_user = expected_hash("alice")
+    expected_group = expected_hash("engineering")
     assert sched.schedules["DummyTask"]["user_id"] == expected_user
     assert sched.schedules["DummyTask"]["group_id"] == expected_group
     persisted = yaml.safe_load(sched_file.read_text())
@@ -316,7 +319,8 @@ def test_yaml_calendar_event_multiple_recurrences(tmp_path, monkeypatch):
     job.func()
 
     assert task.count == 2
+    expected_group = expected_hash("engineering")
     assert captured == [
-        (captured[0][0], "alice", "engineering"),
-        (captured[1][0], "alice", "engineering"),
+        (captured[0][0], "alice", expected_group),
+        (captured[1][0], "alice", expected_group),
     ]
