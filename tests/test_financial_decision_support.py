@@ -1,3 +1,4 @@
+import ast
 import sys
 from pathlib import Path
 from typing import Any
@@ -279,10 +280,34 @@ def test_financial_decision_support_engine_failure(monkeypatch):
     def fake_dispatch(event, payload, user_id, group_id=None):
         dispatched.append(event)
 
-    audit_logs: list[tuple[str, str, str, str | None, str | None, str | None, str | None]] = []
+    audit_logs: list[
+        tuple[
+            str,
+            str,
+            str,
+            str | None,
+            str | None,
+            str | None,
+            str | None,
+            str | None,
+        ]
+    ] = []
 
-    def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
-        audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
+    def fake_audit_log(
+        task_name,
+        stage,
+        status,
+        *,
+        reason=None,
+        output=None,
+        partial=None,
+        user_id=None,
+        group_id=None,
+        **_,
+    ):
+        audit_logs.append(
+            (task_name, stage, status, reason, output, partial, user_id, group_id)
+        )
 
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
@@ -306,19 +331,26 @@ def test_financial_decision_support_engine_failure(monkeypatch):
         a[1] == "engine"
         and a[2] == "error"
         and "boom" in a[3]
-        and "budget" in a[4]
-        and a[5] == "alice"
-        and a[6] == "g1"
+        and "budget" in (a[4] or "")
+        and a[6] == "alice"
+        and a[7] == "g1"
         for a in audit_logs
     )
     assert any(
         a[1] == "workflow"
         and a[2] == "error"
         and "budget" in (a[4] or "")
-        and a[5] == "alice"
-        and a[6] == "g1"
+        and a[6] == "alice"
+        and a[7] == "g1"
         for a in audit_logs
     )
+
+    workflow_errors = [a for a in audit_logs if a[1] == "workflow" and a[2] == "error"]
+    assert workflow_errors
+    parsed = ast.literal_eval(workflow_errors[0][5])
+    assert parsed["budget"] == 100
+    assert parsed["max_options"] == 3
+    assert "balance" in parsed
 
 
 def test_financial_decision_support_persistence_failure(monkeypatch):
@@ -343,10 +375,34 @@ def test_financial_decision_support_persistence_failure(monkeypatch):
     def fake_dispatch(event, payload, user_id, group_id=None):
         dispatched.append(event)
 
-    audit_logs = []
+    audit_logs: list[
+        tuple[
+            str,
+            str,
+            str,
+            str | None,
+            str | None,
+            str | None,
+            str | None,
+            str | None,
+        ]
+    ] = []
 
-    def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
-        audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
+    def fake_audit_log(
+        task_name,
+        stage,
+        status,
+        *,
+        reason=None,
+        output=None,
+        partial=None,
+        user_id=None,
+        group_id=None,
+        **_,
+    ):
+        audit_logs.append(
+            (task_name, stage, status, reason, output, partial, user_id, group_id)
+        )
 
     monkeypatch.setattr(fds, "request_with_retry", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
@@ -370,19 +426,24 @@ def test_financial_decision_support_persistence_failure(monkeypatch):
         a[1] == "persistence"
         and a[2] == "error"
         and "boom" in a[3]
-        and "nodes" in a[4]
-        and a[5] == "alice"
-        and a[6] == "g1"
+        and "nodes" in (a[4] or "")
+        and a[6] == "alice"
+        and a[7] == "g1"
         for a in audit_logs
     )
     assert any(
         a[1] == "workflow"
         and a[2] == "error"
         and "nodes" in (a[4] or "")
-        and a[5] == "alice"
-        and a[6] == "g1"
+        and a[6] == "alice"
+        and a[7] == "g1"
         for a in audit_logs
     )
+
+    workflow_errors = [a for a in audit_logs if a[1] == "workflow" and a[2] == "error"]
+    assert workflow_errors
+    parsed = ast.literal_eval(workflow_errors[0][5])
+    assert "nodes" in parsed and "edges" in parsed
 
 
 @pytest.mark.parametrize(
