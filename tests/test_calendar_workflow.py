@@ -1,6 +1,7 @@
 
 # Tests for calendar event creation workflow
 
+import asyncio
 import pytest
 
 import sys
@@ -42,14 +43,24 @@ def test_calendar_event_creation_importable():
 def test_calendar_event_creation(monkeypatch):
     calls = []
     counter = {"post": 0}
+    research_started = False
+    research_finished = False
+    continue_research = asyncio.Event()
 
     def fake_request(method, url, timeout, **kwargs):
+        nonlocal research_started, research_finished
         calls.append((method, url, kwargs))
         if method == "GET":
             return DummyResponse({"allowed": True})
         if url.endswith("/edges"):
+            payload = kwargs["json"]
+            if payload.get("type") == "RELATES_TO":
+                assert research_finished
             return DummyResponse({"ok": True})
         counter["post"] += 1
+        if counter["post"] == 1:
+            assert research_started and not research_finished
+            continue_research.set()
         return DummyResponse({"id": f"evt{counter['post']}"})
 
     emitted: dict[str, tuple[Any, ...]] = {}
@@ -60,13 +71,16 @@ def test_calendar_event_creation(monkeypatch):
         emitted["event"] = (name, stage, user_id, group_id, kwargs.get("event_id"))
 
     async def fake_gather_travel_info(payload, *, user_id=None, group_id=None):
+        nonlocal research_started, research_finished
+        research_started = True
         query = f"travel time to {payload['location']}"
         emitted["async_research"] = (query, user_id, group_id)
+        await continue_research.wait()
+        research_finished = True
         return {"duration": "15m"}
 
     def fake_emit_note(note, user_id=None, group_id=None):
         emitted["note"] = (note.note, user_id, group_id)
-
 
     monkeypatch.setattr(cec, "request_with_retry", fake_request)
     monkeypatch.setattr(cec, "emit_stage_update_event", fake_emit)
@@ -84,7 +98,6 @@ def test_calendar_event_creation(monkeypatch):
         dispatched["event"] = (event, data, user_id, group_id)
 
     monkeypatch.setattr(cec, "dispatch", fake_dispatch)
-
 
     payload = {
         "title": "Lunch",
@@ -104,14 +117,18 @@ def test_calendar_event_creation(monkeypatch):
     assert calls[0][0] == "GET"
     assert "permissions" in calls[0][1]
 
-    # event creation and related event persistence
-    assert calls[2][0] == "POST"
-    assert calls[2][1] == "http://svc/v1/calendar/events"
-    assert calls[2][2]["json"]["travel_time"] == {"duration": "15m"}
+    # main event persisted before travel research completes
+    event_calls = [c for c in calls if c[1] == "http://svc/v1/calendar/events"]
+    assert "travel_time" not in event_calls[0][2]["json"]
 
-    # invite-edge persistence
-    assert calls[4][1] == "http://svc/v1/calendar/edges"
-    edge_payload = calls[4][2]["json"]
+    # research completes and creates relation edge
+    assert research_finished
+    rel_edges = [
+        c
+        for c in calls
+        if c[1] == "http://svc/v1/calendar/edges" and c[2]["json"].get("type") == "RELATES_TO"
+    ]
+    edge_payload = rel_edges[0][2]["json"]
     assert edge_payload["src"] == "evt2"
     assert edge_payload["dst"] == "evt1"
 
