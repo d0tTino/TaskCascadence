@@ -19,7 +19,7 @@ class DummyResponse:
 
 
 def _setup(monkeypatch):
-    def fake_request(method, url, timeout, **kwargs):
+    async def fake_request(method, url, timeout, **kwargs):
         if method == "GET":
             return DummyResponse({"nodes": []})
         elif url.endswith("/v1/simulations/debt"):
@@ -27,7 +27,7 @@ def _setup(monkeypatch):
         else:
             return DummyResponse({"ok": True})
 
-    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "request_with_retry_async", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", lambda *a, **k: None)
     monkeypatch.setattr(fds, "emit_audit_log", lambda *a, **k: None)
 

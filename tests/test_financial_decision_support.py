@@ -28,7 +28,7 @@ class DummyResponse:
 def test_financial_decision_support(monkeypatch):
     calls: list[tuple[str, str, dict[str, Any]]] = []
 
-    def fake_request(method, url, timeout, **kwargs):
+    async def fake_request(method, url, timeout, **kwargs):
         calls.append((method, url, kwargs))
         if method == "GET":
             assert kwargs["params"]["user_id"] == "alice"
@@ -78,7 +78,7 @@ def test_financial_decision_support(monkeypatch):
     def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
         audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
 
-    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "request_with_retry_async", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
     monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
@@ -138,7 +138,7 @@ def test_financial_decision_support(monkeypatch):
 
 
 def test_financial_decision_support_group_id_mismatch(monkeypatch):
-    def fake_request(*a, **k):
+    async def fake_request(*a, **k):
         raise AssertionError("request should not be called")
 
     audit_logs = []
@@ -146,7 +146,7 @@ def test_financial_decision_support_group_id_mismatch(monkeypatch):
     def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
         audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
 
-    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "request_with_retry_async", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", lambda *a, **k: None)
     monkeypatch.setattr(fds, "dispatch", lambda *a, **k: None)
     monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
@@ -181,7 +181,7 @@ def test_financial_decision_support_group_id_mismatch(monkeypatch):
 def test_financial_decision_support_time_horizon(monkeypatch):
     calls = []
 
-    def fake_request(method, url, timeout, **kwargs):
+    async def fake_request(method, url, timeout, **kwargs):
         calls.append((method, url, kwargs))
         if method == "GET":
             return DummyResponse({"nodes": []})
@@ -190,7 +190,7 @@ def test_financial_decision_support_time_horizon(monkeypatch):
         else:
             return DummyResponse({"ok": True})
 
-    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "request_with_retry_async", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", lambda *a, **k: None)
     monkeypatch.setattr(fds, "dispatch", lambda *a, **k: None)
     monkeypatch.setattr(fds, "emit_audit_log", lambda *a, **k: None)
@@ -213,7 +213,7 @@ def test_financial_decision_support_time_horizon(monkeypatch):
 def test_financial_decision_support_ume_error(monkeypatch):
     calls = []
 
-    def fake_request(method, url, timeout, **kwargs):
+    async def fake_request(method, url, timeout, **kwargs):
         calls.append((method, url, kwargs))
         if method == "GET":
             raise requests.HTTPError("boom")
@@ -234,7 +234,7 @@ def test_financial_decision_support_ume_error(monkeypatch):
     def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
         audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
 
-    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "request_with_retry_async", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
     monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
@@ -262,7 +262,7 @@ def test_financial_decision_support_ume_error(monkeypatch):
 def test_financial_decision_support_engine_failure(monkeypatch):
     calls = []
 
-    def fake_request(method, url, timeout, **kwargs):
+    async def fake_request(method, url, timeout, **kwargs):
         calls.append((method, url, kwargs))
         if method == "GET":
             return DummyResponse({"nodes": []})
@@ -309,7 +309,7 @@ def test_financial_decision_support_engine_failure(monkeypatch):
             (task_name, stage, status, reason, output, partial, user_id, group_id)
         )
 
-    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "request_with_retry_async", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
     monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
@@ -365,7 +365,7 @@ def test_financial_decision_support_engine_failure(monkeypatch):
 def test_financial_decision_support_persistence_failure(monkeypatch):
     calls = []
 
-    def fake_request(method, url, timeout, **kwargs):
+    async def fake_request(method, url, timeout, **kwargs):
         calls.append((method, url, kwargs))
         if method == "GET":
             return DummyResponse({"nodes": []})
@@ -413,7 +413,7 @@ def test_financial_decision_support_persistence_failure(monkeypatch):
             (task_name, stage, status, reason, output, partial, user_id, group_id)
         )
 
-    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "request_with_retry_async", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
     monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
@@ -466,7 +466,7 @@ def test_financial_decision_support_persistence_failure(monkeypatch):
 def test_financial_decision_support_missing_fields(monkeypatch, payload, missing):
     calls = []
 
-    def fake_request(method, url, timeout, **kwargs):
+    async def fake_request(method, url, timeout, **kwargs):
         calls.append((method, url, kwargs))
         return DummyResponse({})
 
@@ -485,7 +485,7 @@ def test_financial_decision_support_missing_fields(monkeypatch, payload, missing
     def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
         audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
 
-    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "request_with_retry_async", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
     monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
@@ -527,7 +527,7 @@ def test_financial_decision_support_missing_fields(monkeypatch, payload, missing
 def test_financial_decision_support_negative_values(monkeypatch, payload, field):
     calls = []
 
-    def fake_request(method, url, timeout, **kwargs):
+    async def fake_request(method, url, timeout, **kwargs):
         calls.append((method, url, kwargs))
         return DummyResponse({})
 
@@ -546,7 +546,7 @@ def test_financial_decision_support_negative_values(monkeypatch, payload, field)
     def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
         audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
 
-    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "request_with_retry_async", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
     monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
@@ -586,7 +586,7 @@ def test_financial_decision_support_negative_values(monkeypatch, payload, field)
 def test_financial_decision_support_invalid_values(monkeypatch, payload, field):
     calls = []
 
-    def fake_request(method, url, timeout, **kwargs):
+    async def fake_request(method, url, timeout, **kwargs):
         calls.append((method, url, kwargs))
         return DummyResponse({})
 
@@ -605,7 +605,7 @@ def test_financial_decision_support_invalid_values(monkeypatch, payload, field):
     def fake_audit_log(task_name, stage, status, *, reason=None, output=None, user_id=None, group_id=None, **_):
         audit_logs.append((task_name, stage, status, reason, output, user_id, group_id))
 
-    monkeypatch.setattr(fds, "request_with_retry", fake_request)
+    monkeypatch.setattr(fds, "request_with_retry_async", fake_request)
     monkeypatch.setattr(fds, "emit_stage_update_event", fake_emit)
     monkeypatch.setattr(fds, "dispatch", fake_dispatch)
     monkeypatch.setattr(fds, "emit_audit_log", fake_audit_log)
