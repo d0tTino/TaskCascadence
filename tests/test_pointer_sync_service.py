@@ -151,7 +151,11 @@ class Stub:
     monkeypatch.setenv("UME_GRPC_STUB", "stub_b:Stub")
 
     importlib.invalidate_caches()
-    monkeypatch.setattr(pointer_sync, "emit_pointer_update", __import__("stub_b").Stub.Send)
+    monkeypatch.setattr(
+        pointer_sync,
+        "emit_pointer_update",
+        lambda update, **_: __import__("stub_b").Stub.Send(update),
+    )
     pointer_sync.run()
 
     data = yaml.safe_load(store_a.read_text())

@@ -82,7 +82,7 @@ class Stub:
 
     captured = {}
 
-    def fake_emit(update):
+    def fake_emit(update, **_):
         captured["update"] = update
 
     monkeypatch.setattr(pointer_sync, "emit_pointer_update", fake_emit)
@@ -141,7 +141,11 @@ class Stub:
 
     importlib.invalidate_caches()
     stub_module = __import__("astub_broadcast")
-    monkeypatch.setattr(pointer_sync, "emit_pointer_update", stub_module.Stub.Send)
+    monkeypatch.setattr(
+        pointer_sync,
+        "emit_pointer_update",
+        lambda update, **_: stub_module.Stub.Send(update),
+    )
 
     asyncio.run(pointer_sync.run_async())
 
@@ -157,3 +161,110 @@ class Stub:
 
     data = yaml.safe_load(store_b.read_text())
     assert data["demo"] == [{"run_id": "ab1", "user_hash": "u"}]
+
+
+def test_pointer_sync_context_propagation(monkeypatch, tmp_path):
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+    monkeypatch.setenv("UME_TRANSPORT", "grpc")
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe")
+    monkeypatch.setenv("UME_BROADCAST_POINTERS", "1")
+
+    module = tmp_path / "ctx_stub.py"
+    module.write_text(
+        """
+from task_cascadence.ume import _hash_user_id
+class Stub:
+    @staticmethod
+    def Subscribe():
+        from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+        return [
+            PointerUpdate(
+                task_name='demo',
+                run_id='r1',
+                user_id='u1',
+                user_hash=_hash_user_id('u1'),
+                group_id='g1',
+            )
+        ]
+"""
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("UME_GRPC_STUB", "ctx_stub:Stub")
+
+    import importlib
+
+    importlib.invalidate_caches()
+
+    captured_emit: dict[str, dict[str, str | None]] = {}
+
+    def fake_emit(update, **kwargs):
+        captured_emit["kwargs"] = kwargs
+
+    audits: list[tuple[str, str, str, str | None, str | None, str | None]] = []
+
+    def fake_audit(
+        task, stage, status, *, reason=None, user_id=None, group_id=None, **_
+    ):
+        audits.append((task, stage, status, reason, user_id, group_id))
+
+    monkeypatch.setattr(pointer_sync, "emit_pointer_update", fake_emit)
+    monkeypatch.setattr(pointer_sync, "emit_audit_log", fake_audit)
+
+    pointer_sync.run()
+
+    assert captured_emit["kwargs"]["user_id"] == "u1"
+    assert captured_emit["kwargs"]["group_id"] == "g1"
+    assert ("demo", "pointer_sync", "success", None, "u1", "g1") in audits
+    data = yaml.safe_load(store.read_text())
+    assert data["demo"][0]["group_id"] == "g1"
+
+
+def test_pointer_sync_audit_failure(monkeypatch, tmp_path):
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+    monkeypatch.setenv("UME_TRANSPORT", "grpc")
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe")
+
+    module = tmp_path / "fail_stub.py"
+    module.write_text(
+        """
+from task_cascadence.ume import _hash_user_id
+class Stub:
+    @staticmethod
+    def Subscribe():
+        from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+        return [
+            PointerUpdate(
+                task_name='demo',
+                run_id='r2',
+                user_id='u2',
+                user_hash=_hash_user_id('u2'),
+            )
+        ]
+"""
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("UME_GRPC_STUB", "fail_stub:Stub")
+
+    import importlib
+
+    importlib.invalidate_caches()
+
+    def boom(self, update, group_id=None):  # type: ignore[override]
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(pointer_sync.PointerStore, "apply_update", boom)
+
+    audits: list[tuple[str, str, str, str | None, str | None, str | None]] = []
+
+    def fake_audit(
+        task, stage, status, *, reason=None, user_id=None, group_id=None, **_
+    ):
+        audits.append((task, stage, status, reason, user_id, group_id))
+
+    monkeypatch.setattr(pointer_sync, "emit_audit_log", fake_audit)
+
+    pointer_sync.run()
+
+    assert ("demo", "pointer_sync", "error", "boom", "u2", None) in audits
