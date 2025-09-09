@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from . import subscribe, dispatch
-from ..http_utils import request_with_retry
+from ..http_utils import request_with_retry_async
 from ..ume import emit_stage_update_event, emit_audit_log
 
 
@@ -11,7 +11,7 @@ task_name = "finance.decision"
 
 
 @subscribe("finance.decision.request")
-def financial_decision_support(
+async def financial_decision_support(
     payload: Dict[str, Any],
     *,
     user_id: str,
@@ -92,7 +92,7 @@ def financial_decision_support(
         if time_horizon is not None:
             params["time_horizon"] = time_horizon
         try:
-            resp = request_with_retry("GET", url, params=params, timeout=5)
+            resp = await request_with_retry_async("GET", url, params=params, timeout=5)
             data = resp.json()
         except Exception as exc:
             partial = repr({"url": url, "params": params})
@@ -141,7 +141,7 @@ def financial_decision_support(
 
         emit_audit_log(task_name, "engine", "started", user_id=user_id, group_id=group_id)
         try:
-            eng_resp = request_with_retry(
+            eng_resp = await request_with_retry_async(
                 "POST",
                 f"{engine_base.rstrip('/')}/v1/simulations/debt",
                 json=engine_payload,
@@ -224,7 +224,7 @@ def financial_decision_support(
 
         emit_audit_log(task_name, "persistence", "started", user_id=user_id, group_id=group_id)
         try:
-            request_with_retry(
+            await request_with_retry_async(
                 "POST", url, json={"nodes": nodes_to_persist, "edges": edges}, timeout=5
             )
         except Exception as exc:
