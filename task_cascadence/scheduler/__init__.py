@@ -104,25 +104,102 @@ class BaseScheduler:
         group_id: str | None = None,
     ) -> Any:
         """Run a task by name if it exists and is enabled."""
+        try:  # pragma: no cover - allow tests to omit audit logging
+            from ..ume import emit_audit_log
+            from ..ume.models import AuditEvent
+        except Exception:  # pragma: no cover - fallback when not available
+            AuditEvent = None  # type: ignore[assignment]
+
+            def emit_audit_log(*args: object, **kwargs: object) -> None:  # type: ignore[misc]
+                return None
+
+        supports_partial = AuditEvent is not None and hasattr(AuditEvent(), "partial")
+
+        user_hash = _maybe_hash_user_id(user_id) if user_id is not None else None
+        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
 
         with self._schedules_lock:
             info = self._tasks.get(name)
             if not info:
-                raise ValueError(f"Unknown task: {name}")
+                reason = f"Unknown task: {name}"
+                emit_audit_log(
+                    name,
+                    "run",
+                    "error",
+                    reason=reason,
+                    user_id=user_hash,
+                    group_id=group_hash,
+                )
+                raise ValueError(reason)
             if info["disabled"]:
-                raise ValueError(f"Task '{name}' is disabled")
+                reason = f"Task '{name}' is disabled"
+                emit_audit_log(
+                    name,
+                    "run",
+                    "error",
+                    reason=reason,
+                    user_id=user_hash,
+                    group_id=group_hash,
+                )
+                raise ValueError(reason)
             if info.get("paused"):
-                raise ValueError(f"Task '{name}' is paused")
+                reason = f"Task '{name}' is paused"
+                emit_audit_log(
+                    name,
+                    "run",
+                    "error",
+                    reason=reason,
+                    user_id=user_hash,
+                    group_id=group_hash,
+                )
+                raise ValueError(reason)
             if user_id is None:
-                raise ValueError("user_id is required")
+                reason = "user_id is required"
+                emit_audit_log(
+                    name,
+                    "run",
+                    "error",
+                    reason=reason,
+                    user_id=user_hash,
+                    group_id=group_hash,
+                )
+                raise ValueError(reason)
             uid = user_id
             task = info["task"]
 
         if (use_temporal or (use_temporal is None and self._temporal)):
             if not self._temporal:
-                raise RuntimeError("Temporal backend not configured")
+                reason = "Temporal backend not configured"
+                emit_audit_log(
+                    name,
+                    "run",
+                    "error",
+                    reason=reason,
+                    user_id=user_hash,
+                    group_id=group_hash,
+                )
+                raise RuntimeError(reason)
             workflow = getattr(task, "workflow", task.__class__.__name__)
-            return self._temporal.run_workflow_sync(workflow)
+            try:
+                result = self._temporal.run_workflow_sync(workflow)
+            except Exception as exc:
+                emit_audit_log(
+                    name,
+                    "run",
+                    "error",
+                    reason=str(exc),
+                    user_id=user_hash,
+                    group_id=group_hash,
+                )
+                raise
+            emit_audit_log(
+                name,
+                "run",
+                "success",
+                user_id=user_hash,
+                group_id=group_hash,
+            )
+            return result
 
         if hasattr(task, "run"):
             from datetime import datetime
@@ -141,6 +218,7 @@ class BaseScheduler:
                 started = Timestamp()
                 started.FromDatetime(datetime.now())
                 status = "success"
+                result: Any | None = None
                 try:
                     if any(
                         hasattr(task, attr)
@@ -164,9 +242,38 @@ class BaseScheduler:
                             result = run_coroutine(
                                 cast(Coroutine[Any, Any, Any], result)
                             )
-                except Exception:
+                except Exception as exc:
                     status = "error"
+                    partial_data = None if result is None else repr(result)
+                    if supports_partial:
+                        emit_audit_log(
+                            name,
+                            "run",
+                            "error",
+                            reason=str(exc),
+                            partial=partial_data,
+                            user_id=user_hash,
+                            group_id=group_hash,
+                        )
+                    else:
+                        emit_audit_log(
+                            name,
+                            "run",
+                            "error",
+                            reason=str(exc),
+                            output=partial_data,
+                            user_id=user_hash,
+                            group_id=group_hash,
+                        )
                     raise
+                else:
+                    emit_audit_log(
+                        name,
+                        "run",
+                        "success",
+                        user_id=user_hash,
+                        group_id=group_hash,
+                    )
                 finally:
                     finished = Timestamp()
                     finished.FromDatetime(datetime.now())
@@ -176,9 +283,6 @@ class BaseScheduler:
                         status=status,
                         started_at=started,
                         finished_at=finished,
-                    )
-                    group_hash = (
-                        _maybe_hash_group_id(group_id) if group_id is not None else None
                     )
                     if user_id is None and group_hash is None:
                         emit_task_run(run)
@@ -191,7 +295,16 @@ class BaseScheduler:
                 return result
 
             return runner()
-        raise AttributeError(f"Task '{name}' has no run() method")
+        reason = f"Task '{name}' has no run() method"
+        emit_audit_log(
+            name,
+            "run",
+            "error",
+            reason=reason,
+            user_id=user_hash,
+            group_id=group_hash,
+        )
+        raise AttributeError(reason)
 
     def replay_history(self, history_path: str) -> None:
         """Replay a workflow history using the configured Temporal backend."""
