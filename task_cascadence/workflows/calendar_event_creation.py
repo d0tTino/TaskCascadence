@@ -195,6 +195,37 @@ def persist_events(
 
     edge_url = f"{ume_base.rstrip('/')}/v1/calendar/edges"
 
+    def _create_edge(src: str, dst: str, edge_type: str) -> None:
+        """Persist a calendar edge with audit logging."""
+        edge_payload = {
+            "src": src,
+            "dst": dst,
+            "type": edge_type,
+            "user_id": user_id,
+        }
+        if group_id:
+            edge_payload["group_id"] = group_id
+        try:
+            request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
+        except Exception as exc:
+            emit_audit_log(
+                "calendar.event.create",
+                "persistence",
+                "error",
+                reason=str(exc),
+                user_id=user_id,
+                group_id=group_id,
+            )
+            raise
+        else:
+            emit_audit_log(
+                "calendar.event.create",
+                "persistence",
+                "success",
+                user_id=user_id,
+                group_id=group_id,
+            )
+
     related_id = None
     if related_event is not None:
         try:
@@ -221,96 +252,13 @@ def persist_events(
             )
             related_event = rel_resp.json()
             related_id = related_event.get("id")
-            edge_payload = {
-                "src": related_id,
-                "dst": main_id,
-                "type": "RELATES_TO",
-                "user_id": user_id,
-            }
-            if group_id:
-                edge_payload["group_id"] = group_id
-            try:
-                request_with_retry(
-                    "POST", edge_url, json=edge_payload, timeout=5
-                )
-            except Exception as exc:
-                emit_audit_log(
-                    "calendar.event.create",
-                    "persistence",
-                    "error",
-                    reason=str(exc),
-                    user_id=user_id,
-                    group_id=group_id,
-                )
-                raise
-            else:
-                emit_audit_log(
-                    "calendar.event.create",
-                    "persistence",
-                    "success",
-                    user_id=user_id,
-                    group_id=group_id,
-                )
+            _create_edge(related_id, main_id, "RELATES_TO")
 
     for invitee in invitees:
-        edge_payload = {
-            "src": main_id,
-            "dst": invitee,
-            "type": "INVITED",
-            "user_id": user_id,
-        }
-        if group_id:
-            edge_payload["group_id"] = group_id
-        try:
-            request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            raise
-        else:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "success",
-                user_id=user_id,
-                group_id=group_id,
-            )
+        _create_edge(main_id, invitee, "INVITED")
 
     for layer in layers:
-        edge_payload = {
-            "src": main_id,
-            "dst": layer,
-            "type": "LAYER",
-            "user_id": user_id,
-        }
-        if group_id:
-            edge_payload["group_id"] = group_id
-        try:
-            request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            raise
-        else:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "success",
-                user_id=user_id,
-                group_id=group_id,
-            )
+        _create_edge(main_id, layer, "LAYER")
 
     return main_id, related_id
 
@@ -366,20 +314,6 @@ async def create_calendar_event(
     event_data["user_id"] = user_id
     if group_id:
         event_data["group_id"] = group_id
-    if travel_task.done():
-        early_info = travel_task.result()
-        if early_info is not None:
-            event_data["travel_time"] = early_info
-
-    main_id, _ = persist_events(
-        event_data,
-        [],
-        [],
-        ume_base=ume_base,
-        user_id=user_id,
-        group_id=group_id,
-        related_event=None,
-    )
 
     travel_info = await travel_task
     emit_audit_log(
@@ -390,126 +324,36 @@ async def create_calendar_event(
         group_id=group_id,
     )
 
-    related_id = None
+    related_event = None
     if travel_info is not None:
+        event_data["travel_time"] = travel_info
         try:
             start_dt = datetime.fromisoformat(
                 payload["start_time"].replace("Z", "+00:00")
             )
-            duration = travel_info.get("duration")
-            leave_dt = start_dt
-            if isinstance(duration, str) and duration.endswith("m"):
-                leave_dt = start_dt - timedelta(minutes=int(duration[:-1]))
-            related_event = {
-                "title": f"Leave by {payload['title']}",
-                "start_time": leave_dt.isoformat(),
-                "user_id": user_id,
-            }
-            if group_id:
-                related_event["group_id"] = group_id
-            event_url = f"{ume_base.rstrip('/')}/v1/calendar/events"
-            rel_resp = request_with_retry(
-                "POST", event_url, json=related_event, timeout=5
-            )
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "success",
-                user_id=user_id,
-                group_id=group_id,
-            )
-            related_data = rel_resp.json()
-            related_id = related_data.get("id")
-            edge_payload = {
-                "src": related_id,
-                "dst": main_id,
-                "type": "RELATES_TO",
-                "user_id": user_id,
-            }
-            if group_id:
-                edge_payload["group_id"] = group_id
-            edge_url = f"{ume_base.rstrip('/')}/v1/calendar/edges"
-            request_with_retry(
-                "POST", edge_url, json=edge_payload, timeout=5
-            )
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "success",
-                user_id=user_id,
-                group_id=group_id,
-            )
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            raise
-
-    edge_url = f"{ume_base.rstrip('/')}/v1/calendar/edges"
-    for invitee in invitees:
-        edge_payload = {
-            "src": main_id,
-            "dst": invitee,
-            "type": "INVITED",
+        except Exception:
+            start_dt = datetime.fromisoformat(payload["start_time"])
+        duration = travel_info.get("duration")
+        leave_dt = start_dt
+        if isinstance(duration, str) and duration.endswith("m"):
+            leave_dt = start_dt - timedelta(minutes=int(duration[:-1]))
+        related_event = {
+            "title": f"Leave by {payload['title']}",
+            "start_time": leave_dt.isoformat(),
             "user_id": user_id,
         }
         if group_id:
-            edge_payload["group_id"] = group_id
-        try:
-            request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            raise
-        else:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "success",
-                user_id=user_id,
-                group_id=group_id,
-            )
+            related_event["group_id"] = group_id
 
-    for layer in layers:
-        edge_payload = {
-            "src": main_id,
-            "dst": layer,
-            "type": "LAYER",
-            "user_id": user_id,
-        }
-        if group_id:
-            edge_payload["group_id"] = group_id
-        try:
-            request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            raise
-        else:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "success",
-                user_id=user_id,
-                group_id=group_id,
-            )
+    main_id, related_id = persist_events(
+        event_data,
+        invitees,
+        layers,
+        ume_base=ume_base,
+        user_id=user_id,
+        group_id=group_id,
+        related_event=related_event,
+    )
 
     note_text = "No travel details"
     if travel_info:
