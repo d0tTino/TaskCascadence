@@ -320,6 +320,7 @@ ExampleTask:
   group_id: ops
   recurrence:
     note: "every day at noon"
+```
 
 Another form references an existing calendar event. The scheduler fetches the
 event's recurrence rule and applies it, optionally polling for changes:
@@ -330,7 +331,37 @@ ExampleTask:
     node: "evt123"
     poll: 3600  # refresh every hour
 ```
+
+A calendar event can also drive domain-specific tasks. The following example
+links a monthly budget review to a calendar entry whose recurrence is expressed
+in cron syntax:
+
+```python
+from task_cascadence.workflows import dispatch
+
+# create the calendar event once
+dispatch(
+    "calendar.event.create_request",
+    {
+        "title": "Monthly Budget Review",
+        "start_time": "2024-01-01T09:00:00Z",
+        "recurrence": {"cron": "0 9 1 * *"},
+    },
+    user_id="finance",
+    group_id="ops",
+)
 ```
+
+```yaml
+BudgetReview:
+  calendar_event:
+    node: "evt-budget-review"  # ID returned from event creation
+    poll: 86400  # refresh daily for updates
+```
+
+This causes the ``BudgetReview`` task to run at 09:00 on the first day of each
+month. Adjust the ``poll`` interval if changes to the calendar event should be
+picked up more frequently.
 
 The scheduler reloads this file on startup and recreates any jobs whose task
 objects are available via the ``tasks`` argument. Editing the file adjusts
