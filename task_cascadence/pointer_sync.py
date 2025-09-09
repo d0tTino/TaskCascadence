@@ -14,7 +14,7 @@ from typing import Iterable, Any, AsyncIterator
 from .config import load_config
 from .pointer_store import PointerStore
 from .ume.models import PointerUpdate
-from .ume import emit_pointer_update
+from .ume import emit_pointer_update, emit_audit_log
 from .async_utils import run_coroutine
 
 logger = logging.getLogger(__name__)
@@ -42,10 +42,16 @@ async def run_async() -> None:
         if not broadcast:
             return
         try:
+            user_id = update.user_id or None
+            group_id = update.group_id or None
             if "use_asyncio" in inspect.signature(emit_pointer_update).parameters:
-                result = emit_pointer_update(update, use_asyncio=True)
+                result = emit_pointer_update(
+                    update, user_id=user_id, group_id=group_id, use_asyncio=True
+                )
             else:
-                result = emit_pointer_update(update)
+                result = emit_pointer_update(
+                    update, user_id=user_id, group_id=group_id
+                )
             if isinstance(result, asyncio.Task):
                 await result
         except Exception:  # pragma: no cover - best effort transport
@@ -67,11 +73,28 @@ async def run_async() -> None:
                     yield item
             async_iter = _gen()
         async for update in async_iter:
+            user_id = update.user_id or None
+            group_id = update.group_id or None
             try:
-                store.apply_update(update)
+                store.apply_update(update, group_id=group_id)
                 await _maybe_broadcast(update)
-            except Exception:  # pragma: no cover - resilient loop
+                emit_audit_log(
+                    update.task_name,
+                    "pointer_sync",
+                    "success",
+                    user_id=user_id,
+                    group_id=group_id,
+                )
+            except Exception as exc:  # pragma: no cover - resilient loop
                 logger.exception("Error processing pointer update")
+                emit_audit_log(
+                    update.task_name,
+                    "pointer_sync",
+                    "error",
+                    reason=str(exc),
+                    user_id=user_id,
+                    group_id=group_id,
+                )
                 continue
         return
 
@@ -101,10 +124,31 @@ async def run_async() -> None:
                     update = data
                 else:
                     update.ParseFromString(data)
-                store.apply_update(update)
+                user_id = update.user_id or None
+                group_id = update.group_id or None
+                store.apply_update(update, group_id=group_id)
                 await _maybe_broadcast(update)
-            except Exception:  # pragma: no cover - resilient loop
+                emit_audit_log(
+                    update.task_name,
+                    "pointer_sync",
+                    "success",
+                    user_id=user_id,
+                    group_id=group_id,
+                )
+            except Exception as exc:  # pragma: no cover - resilient loop
                 logger.exception("Error processing pointer update")
+                try:
+                    update_task_name = update.task_name  # may be unset
+                except Exception:  # pragma: no cover - defensive
+                    update_task_name = ""
+                emit_audit_log(
+                    update_task_name,
+                    "pointer_sync",
+                    "error",
+                    reason=str(exc),
+                    user_id=getattr(update, "user_id", None) or None,
+                    group_id=getattr(update, "group_id", None) or None,
+                )
                 continue
         return
 
