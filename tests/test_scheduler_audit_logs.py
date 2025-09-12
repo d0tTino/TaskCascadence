@@ -1,6 +1,7 @@
 import importlib.machinery
 import importlib.util
 import pathlib
+import pytest
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -85,5 +86,41 @@ def test_scheduler_audit_logs(monkeypatch, tmp_path):
             ume_mod._hash_user_id("alice"),
             ume_mod._hash_user_id("team"),
         ),
+    ]
+
+
+def test_run_task_failure_emits_audit_log(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
+
+    sched_mod = _load("task_cascadence.scheduler", _DEF_SCHED)
+    ume_mod = _load("task_cascadence.ume", _DEF_UME)
+
+    calls = []
+
+    def fake_emit(task, stage, status, *, user_id=None, group_id=None, reason=None, **_):
+        if stage == "run":
+            calls.append((task, stage, status, user_id, group_id, reason))
+
+    monkeypatch.setattr(ume_mod, "emit_audit_log", fake_emit)
+
+    class BadTask:
+        def run(self):
+            raise RuntimeError("boom")
+
+    sched = sched_mod.CronScheduler(storage_path=tmp_path / "sched.yml")
+    sched.register_task("BadTask", BadTask())
+
+    with pytest.raises(RuntimeError):
+        sched.run_task("BadTask", user_id="alice", group_id="team")
+
+    assert calls == [
+        (
+            "BadTask",
+            "run",
+            "error",
+            ume_mod._hash_user_id("alice"),
+            ume_mod._hash_user_id("team"),
+            "boom",
+        )
     ]
 
