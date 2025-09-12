@@ -45,7 +45,9 @@ def test_calendar_edge_persistence_error(monkeypatch):
             return DummyResponse({"allowed": True})
         if url.endswith("/v1/calendar/events"):
             return DummyResponse({"id": "evt1"})
-        raise RuntimeError("edge boom")
+        if url.endswith("/v1/calendar/edges"):
+            raise RuntimeError("edge boom")
+        raise AssertionError(f"unexpected request: {method} {url}")
 
     audit_logs: list[tuple[str, str, str, str | None]] = []
 
