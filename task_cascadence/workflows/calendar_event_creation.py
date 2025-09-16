@@ -157,17 +157,14 @@ async def check_permissions(
     await asyncio.gather(*(_check_invitee(i) for i in invitees))
 
 
-def persist_events(
+def _post_calendar_event(
     event_data: Dict[str, Any],
-    invitees: List[str],
-    layers: List[str],
     *,
     ume_base: str,
     user_id: str,
     group_id: str | None = None,
-    related_event: Dict[str, Any] | None = None,
-) -> tuple[str | None, str | None]:
-    """Persist the calendar event and related edges."""
+) -> str | None:
+    """Persist a calendar event and return its identifier."""
 
     url = f"{ume_base.rstrip('/')}/v1/calendar/events"
     try:
@@ -190,77 +187,129 @@ def persist_events(
             user_id=user_id,
             group_id=group_id,
         )
-        main_event = resp.json()
-        main_id = main_event.get("id")
+        event = resp.json()
+        return event.get("id")
+
+
+def _post_calendar_edge(
+    src: str | None,
+    dst: str | None,
+    edge_type: str,
+    *,
+    ume_base: str,
+    user_id: str,
+    group_id: str | None = None,
+) -> None:
+    """Persist a calendar edge with audit logging."""
+
+    if src is None or dst is None:
+        return
 
     edge_url = f"{ume_base.rstrip('/')}/v1/calendar/edges"
+    edge_payload = {
+        "src": src,
+        "dst": dst,
+        "type": edge_type,
+        "user_id": user_id,
+    }
+    if group_id:
+        edge_payload["group_id"] = group_id
+    try:
+        request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
+    except Exception as exc:
+        emit_audit_log(
+            "calendar.event.create",
+            "persistence",
+            "error",
+            reason=str(exc),
+            user_id=user_id,
+            group_id=group_id,
+        )
+        raise
+    else:
+        emit_audit_log(
+            "calendar.event.create",
+            "persistence",
+            "success",
+            user_id=user_id,
+            group_id=group_id,
+        )
 
-    def _create_edge(src: str, dst: str, edge_type: str) -> None:
-        """Persist a calendar edge with audit logging."""
-        edge_payload = {
-            "src": src,
-            "dst": dst,
-            "type": edge_type,
-            "user_id": user_id,
-        }
-        if group_id:
-            edge_payload["group_id"] = group_id
-        try:
-            request_with_retry("POST", edge_url, json=edge_payload, timeout=5)
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            raise
-        else:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "success",
-                user_id=user_id,
-                group_id=group_id,
-            )
+
+def persist_events(
+    event_data: Dict[str, Any],
+    invitees: List[str],
+    layers: List[str],
+    *,
+    ume_base: str,
+    user_id: str,
+    group_id: str | None = None,
+    related_event: Dict[str, Any] | None = None,
+) -> tuple[str | None, str | None]:
+    """Persist the calendar event and related edges."""
+
+    main_id = _post_calendar_event(
+        event_data,
+        ume_base=ume_base,
+        user_id=user_id,
+        group_id=group_id,
+    )
 
     related_id = None
+    edges_to_create: List[tuple[str | None, str | None, str]] = []
     if related_event is not None:
-        try:
-            rel_resp = request_with_retry(
-                "POST", url, json=related_event, timeout=5
-            )
-        except Exception as exc:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "error",
-                reason=str(exc),
-                user_id=user_id,
-                group_id=group_id,
-            )
-            raise
-        else:
-            emit_audit_log(
-                "calendar.event.create",
-                "persistence",
-                "success",
-                user_id=user_id,
-                group_id=group_id,
-            )
-            related_event = rel_resp.json()
-            related_id = related_event.get("id")
-            _create_edge(related_id, main_id, "RELATES_TO")
+        related_id = _post_calendar_event(
+            related_event,
+            ume_base=ume_base,
+            user_id=user_id,
+            group_id=group_id,
+        )
+        edges_to_create.append((related_id, main_id, "RELATES_TO"))
 
-    for invitee in invitees:
-        _create_edge(main_id, invitee, "INVITED")
+    edges_to_create.extend(
+        (main_id, target, edge_type)
+        for targets, edge_type in ((invitees, "INVITED"), (layers, "LAYER"))
+        for target in targets
+    )
 
-    for layer in layers:
-        _create_edge(main_id, layer, "LAYER")
+    for src, dst, edge_type in edges_to_create:
+        _post_calendar_edge(
+            src,
+            dst,
+            edge_type,
+            ume_base=ume_base,
+            user_id=user_id,
+            group_id=group_id,
+        )
 
     return main_id, related_id
+
+
+def persist_related_event(
+    main_event_id: str | None,
+    related_event: Dict[str, Any],
+    *,
+    ume_base: str,
+    user_id: str,
+    group_id: str | None = None,
+) -> str | None:
+    """Persist a follow-up event and relate it to the main event."""
+
+    related_id = _post_calendar_event(
+        related_event,
+        ume_base=ume_base,
+        user_id=user_id,
+        group_id=group_id,
+    )
+    _post_calendar_edge(
+        related_id,
+        main_event_id,
+        "RELATES_TO",
+        ume_base=ume_base,
+        user_id=user_id,
+        group_id=group_id,
+    )
+    return related_id
 
 
 @subscribe("calendar.event.create_request")
@@ -285,8 +334,12 @@ async def create_calendar_event(
     travel_task = asyncio.create_task(
         gather_travel_info(payload, user_id=user_id, group_id=group_id)
     )
-    invitees: List[str] = payload.get("invitees", []) or []
-    layers: List[str] = payload.get("layers", []) or []
+    participant_lists: Dict[str, List[str]] = {
+        key: payload.get(key, []) or []
+        for key in ("invitees", "layers")
+    }
+    invitees: List[str] = participant_lists["invitees"]
+    layers: List[str] = participant_lists["layers"]
     perm_task = asyncio.create_task(
         check_permissions(
             user_id,
@@ -315,6 +368,15 @@ async def create_calendar_event(
     if group_id:
         event_data["group_id"] = group_id
 
+    main_id, _ = persist_events(
+        event_data,
+        invitees,
+        layers,
+        ume_base=ume_base,
+        user_id=user_id,
+        group_id=group_id,
+    )
+
     travel_info = await travel_task
     emit_audit_log(
         "calendar.event.create",
@@ -324,9 +386,8 @@ async def create_calendar_event(
         group_id=group_id,
     )
 
-    related_event = None
+    related_id = None
     if travel_info is not None:
-        event_data["travel_time"] = travel_info
         try:
             start_dt = datetime.fromisoformat(
                 payload["start_time"].replace("Z", "+00:00")
@@ -344,16 +405,13 @@ async def create_calendar_event(
         }
         if group_id:
             related_event["group_id"] = group_id
-
-    main_id, related_id = persist_events(
-        event_data,
-        invitees,
-        layers,
-        ume_base=ume_base,
-        user_id=user_id,
-        group_id=group_id,
-        related_event=related_event,
-    )
+        related_id = persist_related_event(
+            main_id,
+            related_event,
+            ume_base=ume_base,
+            user_id=user_id,
+            group_id=group_id,
+        )
 
     note_text = "No travel details"
     if travel_info:
