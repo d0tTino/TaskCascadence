@@ -268,3 +268,53 @@ class Stub:
     pointer_sync.run()
 
     assert ("demo", "pointer_sync", "error", "boom", "u2", None) in audits
+
+
+def test_pointer_sync_broadcast_failure(monkeypatch, tmp_path):
+    store = tmp_path / "pointers.yml"
+    monkeypatch.setenv("CASCADENCE_POINTERS_PATH", str(store))
+    monkeypatch.setenv("UME_TRANSPORT", "grpc")
+    monkeypatch.setenv("UME_GRPC_METHOD", "Subscribe")
+    monkeypatch.setenv("UME_BROADCAST_POINTERS", "1")
+
+    module = tmp_path / "bcast_fail_stub.py"
+    module.write_text(
+        """
+from task_cascadence.ume import _hash_user_id
+class Stub:
+    @staticmethod
+    def Subscribe():
+        from task_cascadence.ume.protos.tasks_pb2 import PointerUpdate
+        return [
+            PointerUpdate(
+                task_name='demo',
+                run_id='r3',
+                user_id='u3',
+                user_hash=_hash_user_id('u3'),
+            )
+        ]
+"""
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.setenv("UME_GRPC_STUB", "bcast_fail_stub:Stub")
+
+    import importlib
+
+    importlib.invalidate_caches()
+
+    def boom(update, **kwargs):  # type: ignore[override]
+        raise RuntimeError("boom")
+
+    audits: list[tuple[str, str, str, str | None, str | None, str | None]] = []
+
+    def fake_audit(
+        task, stage, status, *, reason=None, user_id=None, group_id=None, **_,
+    ):
+        audits.append((task, stage, status, reason, user_id, group_id))
+
+    monkeypatch.setattr(pointer_sync, "emit_pointer_update", boom)
+    monkeypatch.setattr(pointer_sync, "emit_audit_log", fake_audit)
+
+    pointer_sync.run()
+
+    assert ("demo", "pointer_sync", "error", "boom", "u3", None) in audits
