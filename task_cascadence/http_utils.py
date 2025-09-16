@@ -41,17 +41,23 @@ async def request_with_retry_async(
     **kwargs: Any,
 ) -> httpx.Response:
     """Asynchronously perform an HTTP request with simple retry logic."""
-    for attempt in range(1, retries + 1):
-        try:
-            if client is None:
-                async with httpx.AsyncClient() as c:
-                    response = await c.request(method, url, timeout=timeout, **kwargs)
-            else:
-                response = await client.request(method, url, timeout=timeout, **kwargs)
-            response.raise_for_status()
-            return response
-        except httpx.HTTPError:
-            if attempt == retries:
-                raise
-            await asyncio.sleep(backoff_factor * 2 ** (attempt - 1))
-    raise RuntimeError("unreachable")
+
+    async def _request(active_client: httpx.AsyncClient) -> httpx.Response:
+        for attempt in range(1, retries + 1):
+            try:
+                response = await active_client.request(
+                    method, url, timeout=timeout, **kwargs
+                )
+                response.raise_for_status()
+                return response
+            except httpx.HTTPError:
+                if attempt == retries:
+                    raise
+                await asyncio.sleep(backoff_factor * 2 ** (attempt - 1))
+        raise RuntimeError("unreachable")
+
+    if client is not None:
+        return await _request(client)
+
+    async with httpx.AsyncClient() as auto_client:
+        return await _request(auto_client)
