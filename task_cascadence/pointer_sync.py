@@ -38,24 +38,21 @@ async def run_async() -> None:
         logger.warning("UME transport not configured. Exiting.")
         return
 
-    async def _maybe_broadcast(update: PointerUpdate) -> None:
+    async def _maybe_broadcast(
+        update: PointerUpdate, user_id: str | None, group_id: str | None
+    ) -> None:
         if not broadcast:
             return
-        try:
-            user_id = update.user_id or None
-            group_id = update.group_id or None
-            if "use_asyncio" in inspect.signature(emit_pointer_update).parameters:
-                result = emit_pointer_update(
-                    update, user_id=user_id, group_id=group_id, use_asyncio=True
-                )
-            else:
-                result = emit_pointer_update(
-                    update, user_id=user_id, group_id=group_id
-                )
-            if isinstance(result, asyncio.Task):
-                await result
-        except Exception:  # pragma: no cover - best effort transport
-            pass
+        if "use_asyncio" in inspect.signature(emit_pointer_update).parameters:
+            result = emit_pointer_update(
+                update, user_id=user_id, group_id=group_id, use_asyncio=True
+            )
+        else:
+            result = emit_pointer_update(
+                update, user_id=user_id, group_id=group_id
+            )
+        if isinstance(result, asyncio.Task):
+            await result
 
     if transport == "grpc":
         if not cfg.get("ume_grpc_stub"):
@@ -77,7 +74,7 @@ async def run_async() -> None:
             group_id = update.group_id or None
             try:
                 store.apply_update(update, group_id=group_id)
-                await _maybe_broadcast(update)
+                await _maybe_broadcast(update, user_id, group_id)
                 emit_audit_log(
                     update.task_name,
                     "pointer_sync",
@@ -127,7 +124,7 @@ async def run_async() -> None:
                 user_id = update.user_id or None
                 group_id = update.group_id or None
                 store.apply_update(update, group_id=group_id)
-                await _maybe_broadcast(update)
+                await _maybe_broadcast(update, user_id, group_id)
                 emit_audit_log(
                     update.task_name,
                     "pointer_sync",
