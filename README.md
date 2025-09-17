@@ -97,6 +97,25 @@ dispatch("calendar.event.create_request", payload, user_id="alice", group_id="en
 
 User and group identifiers are hashed before being persisted.
 
+### Flow Through Tasks and Audit Logs
+
+1. **Request handling.** The HTTP API requires ``X-User-ID`` and optionally
+   ``X-Group-ID`` headers. The dependency helpers
+   :func:`task_cascadence.api.get_user_id` and
+   :func:`task_cascadence.api.get_group_id` validate and return these values, so
+   each endpoint consistently receives them before invoking the scheduler.【F:task_cascadence/api/__init__.py†L36-L145】
+2. **Task execution.** The scheduler forwards the identifiers to the
+   :class:`~task_cascadence.orchestrator.TaskPipeline`, whose stage methods pass
+   them into :func:`task_cascadence.ume.emit_audit_log` and
+   :func:`task_cascadence.ume.emit_stage_update_event` calls. Every stage
+   transition therefore records the user and group context alongside the stage
+   outcome.【F:task_cascadence/orchestrator.py†L77-L151】
+3. **Audit persistence and emission.** ``emit_audit_log`` hashes any supplied
+   ``user_id`` with the configured secret, stores the hash together with the
+   ``group_id`` in :class:`~task_cascadence.stage_store.StageStore`, and attaches
+   both the raw identifier and the hash to outbound ``AuditEvent`` messages so
+   listeners can correlate activity without exposing the plain ID.【F:task_cascadence/ume/__init__.py†L90-L179】【F:task_cascadence/stage_store.py†L73-L121】
+
 ## Nested Pipelines
 
 The return value of ``plan`` may include a list of tasks or ``TaskPipeline``
