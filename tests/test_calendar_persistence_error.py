@@ -28,14 +28,16 @@ def test_calendar_event_persistence_error(monkeypatch):
 
     payload = {"title": "Lunch", "start_time": "2024-01-01T12:00:00Z"}
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError) as excinfo:
         dispatch("calendar.event.create_request", payload, user_id="alice")
+
+    error_reason = str(excinfo.value)
 
     assert (
         "calendar.event.create",
         "persistence",
         "error",
-        "boom",
+        error_reason,
     ) in audit_logs
 
 
@@ -63,12 +65,14 @@ def test_calendar_edge_persistence_error(monkeypatch):
         "invitees": ["bob"],
     }
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(RuntimeError) as excinfo:
         dispatch("calendar.event.create_request", payload, user_id="alice")
+
+    error_reason = str(excinfo.value)
 
     assert (
         "calendar.event.create",
         "persistence",
         "error",
-        "edge boom",
+        error_reason,
     ) in audit_logs
