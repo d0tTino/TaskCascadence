@@ -173,6 +173,45 @@ $ task webhook [--host HOST] [--port PORT]  # start webhook server
 $ task watch-plugins DIR # reload plugins on changes in DIR
 ```
 
+### Cron schedules and YAML configuration
+
+Cron expressions use the standard five-field format interpreted by
+APScheduler: ``minute hour day-of-month month day-of-week``. Wildcards
+(``*``), step values (``*/5``), ranges (``1-5``), and named weekdays or
+months (``MON-FRI``, ``JAN``) are all accepted. For example:
+
+- ``*/5 * * * *`` – run every five minutes.
+- ``0 9 * * MON-FRI`` – run at 09:00 Monday through Friday.
+- ``30 2 1 * *`` – run at 02:30 on the first day of each month.
+
+Schedules can be loaded in bulk from a YAML file. Each key should match the
+task's class name or registered identifier. Values may be a bare cron string
+or a mapping with extra metadata:
+
+```yaml
+# schedules.yml
+ExampleTask: "*/5 * * * *"
+
+NightlySummary:
+  expr: "0 1 * * *"
+  user_id: analytics@example.com
+  group_id: insights
+  recurrence:
+    note: Nightly ETL refresh
+
+CalendarDrivenTask:
+  calendar_event:
+    node: /calendar/nodes/team-sync
+    poll: 600  # refresh every 10 minutes
+  user_id: manager@example.com
+  group_id: leadership
+```
+
+Use ``task load-schedules schedules.yml`` to register every entry. ``user_id``
+and ``group_id`` values are hashed on disk automatically. When a
+``calendar_event`` is supplied the scheduler pulls recurrence details from the
+referenced UME node and keeps them current.
+
 Global options allow metrics and UME transport configuration:
 
 ```bash
