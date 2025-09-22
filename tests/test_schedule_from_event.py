@@ -24,8 +24,8 @@ def test_schedule_from_event_registers_metadata(tmp_path):
     assert entry["recurrence"] == {"cron": "*/5 * * * *"}
     from task_cascadence.ume import _hash_user_id
 
-    assert entry["user_id"] == _hash_user_id("alice")
-    assert entry["group_id"] == _hash_user_id("engineering")
+    assert entry["user_hash"] == _hash_user_id("alice")
+    assert entry["group_hash"] == _hash_user_id("engineering")
 
 
 def test_yaml_recurrence_loaded(tmp_path):

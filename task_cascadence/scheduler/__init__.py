@@ -64,7 +64,14 @@ class BaseScheduler:
         self._temporal = temporal
         self._schedules_lock = threading.Lock()
 
-    def register_task(self, name: str, task: Any) -> None:
+    def register_task(
+        self,
+        name: str,
+        task: Any,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         """Register a task object under ``name``."""
 
         with self._schedules_lock:
@@ -72,6 +79,8 @@ class BaseScheduler:
                 "task": task,
                 "disabled": False,
                 "paused": False,
+                "user_id": user_id,
+                "group_id": group_id,
             }
 
     # ------------------------------------------------------------------
@@ -430,8 +439,12 @@ class CronScheduler(BaseScheduler):
         self.scheduler = BackgroundScheduler(timezone=tz)
         self.storage_path = Path(storage_path)
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        self.context_path = self.storage_path.with_suffix(
+            f"{self.storage_path.suffix}.ctx"
+        )
         with self._schedules_lock:
             self.schedules = self._load_schedules()
+            self._schedule_context = self._load_schedule_context()
         self._restore_jobs(tasks or {})
 
     def _load_schedules(self):
@@ -443,22 +456,59 @@ class CronScheduler(BaseScheduler):
                     for info in data.values():
                         if isinstance(info, dict):
                             if "user_id" in info:
-                                uid = info["user_id"]
-                                hashed = _maybe_hash_user_id(uid)
-                                if hashed != uid:
-                                    info["user_id"] = hashed
+                                uid = info.pop("user_id")
+                                info["user_hash"] = _maybe_hash_user_id(uid)
+                                modified = True
+                            elif "user_hash" in info:
+                                uid = info["user_hash"]
+                                if uid and not _HASH_RE.match(uid):
+                                    info["user_hash"] = _maybe_hash_user_id(uid)
                                     modified = True
                             if "group_id" in info:
-                                gid = info["group_id"]
-                                ghashed = _maybe_hash_group_id(gid)
-                                if ghashed != gid:
-                                    info["group_id"] = ghashed
+                                gid = info.pop("group_id")
+                                info["group_hash"] = _maybe_hash_group_id(gid)
+                                modified = True
+                            elif "group_hash" in info:
+                                gid = info["group_hash"]
+                                if gid and not _HASH_RE.match(gid):
+                                    info["group_hash"] = _maybe_hash_group_id(gid)
                                     modified = True
                     if modified:
                         with open(self.storage_path, "w") as out:
                             self._yaml.safe_dump(data, out)
                     return data
         return {}
+
+    def _load_schedule_context(self) -> dict[str, dict[str, str | None]]:
+        if self.context_path.exists():
+            with open(self.context_path, "r") as fh:
+                data = self._yaml.safe_load(fh) or {}
+                if isinstance(data, dict):
+                    result: dict[str, dict[str, str | None]] = {}
+                    for key, value in data.items():
+                        if not isinstance(value, dict):
+                            continue
+                        context: dict[str, str | None] = {}
+                        user_id = value.get("user_id")
+                        group_id = value.get("group_id")
+                        if isinstance(user_id, str):
+                            context["user_id"] = user_id
+                        if isinstance(group_id, str):
+                            context["group_id"] = group_id
+                        if context:
+                            result[key] = context
+                    return result
+        return {}
+
+    def _save_schedule_context(self) -> None:
+        if not self.context_path.parent.exists():
+            self.context_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.context_path, "w") as fh:
+            self._yaml.safe_dump(self._schedule_context, fh)
+        try:
+            os.chmod(self.context_path, 0o600)
+        except OSError:  # pragma: no cover - platform dependent
+            pass
 
     def _restore_jobs(self, tasks):
         with self._schedules_lock:
@@ -469,13 +519,22 @@ class CronScheduler(BaseScheduler):
                 continue
             if isinstance(data, dict):
                 expr = data.get("expr")
-                user_id = data.get("user_id")
-                group_id = data.get("group_id")
+                user_hash = data.get("user_hash") or data.get("user_id")
+                group_hash = data.get("group_hash") or data.get("group_id")
             else:
                 expr = data
-                user_id = None
-                group_id = None
-            super().register_task(job_id, task)
+                user_hash = None
+                group_hash = None
+            context = self._schedule_context.get(job_id, {})
+            user_id = context.get("user_id") if context else None
+            group_id = context.get("group_id") if context else None
+            if user_id is None and user_hash is not None:
+                user_id = user_hash
+            if group_id is None and group_hash is not None:
+                group_id = group_hash
+            super().register_task(
+                job_id, task, user_id=user_id, group_id=group_id
+            )
             trigger = self._CronTrigger.from_crontab(
                 expr, timezone=self.scheduler.timezone
             )
@@ -571,10 +630,19 @@ class CronScheduler(BaseScheduler):
             with self._schedules_lock:
                 info = self._tasks.get(task.__class__.__name__)
                 paused = bool(info and info.get("paused"))
+                resolved_user = user_id
+                resolved_group = group_id
+                if info is not None:
+                    if resolved_user is None:
+                        resolved_user = info.get("user_id")
+                    if resolved_group is None:
+                        resolved_group = info.get("group_id")
             if paused:
                 return
             self.run_task(
-                task.__class__.__name__, user_id=user_id, group_id=group_id
+                task.__class__.__name__,
+                user_id=resolved_user,
+                group_id=resolved_group,
             )
 
         return runner
@@ -615,13 +683,16 @@ class CronScheduler(BaseScheduler):
             def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
                 return None
 
+        user_hash = _maybe_hash_user_id(user_id) if user_id is not None else None
         group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
 
         if isinstance(name_or_task, str):
             # Called with ``name`` and ``task``
             name, task = name_or_task, task_or_expr
             try:
-                super().register_task(name, task)
+                super().register_task(
+                    name, task, user_id=user_id, group_id=group_id
+                )
             except Exception as exc:  # pragma: no cover - passthrough
                 emit_audit_log(
                     name,
@@ -640,19 +711,30 @@ class CronScheduler(BaseScheduler):
         task, cron_expression = name_or_task, task_or_expr
         job_id = task.__class__.__name__
         try:
-            super().register_task(job_id, task)
-            user_hash = _maybe_hash_user_id(user_id) if user_id is not None else None
+            super().register_task(
+                job_id, task, user_id=user_id, group_id=group_id
+            )
             with self._schedules_lock:
                 if user_id is None and group_hash is None:
                     self.schedules[job_id] = cron_expression
                 else:
                     entry: dict[str, Any] = {"expr": cron_expression}
                     if user_hash is not None:
-                        entry["user_id"] = user_hash
+                        entry["user_hash"] = user_hash
                     if group_hash is not None:
-                        entry["group_id"] = group_hash
+                        entry["group_hash"] = group_hash
                     self.schedules[job_id] = entry
+                if user_id is not None or group_id is not None:
+                    context: dict[str, str | None] = {}
+                    if user_id is not None:
+                        context["user_id"] = user_id
+                    if group_id is not None:
+                        context["group_id"] = group_id
+                    self._schedule_context[job_id] = context
+                elif job_id in self._schedule_context:
+                    self._schedule_context.pop(job_id)
                 self._save_schedules()
+                self._save_schedule_context()
 
             trigger = self._CronTrigger.from_crontab(
                 cron_expression, timezone=self.scheduler.timezone
@@ -859,17 +941,18 @@ class CronScheduler(BaseScheduler):
                 if isinstance(sched_entry, dict):
                     sched_entry["recurrence"] = recurrence
                     if user_hash is not None:
-                        sched_entry["user_id"] = user_hash
+                        sched_entry["user_hash"] = user_hash
                     if group_hash is not None:
-                        sched_entry["group_id"] = group_hash
+                        sched_entry["group_hash"] = group_hash
                 else:
                     entry: dict[str, Any] = {"expr": expr, "recurrence": recurrence}
                     if user_hash is not None:
-                        entry["user_id"] = user_hash
+                        entry["user_hash"] = user_hash
                     if group_hash is not None:
-                        entry["group_id"] = group_hash
+                        entry["group_hash"] = group_hash
                     self.schedules[job_id] = entry
                 self._save_schedules()
+                self._save_schedule_context()
         except Exception as exc:  # pragma: no cover - passthrough
             emit_audit_log(
                 job_id,
@@ -906,16 +989,14 @@ class CronScheduler(BaseScheduler):
                 )
                 raise ValueError(f"Unknown schedule: {name}")
             if isinstance(sched_entry, dict):
-                user_id = sched_entry.get("user_id")
-                group_id = sched_entry.get("group_id")
+                user_hash = sched_entry.get("user_hash") or sched_entry.get("user_id")
+                group_hash = sched_entry.get("group_hash") or sched_entry.get("group_id")
             else:
-                user_id = group_id = None
-            user_id = (
-                _maybe_hash_user_id(user_id) if user_id is not None else None
-            )
-            group_id = (
-                _maybe_hash_group_id(group_id) if group_id is not None else None
-            )
+                user_hash = group_hash = None
+            if user_hash is not None and not _HASH_RE.match(user_hash):
+                user_hash = _maybe_hash_user_id(user_hash)
+            if group_hash is not None and not _HASH_RE.match(group_hash):
+                group_hash = _maybe_hash_group_id(group_hash)
 
             try:
                 self.scheduler.remove_job(name)
@@ -925,11 +1006,13 @@ class CronScheduler(BaseScheduler):
                     "unschedule",
                     "error",
                     reason=str(exc),
-                    user_id=user_id,
-                    group_id=group_id,
+                    user_id=user_hash,
+                    group_id=group_hash,
                 )
             self.schedules.pop(name, None)
             self._save_schedules()
+            self._schedule_context.pop(name, None)
+            self._save_schedule_context()
         # Ensure stage events are persisted even when no transport is configured
         from ..stage_store import StageStore
         StageStore().add_event(name, "unschedule", None, None)
@@ -938,7 +1021,11 @@ class CronScheduler(BaseScheduler):
 
         emit_stage_update_event(name, "unschedule")
         emit_audit_log(
-            name, "unschedule", "success", user_id=user_id, group_id=group_id
+            name,
+            "unschedule",
+            "success",
+            user_id=user_hash,
+            group_id=group_hash,
         )
 
     def disable_task(

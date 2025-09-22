@@ -32,5 +32,5 @@ def test_poll_calendar_event(monkeypatch, tmp_path):
     assert entry["calendar_event"] == {"node": "node42", "poll": 1}
     from task_cascadence.ume import _hash_user_id
 
-    assert entry["user_id"] == _hash_user_id("alice")
-    assert entry["group_id"] == _hash_user_id("engineering")
+    assert entry["user_hash"] == _hash_user_id("alice")
+    assert entry["group_hash"] == _hash_user_id("engineering")

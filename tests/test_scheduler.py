@@ -62,7 +62,7 @@ def test_schedule_persistence(tmp_path):
     from task_cascadence.ume import _hash_user_id
 
     assert data["DummyTask"]["expr"] == "*/5 * * * *"
-    assert data["DummyTask"]["user_id"] == _hash_user_id("alice")
+    assert data["DummyTask"]["user_hash"] == _hash_user_id("alice")
 
 
 def test_run_emits_result(monkeypatch, tmp_path):
@@ -98,7 +98,7 @@ def test_restore_schedules_on_init(tmp_path, monkeypatch):
 
     from task_cascadence import ume
 
-    captured = {}
+    captured: dict[str, str | None] = {}
 
     from task_cascadence.ume import _hash_user_id
 
@@ -115,7 +115,67 @@ def test_restore_schedules_on_init(tmp_path, monkeypatch):
     assert job is not None
     job.func()
     assert new_task.count == 1
-    assert captured["user_id"] == _hash_user_id("alice")
+    assert captured["user_id"] == "alice"
+
+
+def test_restored_scheduler_preserves_plain_identifiers(tmp_path, monkeypatch):
+    from task_cascadence import scheduler as scheduler_module
+
+    captured: list[dict[str, object]] = []
+
+    class Resp:
+        def json(self) -> dict[str, object]:  # pragma: no cover - compatibility
+            return {}
+
+    def fake_request(method, url, timeout=0, **kwargs):
+        captured.append({"method": method, "url": url, "kwargs": kwargs})
+        return Resp()
+
+    monkeypatch.setattr(scheduler_module, "request_with_retry", fake_request)
+
+    class HttpTask:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def run(self) -> None:
+            self.calls += 1
+            scheduler_module.request_with_retry(
+                "POST",
+                "http://ume/test",
+                json={
+                    "user_id": self.user_id,
+                    "group_id": self.group_id,
+                },
+            )
+
+    storage = tmp_path / "sched.yml"
+    sched = CronScheduler(timezone="UTC", storage_path=storage)
+    task = HttpTask()
+    sched.register_task(
+        name_or_task=task,
+        task_or_expr="*/5 * * * *",
+        user_id="alice",
+        group_id="engineering",
+    )
+
+    restored_task = HttpTask()
+    sched2 = CronScheduler(
+        timezone="UTC",
+        storage_path=storage,
+        tasks={"HttpTask": restored_task},
+    )
+
+    job = sched2.scheduler.get_job("HttpTask")
+    assert job is not None
+
+    captured.clear()
+    job.func()
+
+    assert restored_task.calls == 1
+    assert captured
+    payload = captured[-1]["kwargs"].get("json")
+    assert payload["user_id"] == "alice"
+    assert payload["group_id"] == "engineering"
 
 
 def test_schedule_task(tmp_path):
@@ -138,7 +198,7 @@ def test_schedule_task_user_id(tmp_path):
     from task_cascadence.ume import _hash_user_id
 
     assert data["DummyTask"]["expr"] == "*/2 * * * *"
-    assert data["DummyTask"]["user_id"] == _hash_user_id("bob")
+    assert data["DummyTask"]["user_hash"] == _hash_user_id("bob")
 
 
 def test_base_scheduler_has_no_schedule_task():

@@ -101,11 +101,11 @@ def test_schedule_from_calendar_event(tmp_path):
     assert entry["recurrence"] == {"cron": "*/2 * * * *"}
     expected_user = expected_hash("alice")
     expected_group = expected_hash("engineering")
-    assert entry["user_id"] == expected_user
-    assert entry["group_id"] == expected_group
+    assert entry["user_hash"] == expected_user
+    assert entry["group_hash"] == expected_group
     persisted = yaml.safe_load((tmp_path / "sched.yml").read_text())
-    assert persisted["DummyTask"]["user_id"] == expected_user
-    assert persisted["DummyTask"]["group_id"] == expected_group
+    assert persisted["DummyTask"]["user_hash"] == expected_user
+    assert persisted["DummyTask"]["group_hash"] == expected_group
     assert persisted["DummyTask"]["recurrence"] == {"cron": "*/2 * * * *"}
 
 
@@ -122,11 +122,11 @@ def test_loads_plain_identifiers_and_rewrites(tmp_path):
     sched = CronScheduler(timezone="UTC", storage_path=sched_file)
     expected_user = expected_hash("alice")
     expected_group = expected_hash("engineering")
-    assert sched.schedules["DummyTask"]["user_id"] == expected_user
-    assert sched.schedules["DummyTask"]["group_id"] == expected_group
+    assert sched.schedules["DummyTask"]["user_hash"] == expected_user
+    assert sched.schedules["DummyTask"]["group_hash"] == expected_group
     persisted = yaml.safe_load(sched_file.read_text())
-    assert persisted["DummyTask"]["user_id"] == expected_user
-    assert persisted["DummyTask"]["group_id"] == expected_group
+    assert persisted["DummyTask"]["user_hash"] == expected_user
+    assert persisted["DummyTask"]["group_hash"] == expected_group
 
 
 def test_yaml_calendar_event_daily(tmp_path, monkeypatch):
