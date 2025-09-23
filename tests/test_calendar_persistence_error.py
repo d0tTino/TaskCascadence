@@ -1,4 +1,4 @@
-import pytest
+import pytest  # needed for pytest.raises assertions
 
 from task_cascadence.workflows import dispatch
 from task_cascadence.workflows import calendar_event_creation as cec
