@@ -1,5 +1,5 @@
-import yaml
 import pytest
+import yaml
 from apscheduler.triggers.cron import CronTrigger
 from task_cascadence.scheduler import CronScheduler
 
