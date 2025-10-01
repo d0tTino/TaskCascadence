@@ -1,5 +1,7 @@
+import yaml
+
+from task_cascadence import scheduler
 from task_cascadence.scheduler import CronScheduler
-import task_cascadence.scheduler as scheduler
 from task_cascadence.ume import _hash_user_id
 
 
