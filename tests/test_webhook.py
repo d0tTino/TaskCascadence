@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from typing import Any
+
 from task_cascadence.plugins import (
     WebhookTask,
     register_webhook_task,
@@ -32,7 +34,7 @@ def test_registered_task_receives_event():
     @register_webhook_task
     class CollectorTask(WebhookTask):
         def __init__(self):
-            self.events: list[tuple[str, str, dict]] = []
+            self.events: list[tuple[str, str, dict[str, Any]]] = []
 
         def handle_event(self, source, event_type, payload):
             self.events.append((source, event_type, payload))
@@ -61,7 +63,7 @@ def test_calcom_task_receives_event():
     @register_webhook_task
     class CollectorTask(WebhookTask):
         def __init__(self):
-            self.events: list[tuple[str, str, dict]] = []
+            self.events: list[tuple[str, str, dict[str, Any]]] = []
 
         def handle_event(self, source, event_type, payload):
             self.events.append((source, event_type, payload))
