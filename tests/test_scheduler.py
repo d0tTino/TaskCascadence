@@ -100,8 +100,6 @@ def test_restore_schedules_on_init(tmp_path, monkeypatch):
 
     captured: dict[str, str | None] = {}
 
-    from task_cascadence.ume import _hash_user_id
-
     def fake_emit(run, user_id=None):
         captured["user_id"] = user_id
 
@@ -427,6 +425,62 @@ def test_scheduled_job_runs_pipeline(monkeypatch, tmp_path):
     data = yaml.safe_load(path.read_text())
     stages = [e["stage"] for e in data["DemoTask"]]
     assert stages == ["intake", "research", "planning", "run", "verification"]
+
+
+def test_scheduler_audit_hash_matches_pipeline(monkeypatch, tmp_path):
+    path = tmp_path / "stages.yml"
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(path))
+
+    import task_cascadence.ume as ume
+
+    ume._stage_store = None
+
+    class DemoTask(CronTask):
+        def intake(self):
+            pass
+
+        def plan(self):
+            return None
+
+        def run(self):
+            return "ok"
+
+        def verify(self, result):
+            return result
+
+    sched = CronScheduler(timezone="UTC", storage_path=tmp_path / "sched.yml")
+    task = DemoTask()
+    sched.register_task(
+        name_or_task=task,
+        task_or_expr="* * * * *",
+        user_id="alice",
+        group_id="engineering",
+    )
+
+    job = sched.scheduler.get_job("DemoTask")
+    assert job is not None
+    job.func()
+
+    from task_cascadence.stage_store import StageStore
+    from task_cascadence.ume import _hash_user_id
+
+    store = StageStore(path=path)
+    stage_events = store.get_events("DemoTask")
+    audit_events = store.get_events("DemoTask", category="audit")
+
+    assert stage_events
+    assert audit_events
+
+    stage_hashes = {e.get("user_hash") for e in stage_events if e.get("user_hash")}
+    audit_hashes = {e.get("user_hash") for e in audit_events if e.get("user_hash")}
+    expected_hash = {_hash_user_id("alice")}
+    assert stage_hashes == expected_hash
+    assert audit_hashes == expected_hash
+
+    stage_groups = {e.get("group_id") for e in stage_events if e.get("group_id")}
+    audit_groups = {e.get("group_id") for e in audit_events if e.get("group_id")}
+    assert stage_groups == {"engineering"}
+    assert audit_groups == {"engineering"}
 
 
 class DummyResp:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable
 
-from . import CronScheduler, BaseScheduler
+from . import CronScheduler
 
 
 class DagCronScheduler(CronScheduler):
@@ -23,32 +23,27 @@ class DagCronScheduler(CronScheduler):
 
     # ------------------------------------------------------------------
     def _restore_jobs(self, tasks: Dict[str, Any]) -> None:
-        for job_id, data in self.schedules.items():
-            task = tasks.get(job_id)
-            if not task:
+        """Restore persisted DAG schedules including dependency metadata."""
+
+        super()._restore_jobs(tasks)
+
+        with self._schedules_lock:
+            items = list(self.schedules.items())
+
+        for job_id, data in items:
+            if not isinstance(data, dict):
+                self.dependencies.pop(job_id, None)
                 continue
-            if isinstance(data, dict):
-                expr = data.get("expr")
-                user_id = data.get("user_id")
-                group_id = data.get("group_id")
-                deps = data.get("deps", [])
+
+            raw_deps = data.get("deps")
+            if isinstance(raw_deps, (list, tuple)):
+                deps = [str(dep) for dep in raw_deps]
+                if deps:
+                    self.dependencies[job_id] = deps
+                else:
+                    self.dependencies.pop(job_id, None)
             else:
-                expr = data
-                user_id = None
-                group_id = None
-                deps = []
-            if deps:
-                self.dependencies[job_id] = list(deps)
-            BaseScheduler.register_task(self, job_id, task)
-            trigger = self._CronTrigger.from_crontab(
-                expr, timezone=self.scheduler.timezone
-            )
-            self.scheduler.add_job(
-                self._wrap_task(task, user_id=user_id, group_id=group_id),
-                trigger=trigger,
-                id=job_id,
-                replace_existing=True,
-            )
+                self.dependencies.pop(job_id, None)
 
     # ------------------------------------------------------------------
     def register_task(
@@ -65,31 +60,33 @@ class DagCronScheduler(CronScheduler):
             super().register_task(name, task)
             if dependencies:
                 self.dependencies[name] = list(dependencies)
+            else:
+                self.dependencies.pop(name, None)
             return
 
         task, cron_expression = name_or_task, task_or_expr
         job_id = task.__class__.__name__
-        BaseScheduler.register_task(self, job_id, task)
+
+        super().register_task(
+            task,
+            cron_expression,
+            user_id=user_id,
+            group_id=group_id,
+        )
+
         if dependencies:
             self.dependencies[job_id] = list(dependencies)
-        entry: Dict[str, Any] = {"expr": cron_expression}
-        if user_id is not None:
-            entry["user_id"] = user_id
-        if group_id is not None:
-            entry["group_id"] = group_id
-        if dependencies:
-            entry["deps"] = list(dependencies)
-        self.schedules[job_id] = entry
-        self._save_schedules()
-        trigger = self._CronTrigger.from_crontab(
-            cron_expression, timezone=self.scheduler.timezone
-        )
-        self.scheduler.add_job(
-            self._wrap_task(task, user_id=user_id, group_id=group_id),
-            trigger=trigger,
-            id=job_id,
-            replace_existing=True,
-        )
+        else:
+            self.dependencies.pop(job_id, None)
+
+        with self._schedules_lock:
+            entry = self.schedules.get(job_id)
+            if isinstance(entry, dict):
+                if dependencies:
+                    entry["deps"] = list(dependencies)
+                elif "deps" in entry:
+                    entry.pop("deps", None)
+                self._save_schedules()
 
     # ------------------------------------------------------------------
     def _run_with_dependencies(

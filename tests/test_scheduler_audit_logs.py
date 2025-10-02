@@ -63,28 +63,28 @@ def test_scheduler_audit_logs(monkeypatch, tmp_path):
             "scheduler",
             "disabled",
             "alice",
-            ume_mod._hash_user_id("team"),
+            "team",
         ),
         (
             "Dummy",
             "scheduler",
             "paused",
             "alice",
-            ume_mod._hash_user_id("team"),
+            "team",
         ),
         (
             "Dummy",
             "scheduler",
             "resumed",
             "alice",
-            ume_mod._hash_user_id("team"),
+            "team",
         ),
         (
             "Dummy",
             "unschedule",
             "success",
-            ume_mod._hash_user_id("alice"),
-            ume_mod._hash_user_id("team"),
+            "alice",
+            "team",
         ),
     ]
 
@@ -118,8 +118,8 @@ def test_run_task_failure_emits_audit_log(monkeypatch, tmp_path):
             "BadTask",
             "run",
             "error",
-            ume_mod._hash_user_id("alice"),
-            ume_mod._hash_user_id("team"),
+            "alice",
+            "team",
             "boom",
         )
     ]

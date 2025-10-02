@@ -124,9 +124,6 @@ class BaseScheduler:
 
         supports_partial = AuditEvent is not None and hasattr(AuditEvent(), "partial")
 
-        user_hash = _maybe_hash_user_id(user_id) if user_id is not None else None
-        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
-
         with self._schedules_lock:
             info = self._tasks.get(name)
             if not info:
@@ -136,8 +133,8 @@ class BaseScheduler:
                     "run",
                     "error",
                     reason=reason,
-                    user_id=user_hash,
-                    group_id=group_hash,
+                    user_id=user_id,
+                    group_id=group_id,
                 )
                 raise ValueError(reason)
             if info["disabled"]:
@@ -147,8 +144,8 @@ class BaseScheduler:
                     "run",
                     "error",
                     reason=reason,
-                    user_id=user_hash,
-                    group_id=group_hash,
+                    user_id=user_id,
+                    group_id=group_id,
                 )
                 raise ValueError(reason)
             if info.get("paused"):
@@ -158,8 +155,8 @@ class BaseScheduler:
                     "run",
                     "error",
                     reason=reason,
-                    user_id=user_hash,
-                    group_id=group_hash,
+                    user_id=user_id,
+                    group_id=group_id,
                 )
                 raise ValueError(reason)
             if user_id is None:
@@ -169,8 +166,8 @@ class BaseScheduler:
                     "run",
                     "error",
                     reason=reason,
-                    user_id=user_hash,
-                    group_id=group_hash,
+                    user_id=user_id,
+                    group_id=group_id,
                 )
                 raise ValueError(reason)
             uid = user_id
@@ -184,8 +181,8 @@ class BaseScheduler:
                     "run",
                     "error",
                     reason=reason,
-                    user_id=user_hash,
-                    group_id=group_hash,
+                    user_id=user_id,
+                    group_id=group_id,
                 )
                 raise RuntimeError(reason)
             workflow = getattr(task, "workflow", task.__class__.__name__)
@@ -197,16 +194,16 @@ class BaseScheduler:
                     "run",
                     "error",
                     reason=str(exc),
-                    user_id=user_hash,
-                    group_id=group_hash,
+                    user_id=user_id,
+                    group_id=group_id,
                 )
                 raise
             emit_audit_log(
                 name,
                 "run",
                 "success",
-                user_id=user_hash,
-                group_id=group_hash,
+                user_id=user_id,
+                group_id=group_id,
             )
             return result
 
@@ -261,8 +258,8 @@ class BaseScheduler:
                             "error",
                             reason=str(exc),
                             partial=partial_data,
-                            user_id=user_hash,
-                            group_id=group_hash,
+                            user_id=user_id,
+                            group_id=group_id,
                         )
                     else:
                         emit_audit_log(
@@ -271,8 +268,8 @@ class BaseScheduler:
                             "error",
                             reason=str(exc),
                             output=partial_data,
-                            user_id=user_hash,
-                            group_id=group_hash,
+                            user_id=user_id,
+                            group_id=group_id,
                         )
                     raise
                 else:
@@ -280,8 +277,8 @@ class BaseScheduler:
                         name,
                         "run",
                         "success",
-                        user_id=user_hash,
-                        group_id=group_hash,
+                        user_id=user_id,
+                        group_id=group_id,
                     )
                 finally:
                     finished = Timestamp()
@@ -293,14 +290,14 @@ class BaseScheduler:
                         started_at=started,
                         finished_at=finished,
                     )
-                    if user_id is None and group_hash is None:
+                    if user_id is None and group_id is None:
                         emit_task_run(run)
-                    elif group_hash is None:
+                    elif group_id is None:
                         emit_task_run(run, user_id=user_id)
                     elif user_id is None:
-                        emit_task_run(run, group_id=group_hash)
+                        emit_task_run(run, group_id=group_id)
                     else:
-                        emit_task_run(run, user_id=user_id, group_id=group_hash)
+                        emit_task_run(run, user_id=user_id, group_id=group_id)
                 return result
 
             return runner()
@@ -310,8 +307,8 @@ class BaseScheduler:
             "run",
             "error",
             reason=reason,
-            user_id=user_hash,
-            group_id=group_hash,
+            user_id=user_id,
+            group_id=group_id,
         )
         raise AttributeError(reason)
 
@@ -336,13 +333,12 @@ class BaseScheduler:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["disabled"] = True
         from ..ume import emit_audit_log
-        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
         emit_audit_log(
             name,
             "scheduler",
             "disabled",
             user_id=user_id,
-            group_id=group_hash,
+            group_id=group_id,
         )
 
     def pause_task(
@@ -359,13 +355,12 @@ class BaseScheduler:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["paused"] = True
         from ..ume import emit_audit_log
-        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
         emit_audit_log(
             name,
             "scheduler",
             "paused",
             user_id=user_id,
-            group_id=group_hash,
+            group_id=group_id,
         )
 
     def resume_task(
@@ -382,13 +377,12 @@ class BaseScheduler:
                 raise ValueError(f"Unknown task: {name}")
             self._tasks[name]["paused"] = False
         from ..ume import emit_audit_log
-        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
         emit_audit_log(
             name,
             "scheduler",
             "resumed",
             user_id=user_id,
-            group_id=group_hash,
+            group_id=group_id,
         )
 
 
@@ -528,9 +522,9 @@ class CronScheduler(BaseScheduler):
             context = self._schedule_context.get(job_id, {})
             user_id = context.get("user_id") if context else None
             group_id = context.get("group_id") if context else None
-            if user_id is None and user_hash is not None:
+            if user_id is None and user_hash is not None and not _HASH_RE.match(user_hash):
                 user_id = user_hash
-            if group_id is None and group_hash is not None:
+            if group_id is None and group_hash is not None and not _HASH_RE.match(group_hash):
                 group_id = group_hash
             super().register_task(
                 job_id, task, user_id=user_id, group_id=group_id
@@ -700,11 +694,11 @@ class CronScheduler(BaseScheduler):
                     "error",
                     reason=str(exc),
                     user_id=user_id,
-                    group_id=group_hash,
+                    group_id=group_id,
                 )
                 raise
             emit_audit_log(
-                name, "register", "success", user_id=user_id, group_id=group_hash
+                name, "register", "success", user_id=user_id, group_id=group_id
             )
             return
 
@@ -715,7 +709,7 @@ class CronScheduler(BaseScheduler):
                 job_id, task, user_id=user_id, group_id=group_id
             )
             with self._schedules_lock:
-                if user_id is None and group_hash is None:
+                if user_id is None and group_id is None:
                     self.schedules[job_id] = cron_expression
                 else:
                     entry: dict[str, Any] = {"expr": cron_expression}
@@ -752,11 +746,11 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason=str(exc),
                 user_id=user_id,
-                group_id=group_hash,
+                group_id=group_id,
             )
             raise
         emit_audit_log(
-            job_id, "schedule", "success", user_id=user_id, group_id=group_hash
+            job_id, "schedule", "success", user_id=user_id, group_id=group_id
         )
 
     def schedule_task(
@@ -924,7 +918,7 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason="event missing recurrence cron",
                 user_id=user_id,
-                group_id=group_hash,
+                group_id=group_id,
             )
             raise ValueError("event missing recurrence cron")
 
@@ -960,11 +954,11 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason=str(exc),
                 user_id=user_id,
-                group_id=group_hash,
+                group_id=group_id,
             )
             raise
         emit_audit_log(
-            job_id, "schedule", "success", user_id=user_id, group_id=group_hash
+            job_id, "schedule", "success", user_id=user_id, group_id=group_id
         )
 
     def unschedule(self, name: str) -> None:
@@ -993,10 +987,21 @@ class CronScheduler(BaseScheduler):
                 group_hash = sched_entry.get("group_hash") or sched_entry.get("group_id")
             else:
                 user_hash = group_hash = None
-            if user_hash is not None and not _HASH_RE.match(user_hash):
-                user_hash = _maybe_hash_user_id(user_hash)
-            if group_hash is not None and not _HASH_RE.match(group_hash):
-                group_hash = _maybe_hash_group_id(group_hash)
+            context = self._schedule_context.get(name, {})
+            plain_user = context.get("user_id") if isinstance(context, dict) else None
+            plain_group = context.get("group_id") if isinstance(context, dict) else None
+            if isinstance(plain_user, str):
+                user_id = plain_user
+            else:
+                user_id = None
+            if isinstance(plain_group, str):
+                group_id = plain_group
+            else:
+                group_id = None
+            if user_id is None and user_hash is not None and not _HASH_RE.match(user_hash):
+                user_id = user_hash
+            if group_id is None and group_hash is not None and not _HASH_RE.match(group_hash):
+                group_id = group_hash
 
             try:
                 self.scheduler.remove_job(name)
@@ -1006,8 +1011,8 @@ class CronScheduler(BaseScheduler):
                     "unschedule",
                     "error",
                     reason=str(exc),
-                    user_id=user_hash,
-                    group_id=group_hash,
+                    user_id=user_id,
+                    group_id=group_id,
                 )
             self.schedules.pop(name, None)
             self._save_schedules()
@@ -1024,8 +1029,8 @@ class CronScheduler(BaseScheduler):
             name,
             "unschedule",
             "success",
-            user_id=user_hash,
-            group_id=group_hash,
+            user_id=user_id,
+            group_id=group_id,
         )
 
     def disable_task(
@@ -1046,10 +1051,8 @@ class CronScheduler(BaseScheduler):
             def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
                 return None
 
-        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
-
         try:
-            super().disable_task(name, user_id=user_id, group_id=group_hash)
+            super().disable_task(name, user_id=user_id, group_id=group_id)
         except Exception as exc:  # pragma: no cover - passthrough
             emit_audit_log(
                 name,
@@ -1057,14 +1060,14 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason=str(exc),
                 user_id=user_id,
-                group_id=group_hash,
+                group_id=group_id,
             )
             raise
         emit_stage_update_event(
-            name, "disabled", user_id=user_id, group_id=group_hash
+            name, "disabled", user_id=user_id, group_id=group_id
         )
         emit_audit_log(
-            name, "disabled", "success", user_id=user_id, group_id=group_hash
+            name, "disabled", "success", user_id=user_id, group_id=group_id
         )
 
     def pause_task(
@@ -1085,10 +1088,8 @@ class CronScheduler(BaseScheduler):
             def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
                 return None
 
-        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
-
         try:
-            super().pause_task(name, user_id=user_id, group_id=group_hash)
+            super().pause_task(name, user_id=user_id, group_id=group_id)
         except Exception as exc:  # pragma: no cover - passthrough
             emit_audit_log(
                 name,
@@ -1096,14 +1097,14 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason=str(exc),
                 user_id=user_id,
-                group_id=group_hash,
+                group_id=group_id,
             )
             raise
         emit_stage_update_event(
-            name, "paused", user_id=user_id, group_id=group_hash
+            name, "paused", user_id=user_id, group_id=group_id
         )
         emit_audit_log(
-            name, "paused", "success", user_id=user_id, group_id=group_hash
+            name, "paused", "success", user_id=user_id, group_id=group_id
         )
 
     def resume_task(
@@ -1124,10 +1125,8 @@ class CronScheduler(BaseScheduler):
             def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
                 return None
 
-        group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
-
         try:
-            super().resume_task(name, user_id=user_id, group_id=group_hash)
+            super().resume_task(name, user_id=user_id, group_id=group_id)
         except Exception as exc:  # pragma: no cover - passthrough
             emit_audit_log(
                 name,
@@ -1135,14 +1134,14 @@ class CronScheduler(BaseScheduler):
                 "error",
                 reason=str(exc),
                 user_id=user_id,
-                group_id=group_hash,
+                group_id=group_id,
             )
             raise
         emit_stage_update_event(
-            name, "resumed", user_id=user_id, group_id=group_hash
+            name, "resumed", user_id=user_id, group_id=group_id
         )
         emit_audit_log(
-            name, "resumed", "success", user_id=user_id, group_id=group_hash
+            name, "resumed", "success", user_id=user_id, group_id=group_id
         )
 
 
