@@ -1,6 +1,11 @@
 import threading
 import time
-from task_cascadence.pipeline_registry import add_pipeline, remove_pipeline, list_pipelines
+from task_cascadence.pipeline_registry import (
+    add_pipeline,
+    remove_pipeline,
+    list_pipelines,
+    attach_pipeline_context,
+)
 from task_cascadence.orchestrator import TaskPipeline
 from task_cascadence.plugins import ExampleTask
 
@@ -43,3 +48,41 @@ def test_thread_safe_registry():
 
     assert not errors
     assert list_pipelines() == {}
+
+
+def test_attach_pipeline_context_exposes_pipeline(monkeypatch):
+    stages: list[str] = []
+    audits: list[tuple[str, str | None]] = []
+
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+
+    def stage(task_name, stage, *args, **kwargs):
+        stages.append(stage)
+
+    def audit(task_name, stage, status, *args, **kwargs):
+        audits.append((stage, kwargs.get("output")))
+
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_stage_update_event", stage)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_audit_log", audit)
+
+    class SimpleTask:
+        def run(self):
+            self.context_snapshot = list(getattr(self, "context", []))
+            return "ok"
+
+    pipeline = TaskPipeline(SimpleTask())
+    add_pipeline("demo", pipeline)
+    try:
+        assert attach_pipeline_context(
+            "demo", {"payload": 1}, user_id="carol", group_id="g"
+        )
+        result = pipeline.run(user_id="carol", group_id="g")
+        assert result == "ok"
+        assert pipeline.task.context_snapshot == [{"payload": 1}]
+        assert stages.count("context_attached") == 1
+        assert ("context_attached", "{'payload': 1}") in audits
+    finally:
+        remove_pipeline("demo")
+
+    assert attach_pipeline_context("missing", "value") is False

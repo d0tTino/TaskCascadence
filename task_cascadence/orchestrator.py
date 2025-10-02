@@ -58,7 +58,7 @@ class TaskPipeline:
     def _emit_stage(
         self,
         stage: str,
-        user_id: str,
+        user_id: str | None,
         group_id: str | None = None,
     ) -> None:
         spec = TaskSpec(
@@ -79,6 +79,52 @@ class TaskPipeline:
                 user_id=user_id,
                 group_id=group_id,
             )
+
+    _context: deque[Any] = field(default_factory=deque, init=False, repr=False)
+    _context_store: list[Any] = field(default_factory=list, init=False, repr=False)
+
+    def attach_context(
+        self,
+        context: Any,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
+        """Queue *context* for delivery to the running task."""
+
+        self._context.append(context)
+        task_name = self.task.__class__.__name__
+        resolved_user_id = (
+            user_id if user_id is not None else getattr(self.task, "user_id", None)
+        )
+        resolved_group_id = (
+            group_id if group_id is not None else getattr(self.task, "group_id", None)
+        )
+        self._emit_stage("context_attached", resolved_user_id, resolved_group_id)
+        emit_audit_log(
+            task_name,
+            "context_attached",
+            "received",
+            output=repr(context) if context is not None else None,
+            user_id=resolved_user_id,
+            group_id=resolved_group_id,
+        )
+
+    def _reset_run_context(self) -> None:
+        """Initialise the per-run context container."""
+
+        self._context_store.clear()
+        self.task.context = self._context_store
+
+    def _process_pending_context(self) -> None:
+        """Attach any queued context to the task."""
+
+        updated = False
+        while self._context:
+            self._context_store.append(self._context.popleft())
+            updated = True
+        if updated or not hasattr(self.task, "context"):
+            self.task.context = self._context_store
 
     def intake(self, *, user_id: str, group_id: str | None = None) -> None:
         task_name = self.task.__class__.__name__
@@ -588,22 +634,27 @@ class TaskPipeline:
             async def _async_wait() -> None:
                 while self._paused:
                     await asyncio.sleep(0.1)
+                self._process_pending_context()
 
             return _async_wait()
 
         while self._paused:
             time.sleep(0.1)
+        self._process_pending_context()
         return None
 
     async def _wait_if_paused_async(self) -> None:
         """Async variant of :meth:`_wait_if_paused`."""
         while self._paused:
             await asyncio.sleep(0.1)
+        self._process_pending_context()
 
     # ------------------------------------------------------------------
     def run(self, *, user_id: str, group_id: str | None = None) -> Any:
         self.task.user_id = user_id
         self.task.group_id = group_id
+        self._reset_run_context()
+        self._process_pending_context()
         loop_running = True
         try:
             asyncio.get_running_loop()
@@ -612,7 +663,9 @@ class TaskPipeline:
 
         if loop_running:
             async def _async_run() -> Any:
+                self._process_pending_context()
                 self.intake(user_id=user_id, group_id=group_id)
+                self._process_pending_context()
                 wait = self._wait_if_paused()
                 if inspect.isawaitable(wait):
                     await wait
@@ -622,19 +675,23 @@ class TaskPipeline:
                 self._deliver_context(
                     "research", user_id=user_id, group_id=group_id
                 )
+n
                 result = self.research(user_id=user_id, group_id=group_id)
                 if inspect.isawaitable(result):
                     await result
 
+                self._process_pending_context()
                 wait = self._wait_if_paused()
                 if inspect.isawaitable(wait):
                     await wait
 
                 self._deliver_context("plan", user_id=user_id, group_id=group_id)
+
                 plan_result = self.plan(user_id=user_id, group_id=group_id)
                 if inspect.isawaitable(plan_result):
                     plan_result = await plan_result
 
+                self._process_pending_context()
                 wait = self._wait_if_paused()
                 if inspect.isawaitable(wait):
                     await wait
@@ -642,12 +699,14 @@ class TaskPipeline:
                 self._deliver_context(
                     "execute", user_id=user_id, group_id=group_id
                 )
+
                 exec_result = self.execute(
                     plan_result, user_id=user_id, group_id=group_id
                 )
                 if inspect.isawaitable(exec_result):
                     exec_result = await exec_result
 
+                self._process_pending_context()
                 wait = self._wait_if_paused()
                 if inspect.isawaitable(wait):
                     await wait
@@ -655,6 +714,7 @@ class TaskPipeline:
                 self._deliver_context(
                     "verify", user_id=user_id, group_id=group_id
                 )
+
                 verify_result = self.verify(
                     exec_result, user_id=user_id, group_id=group_id
                 )
@@ -664,20 +724,29 @@ class TaskPipeline:
 
             return _async_run()
 
+        self._process_pending_context()
         self.intake(user_id=user_id, group_id=group_id)
+        self._process_pending_context()
         self._wait_if_paused()
         self._deliver_context("research", user_id=user_id, group_id=group_id)
+
         self.research(user_id=user_id, group_id=group_id)
+        self._process_pending_context()
         self._wait_if_paused()
         self._deliver_context("plan", user_id=user_id, group_id=group_id)
+
         plan_result = self.plan(user_id=user_id, group_id=group_id)
+        self._process_pending_context()
         self._wait_if_paused()
         self._deliver_context("execute", user_id=user_id, group_id=group_id)
+
         exec_result = self.execute(
             plan_result, user_id=user_id, group_id=group_id
         )
+        self._process_pending_context()
         self._wait_if_paused()
         self._deliver_context("verify", user_id=user_id, group_id=group_id)
+
         return self.verify(exec_result, user_id=user_id, group_id=group_id)
 
     async def run_async(
@@ -686,20 +755,28 @@ class TaskPipeline:
         """Asynchronously execute this pipeline."""
         self.task.user_id = user_id
         self.task.group_id = group_id
+        self._reset_run_context()
+        self._process_pending_context()
         self.intake(user_id=user_id, group_id=group_id)
+        self._process_pending_context()
         await self._wait_if_paused_async()
+        self._process_pending_context()
 
         self._deliver_context("research", user_id=user_id, group_id=group_id)
         research_result = self.research(user_id=user_id, group_id=group_id)
         if inspect.isawaitable(research_result):
             research_result = await research_result
+        self._process_pending_context()
         await self._wait_if_paused_async()
+        self._process_pending_context()
 
         self._deliver_context("plan", user_id=user_id, group_id=group_id)
         plan_result = self.plan(user_id=user_id, group_id=group_id)
         if inspect.isawaitable(plan_result):
             plan_result = await plan_result
+        self._process_pending_context()
         await self._wait_if_paused_async()
+        self._process_pending_context()
 
         self._deliver_context("execute", user_id=user_id, group_id=group_id)
         exec_result = self.execute(
@@ -707,7 +784,9 @@ class TaskPipeline:
         )
         if inspect.isawaitable(exec_result):
             exec_result = await exec_result
+        self._process_pending_context()
         await self._wait_if_paused_async()
+        self._process_pending_context()
 
         self._deliver_context("verify", user_id=user_id, group_id=group_id)
         verify_result = self.verify(
@@ -715,6 +794,7 @@ class TaskPipeline:
         )
         if inspect.isawaitable(verify_result):
             verify_result = await verify_result
+        self._process_pending_context()
         return verify_result
 
     def _call_run(self, plan_result: Any) -> Any:
