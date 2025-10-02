@@ -194,7 +194,8 @@ def test_api_context_signal(monkeypatch, tmp_path):
     store = StageStore(path=tmp_path / "sig_stages.yml")
     audit_events = store.get_events(task.__class__.__name__, category="audit")
     assert any(
-        event.get("stage") == "context" and event.get("status") == "received"
+        event.get("stage") == "context_attached"
+        and event.get("status") == "received"
         for event in audit_events
     )
     assert any(

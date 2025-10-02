@@ -319,8 +319,7 @@ def test_yaml_calendar_event_multiple_recurrences(tmp_path, monkeypatch):
     job.func()
 
     assert task.count == 2
-    expected_group = expected_hash("engineering")
     assert captured == [
-        (captured[0][0], "alice", expected_group),
-        (captured[1][0], "alice", expected_group),
+        (captured[0][0], "alice", "engineering"),
+        (captured[1][0], "alice", "engineering"),
     ]

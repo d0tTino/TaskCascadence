@@ -40,5 +40,6 @@ def test_register_task_hashes_group_id(tmp_path):
     sched.register_task(task, "* * * * *", user_id="alice", group_id="engineering")
     entry = sched.schedules["DummyTask"]
     assert entry["group_hash"] == expected_hash("engineering")
+
     persisted = yaml.safe_load((tmp_path / "s.yml").read_text())
     assert persisted["DummyTask"]["group_hash"] == expected_hash("engineering")

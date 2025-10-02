@@ -81,43 +81,6 @@ class TaskPipeline:
     _context: deque[Any] = field(default_factory=deque, init=False, repr=False)
     _context_store: list[Any] = field(default_factory=list, init=False, repr=False)
 
-    def attach_context(
-        self,
-        context: Any,
-        *,
-        user_id: str | None = None,
-        group_id: str | None = None,
-    ) -> bool:
-        """Queue *context* for delivery to the running task."""
-
-        self._context.append(context)
-        with self._context_lock:
-            self._context_queue.append(context)
-        task_name = self.task.__class__.__name__
-        resolved_user_id = (
-            user_id if user_id is not None else getattr(self.task, "user_id", None)
-        )
-        resolved_group_id = (
-            group_id if group_id is not None else getattr(self.task, "group_id", None)
-        )
-        self._emit_stage("context_attached", resolved_user_id, resolved_group_id)
-        emit_audit_log(
-            task_name,
-            "context_attached",
-            "received",
-            output=repr(context) if context is not None else None,
-            user_id=resolved_user_id,
-            group_id=resolved_group_id,
-        )
-        emit_audit_log(
-            task_name,
-            "context",
-            "received",
-            output=repr(context) if context else None,
-            user_id=resolved_user_id,
-            group_id=resolved_group_id,
-        )
-        return False
 
     def _reset_run_context(self) -> None:
         """Initialise the per-run context container."""
@@ -567,7 +530,43 @@ class TaskPipeline:
             group_id=group_id,
         )
 
-    def _drain_context_queue(self) -> list[Any]:
+    def attach_context(
+        self,
+        payload: Any,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> bool:
+        """Queue *payload* to be delivered to the next pipeline stage."""
+
+        if isinstance(payload, dict):
+            stored_payload: Any = dict(payload)
+        else:
+            stored_payload = payload
+
+        with self._context_lock:
+            self._context.append(stored_payload)
+            self._context_queue.append(stored_payload)
+
+        resolved_user_id = (
+            user_id if user_id is not None else getattr(self.task, "user_id", None)
+        )
+        resolved_group_id = (
+            group_id if group_id is not None else getattr(self.task, "group_id", None)
+        )
+        self._emit_stage("context_attached", resolved_user_id, resolved_group_id)
+        emit_audit_log(
+            self.task.__class__.__name__,
+            "context_attached",
+            "received",
+            output=repr(payload) if payload else None,
+            user_id=resolved_user_id,
+            group_id=resolved_group_id,
+        )
+        return False
+
+    def _drain_context_queue(self) -> list[dict[str, Any]]:
+
         with self._context_lock:
             if not self._context_queue:
                 return []
@@ -595,7 +594,8 @@ class TaskPipeline:
                 if current is None:
                     self.task.context = ctx
                 elif isinstance(current, list):
-                    current.append(ctx)
+                    if current is not self._context_store:
+                        current.append(ctx)
                 else:
                     self.task.context = [current, ctx]
 
@@ -662,6 +662,7 @@ class TaskPipeline:
                 self._deliver_context(
                     "research", user_id=user_id, group_id=group_id
                 )
+
                 result = self.research(user_id=user_id, group_id=group_id)
                 if inspect.isawaitable(result):
                     await result

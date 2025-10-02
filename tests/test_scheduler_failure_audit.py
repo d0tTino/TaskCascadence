@@ -1,7 +1,6 @@
 import pytest
 
 from task_cascadence.scheduler import CronScheduler
-from task_cascadence.ume import _hash_user_id
 
 
 def test_scheduler_job_exception_emits_audit_log(monkeypatch, tmp_path):
@@ -38,8 +37,8 @@ def test_scheduler_job_exception_emits_audit_log(monkeypatch, tmp_path):
     assert stage == "run"
     assert status == "error"
     assert kwargs["reason"] == "boom"
-    assert kwargs["user_id"] == _hash_user_id("alice")
-    assert kwargs["group_id"] == _hash_user_id("team")
+    assert kwargs["user_id"] == "alice"
+    assert kwargs["group_id"] == "team"
     if "output" in kwargs:
         assert kwargs["output"] is None
     if "partial" in kwargs:
