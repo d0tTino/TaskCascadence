@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi.responses import JSONResponse
 import inspect
 from pydantic import BaseModel, Field
 from typing import Any, Dict
@@ -31,6 +32,13 @@ class IntentResponse(BaseModel):
     arguments: Dict[str, Any] = Field(default_factory=dict)
     confidence: float
     clarification: bool
+
+
+class SignalPayload(BaseModel):
+    """Schema for signals sent to a running pipeline."""
+
+    kind: str
+    value: Dict[str, Any]
 
 
 def get_user_id(x_user_id: str | None = Header(default=None)) -> str:
@@ -209,6 +217,30 @@ def resume_task(
         return {"status": "resumed"}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/tasks/{name}/signal")
+def signal_task(
+    name: str,
+    payload: SignalPayload,
+    user_id: str = Depends(get_user_id),
+    group_id: str | None = Depends(get_group_id),
+):
+    """Deliver a signal to a running pipeline."""
+
+    pipeline = get_pipeline(name)
+    if pipeline is None:
+        raise HTTPException(404, "pipeline not running")
+
+    if payload.kind != "context":
+        raise HTTPException(400, "unsupported signal kind")
+
+    consumed = pipeline.attach_context(
+        payload.value, user_id=user_id, group_id=group_id
+    )
+    status_code = 200 if consumed else 202
+    body = {"status": "delivered" if consumed else "accepted"}
+    return JSONResponse(body, status_code=status_code)
 
 
 @app.get("/pipeline/{name}")
