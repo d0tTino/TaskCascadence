@@ -27,14 +27,20 @@ def test_api_pause_resume(monkeypatch, tmp_path):
     sched = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
 
-    resp = client.post("/tasks/example/pause", headers={"X-User-ID": "alice"})
+    resp = client.post(
+        "/tasks/example/pause",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
     assert resp.status_code == 200
     assert sched._tasks["example"]["paused"] is True
     events = StageStore(path=tmp_path / "stages.yml").get_events("example")
     assert events[-1]["stage"] == "paused"
     assert "time" in events[-1]
 
-    resp = client.post("/tasks/example/resume", headers={"X-User-ID": "alice"})
+    resp = client.post(
+        "/tasks/example/resume",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
     assert resp.status_code == 200
     assert sched._tasks["example"]["paused"] is False
     events = StageStore(path=tmp_path / "stages.yml").get_events("example")
@@ -70,12 +76,18 @@ def test_api_pause_running_pipeline(monkeypatch, tmp_path):
     thread = threading.Thread(target=lambda: sched.run_task("slow", user_id="bob"))
     thread.start()
     time.sleep(0.05)
-    resp = client.post("/tasks/slow/pause", headers={"X-User-ID": "bob"})
+    resp = client.post(
+        "/tasks/slow/pause",
+        headers={"X-User-ID": "bob", "X-Group-ID": "builders"},
+    )
     assert resp.status_code == 200
     pipeline = get_pipeline("slow")
     assert pipeline is not None and pipeline._paused is True
     assert thread.is_alive()
-    resp = client.post("/tasks/slow/resume", headers={"X-User-ID": "bob"})
+    resp = client.post(
+        "/tasks/slow/resume",
+        headers={"X-User-ID": "bob", "X-Group-ID": "builders"},
+    )
     assert resp.status_code == 200
     thread.join()
     assert pipeline._paused is False
@@ -164,7 +176,7 @@ def test_api_context_signal(monkeypatch, tmp_path):
 
     resp = client.post(
         "/tasks/contextsignal/signal",
-        headers={"X-User-ID": "alice"},
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
         json={"kind": "context", "value": {"note": "hi"}},
     )
     assert resp.status_code == 202

@@ -100,8 +100,6 @@ def test_restore_schedules_on_init(tmp_path, monkeypatch):
 
     captured: dict[str, str | None] = {}
 
-    from task_cascadence.ume import _hash_user_id
-
     def fake_emit(run, user_id=None):
         captured["user_id"] = user_id
 
