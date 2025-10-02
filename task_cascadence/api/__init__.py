@@ -48,8 +48,10 @@ def get_user_id(x_user_id: str | None = Header(default=None)) -> str:
     return x_user_id
 
 
-def get_group_id(x_group_id: str | None = Header(default=None)) -> str | None:
-    """Return the group identifier from ``X-Group-ID`` header if supplied."""
+def get_group_id(x_group_id: str | None = Header(default=None)) -> str:
+    """Return the group identifier from ``X-Group-ID`` header."""
+    if x_group_id is None:
+        raise HTTPException(400, "group_id header required")
     return x_group_id
 
 
@@ -88,7 +90,7 @@ def run_task(
     name: str,
     temporal: bool = False,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Execute ``name`` and return its result."""
     sched = get_default_scheduler()
@@ -96,9 +98,11 @@ def run_task(
         if user_id is None:
             raise HTTPException(400, "user_id is required")
 
-        kwargs: dict[str, Any] = {"use_temporal": temporal, "user_id": user_id}
-        if group_id is not None:
-            kwargs["group_id"] = group_id
+        kwargs: dict[str, Any] = {
+            "use_temporal": temporal,
+            "user_id": user_id,
+            "group_id": group_id,
+        }
         result = sched.run_task(name, **kwargs)
         return {"result": result}
     except Exception as exc:  # pragma: no cover - passthrough
@@ -110,7 +114,7 @@ async def run_task_async(
     name: str,
     temporal: bool = False,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Execute ``name`` asynchronously and return its result."""
     sched = get_default_scheduler()
@@ -118,9 +122,11 @@ async def run_task_async(
         if user_id is None:
             raise HTTPException(400, "user_id is required")
 
-        kwargs: dict[str, Any] = {"use_temporal": temporal, "user_id": user_id}
-        if group_id is not None:
-            kwargs["group_id"] = group_id
+        kwargs: dict[str, Any] = {
+            "use_temporal": temporal,
+            "user_id": user_id,
+            "group_id": group_id,
+        }
         result = sched.run_task(name, **kwargs)
         if inspect.isawaitable(result):
             result = await result
@@ -134,7 +140,7 @@ def schedule_task(
     name: str,
     expression: str,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Schedule ``name`` according to ``expression``."""
     sched = get_default_scheduler()
@@ -160,7 +166,7 @@ def schedule_task(
 def disable_task(
     name: str,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Disable ``name``."""
     sched = get_default_scheduler()
@@ -177,7 +183,7 @@ def disable_task(
 def pause_task(
     name: str,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Pause ``name`` so it temporarily stops running."""
     sched = get_default_scheduler()
@@ -200,7 +206,7 @@ def pause_task(
 def resume_task(
     name: str,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Resume a previously paused task."""
     sched = get_default_scheduler()
@@ -224,7 +230,7 @@ def signal_task(
     name: str,
     payload: SignalPayload,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Deliver a signal to a running pipeline."""
 
@@ -293,7 +299,7 @@ def suggestion_list():
 def suggestion_accept(
     suggestion_id: str,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Accept a suggestion and enqueue its task."""
 
@@ -308,7 +314,7 @@ def suggestion_accept(
 def suggestion_snooze(
     suggestion_id: str,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Snooze a suggestion."""
 
@@ -323,7 +329,7 @@ def suggestion_snooze(
 def suggestion_dismiss(
     suggestion_id: str,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Dismiss a suggestion."""
 
@@ -336,7 +342,7 @@ def suggestion_dismiss(
 def intent_route(
     req: IntentRequest,
     user_id: str = Depends(get_user_id),
-    group_id: str | None = Depends(get_group_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Return intent analysis for the provided message."""
     message = sanitize_input(req.message)

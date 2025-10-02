@@ -81,6 +81,7 @@ class TaskPipeline:
     _context: deque[Any] = field(default_factory=deque, init=False, repr=False)
     _context_store: list[Any] = field(default_factory=list, init=False, repr=False)
 
+
     def _reset_run_context(self) -> None:
         """Initialise the per-run context container."""
 
@@ -565,6 +566,7 @@ class TaskPipeline:
         return False
 
     def _drain_context_queue(self) -> list[dict[str, Any]]:
+
         with self._context_lock:
             if not self._context_queue:
                 return []
