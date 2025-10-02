@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 from threading import Lock
 
 from .orchestrator import TaskPipeline
@@ -34,3 +34,22 @@ def list_pipelines() -> Dict[str, TaskPipeline]:
     """Return a copy of the currently registered pipelines."""
     with _registry_lock:
         return dict(_running_pipelines)
+
+
+def attach_pipeline_context(
+    name: str,
+    context: Any,
+    *,
+    user_id: str | None = None,
+    group_id: str | None = None,
+) -> bool:
+    """Attach *context* to the running pipeline registered as *name*.
+
+    Returns ``True`` if the pipeline was found and context enqueued.
+    """
+
+    pipeline = get_pipeline(name)
+    if pipeline is None:
+        return False
+    pipeline.attach_context(context, user_id=user_id, group_id=group_id)
+    return True
