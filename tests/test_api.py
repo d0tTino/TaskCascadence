@@ -79,10 +79,20 @@ def test_list_tasks(monkeypatch, tmp_path):
 def test_run_task(monkeypatch, tmp_path):
     sched, task = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    resp = client.post("/tasks/dummy/run", headers={"X-User-ID": "alice"})
+    resp = client.post(
+        "/tasks/dummy/run",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
     assert resp.status_code == 200
     assert resp.json() == {"result": "ok"}
     assert task.ran == 1
+
+
+def test_run_task_missing_group_header(monkeypatch, tmp_path):
+    setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.post("/tasks/dummy/run", headers={"X-User-ID": "alice"})
+    assert resp.status_code == 400
 
 
 def test_run_task_async_endpoint(monkeypatch, tmp_path):
@@ -91,7 +101,8 @@ def test_run_task_async_endpoint(monkeypatch, tmp_path):
     sched.register_task(name_or_task="async", task_or_expr=async_task)
     client = TestClient(app)
     resp = client.post(
-        "/tasks/async/run-async", headers={"X-User-ID": "alice"}
+        "/tasks/async/run-async",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
     )
 
     assert resp.status_code == 200
@@ -101,14 +112,17 @@ def test_run_task_async_endpoint(monkeypatch, tmp_path):
 def test_run_task_user_header(monkeypatch, tmp_path):
     called = {}
 
-    def fake_run(name, use_temporal=False, user_id=None):
+    def fake_run(name, use_temporal=False, user_id=None, group_id=None):
         called["uid"] = user_id
         return "r"
 
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     monkeypatch.setattr(sched, "run_task", fake_run)
     client = TestClient(app)
-    client.post("/tasks/dummy/run", headers={"X-User-ID": "alice"})
+    client.post(
+        "/tasks/dummy/run",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
     assert called["uid"] == "alice"
 
 
@@ -212,17 +226,40 @@ def test_schedule_task(monkeypatch, tmp_path):
     resp = client.post(
         "/tasks/dummy/schedule",
         params={"expression": "*/5 * * * *"},
-        headers={"X-User-ID": "alice"},
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
     )
     assert resp.status_code == 200
     job = sched.scheduler.get_job("DummyTask")
     assert job is not None
 
 
+def test_schedule_task_missing_group_header(monkeypatch, tmp_path):
+    setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.post(
+        "/tasks/dummy/schedule",
+        params={"expression": "*/5 * * * *"},
+        headers={"X-User-ID": "alice"},
+    )
+    assert resp.status_code == 400
+
+
 def test_disable_task_missing_headers(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
     resp = client.post("/tasks/dummy/disable", headers={"X-User-ID": "alice"})
+
+    assert resp.status_code == 400
+    assert sched._tasks["dummy"]["disabled"] is False
+
+
+def test_disable_task(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.post(
+        "/tasks/dummy/disable",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
 
     assert resp.status_code == 200
     assert sched._tasks["dummy"]["disabled"] is True
@@ -232,6 +269,14 @@ def test_pause_task_missing_headers(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
     resp = client.post("/tasks/dummy/pause")
+    assert resp.status_code == 400
+    assert sched._tasks["dummy"]["paused"] is False
+
+
+def test_pause_task_missing_group_header(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.post("/tasks/dummy/pause", headers={"X-User-ID": "alice"})
     assert resp.status_code == 400
     assert sched._tasks["dummy"]["paused"] is False
 
@@ -250,7 +295,7 @@ def test_resume_task_missing_headers(monkeypatch, tmp_path):
     client = TestClient(app)
     headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
     client.post("/tasks/dummy/pause", headers=headers)
-    resp = client.post("/tasks/dummy/resume")
+    resp = client.post("/tasks/dummy/resume", headers={"X-User-ID": "alice"})
     assert resp.status_code == 400
     assert sched._tasks["dummy"]["paused"] is True
 
@@ -272,7 +317,10 @@ def test_register_task(monkeypatch, tmp_path):
     assert resp.status_code == 200
     assert "dynamic" in [name for name, _ in sched.list_tasks()]
     yaml.safe_load(open(tmp_path / "tasks.yml").read())
-    run = client.post("/tasks/dynamic/run", headers={"X-User-ID": "alice"})
+    run = client.post(
+        "/tasks/dynamic/run",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
 
     assert run.status_code == 200
     assert run.json()["result"] == "dyn"
