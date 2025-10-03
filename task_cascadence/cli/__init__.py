@@ -105,17 +105,38 @@ def run_task(
     name: str,
     temporal: bool = typer.Option(False, "--temporal", help="Execute via Temporal"),
     user_id: str = typer.Option(..., "--user-id", help="User ID for UME events"),
+    group_id: str = typer.Option(..., "--group-id", help="Group ID for UME events"),
 ) -> None:
     """Run ``NAME`` if it exists and is enabled."""
 
     from ..ume import emit_stage_update_event
 
     try:
-        emit_stage_update_event(name, "start", user_id=user_id)
-        get_default_scheduler().run_task(name, use_temporal=temporal, user_id=user_id)
-        emit_stage_update_event(name, "finish", user_id=user_id)
+        emit_stage_update_event(
+            name,
+            "start",
+            user_id=user_id,
+            group_id=group_id,
+        )
+        get_default_scheduler().run_task(
+            name,
+            use_temporal=temporal,
+            user_id=user_id,
+            group_id=group_id,
+        )
+        emit_stage_update_event(
+            name,
+            "finish",
+            user_id=user_id,
+            group_id=group_id,
+        )
     except Exception as exc:  # pragma: no cover - simple error propagation
-        emit_stage_update_event(name, "error", user_id=user_id)
+        emit_stage_update_event(
+            name,
+            "error",
+            user_id=user_id,
+            group_id=group_id,
+        )
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
@@ -125,6 +146,7 @@ def run_task_async(
     name: str,
     temporal: bool = typer.Option(False, "--temporal", help="Execute via Temporal"),
     user_id: str = typer.Option(..., "--user-id", help="User ID for UME events"),
+    group_id: str = typer.Option(..., "--group-id", help="Group ID for UME events"),
 ) -> None:
     """Run ``NAME`` asynchronously if it exists and is enabled."""
 
@@ -134,13 +156,33 @@ def run_task_async(
     from ..async_utils import run_coroutine
 
     try:
-        emit_stage_update_event(name, "start", user_id=user_id)
-        result = get_default_scheduler().run_task(name, use_temporal=temporal, user_id=user_id)
+        emit_stage_update_event(
+            name,
+            "start",
+            user_id=user_id,
+            group_id=group_id,
+        )
+        result = get_default_scheduler().run_task(
+            name,
+            use_temporal=temporal,
+            user_id=user_id,
+            group_id=group_id,
+        )
         if inspect.isawaitable(result):
             result = run_coroutine(cast(Coroutine[Any, Any, Any], result))
-        emit_stage_update_event(name, "finish", user_id=user_id)
+        emit_stage_update_event(
+            name,
+            "finish",
+            user_id=user_id,
+            group_id=group_id,
+        )
     except Exception as exc:  # pragma: no cover - simple error propagation
-        emit_stage_update_event(name, "error", user_id=user_id)
+        emit_stage_update_event(
+            name,
+            "error",
+            user_id=user_id,
+            group_id=group_id,
+        )
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
@@ -149,6 +191,7 @@ def run_task_async(
 def manual_trigger(
     name: str,
     user_id: str = typer.Option(..., "--user-id", help="User ID for UME events"),
+    group_id: str = typer.Option(..., "--group-id", help="Group ID for UME events"),
 ) -> None:
     """Run ``NAME`` if it is a ManualTrigger task."""
 
@@ -157,16 +200,19 @@ def manual_trigger(
     if not task_info or not isinstance(task_info["task"], plugins.ManualTrigger):
         typer.echo(f"error: '{name}' is not a manual task", err=True)
         raise typer.Exit(code=1)
-    sched.run_task(name, user_id=user_id)
+    sched.run_task(name, user_id=user_id, group_id=group_id)
 
 
 
 @app.command("disable")
-def disable_task(name: str) -> None:
+def disable_task(
+    name: str,
+    group_id: str = typer.Option(..., "--group-id", help="Group ID for UME events"),
+) -> None:
     """Disable ``NAME`` so it can no longer be executed."""
 
     try:
-        get_default_scheduler().disable_task(name)
+        get_default_scheduler().disable_task(name, group_id=group_id)
         typer.echo(f"{name} disabled")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
@@ -177,6 +223,7 @@ def disable_task(name: str) -> None:
 def pause_task(
     name: str,
     user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+    group_id: str = typer.Option(..., "--group-id", help="Group ID for UME events"),
 ) -> None:
     """Pause ``NAME`` so it temporarily stops running."""
 
@@ -185,9 +232,9 @@ def pause_task(
         if pipeline:
             if user_id is None:
                 raise typer.BadParameter("--user-id is required when pausing a running task")
-            pipeline.pause(user_id=user_id)
+            pipeline.pause(user_id=user_id, group_id=group_id)
         else:
-            get_default_scheduler().pause_task(name)
+            get_default_scheduler().pause_task(name, group_id=group_id)
         typer.echo(f"{name} paused")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
@@ -198,6 +245,7 @@ def pause_task(
 def resume_task(
     name: str,
     user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
+    group_id: str = typer.Option(..., "--group-id", help="Group ID for UME events"),
 ) -> None:
     """Resume a paused task called ``NAME``."""
 
@@ -206,9 +254,9 @@ def resume_task(
         if pipeline:
             if user_id is None:
                 raise typer.BadParameter("--user-id is required when resuming a running task")
-            pipeline.resume(user_id=user_id)
+            pipeline.resume(user_id=user_id, group_id=group_id)
         else:
-            get_default_scheduler().resume_task(name)
+            get_default_scheduler().resume_task(name, group_id=group_id)
         typer.echo(f"{name} resumed")
     except Exception as exc:  # pragma: no cover - simple error propagation
         typer.echo(f"error: {exc}", err=True)
@@ -220,6 +268,7 @@ def schedule_task(
     name: str,
     expression: str,
     user_id: str = typer.Option(..., "--user-id", help="User ID for UME events"),
+    group_id: str = typer.Option(..., "--group-id", help="Group ID for UME events"),
 ) -> None:
     """Schedule ``NAME`` according to ``EXPRESSION``."""
 
@@ -235,7 +284,10 @@ def schedule_task(
     try:
         task = task_info["task"]
         sched.register_task(
-            name_or_task=task, task_or_expr=expression, user_id=user_id
+            name_or_task=task,
+            task_or_expr=expression,
+            user_id=user_id,
+            group_id=group_id,
         )
         typer.echo(f"{name} scheduled: {expression}")
     except Exception as exc:  # pragma: no cover - simple error propagation
