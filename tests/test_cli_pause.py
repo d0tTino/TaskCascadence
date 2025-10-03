@@ -24,13 +24,13 @@ def test_cli_pause_resume(monkeypatch, tmp_path):
     monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["pause", "example"])
+    result = runner.invoke(app, ["pause", "example", "--group-id", "ops"])
     assert result.exit_code == 0
     assert sched._tasks["example"]["paused"] is True
     events = StageStore(path=tmp_path / "stages.yml").get_events("example")
     assert events[-1]["stage"] == "paused"
 
-    result = runner.invoke(app, ["resume", "example"])
+    result = runner.invoke(app, ["resume", "example", "--group-id", "ops"])
     assert result.exit_code == 0
     assert sched._tasks["example"]["paused"] is False
     events = StageStore(path=tmp_path / "stages.yml").get_events("example")
@@ -48,7 +48,7 @@ def test_cli_pause(monkeypatch, tmp_path):
     monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["pause", "example"])
+    result = runner.invoke(app, ["pause", "example", "--group-id", "ops"])
 
     assert result.exit_code == 0
     assert sched._tasks["example"]["paused"] is True
@@ -68,7 +68,7 @@ def test_cli_resume(monkeypatch, tmp_path):
     monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["resume", "example"])
+    result = runner.invoke(app, ["resume", "example", "--group-id", "ops"])
 
     assert result.exit_code == 0
     assert sched._tasks["example"]["paused"] is False
@@ -104,12 +104,18 @@ def test_pause_running_pipeline(monkeypatch, tmp_path):
     thread = threading.Thread(target=lambda: sched.run_task("slow", user_id="bob"))
     thread.start()
     time.sleep(0.05)
-    result = runner.invoke(app, ["pause", "slow", "--user-id", "bob"])
+    result = runner.invoke(
+        app,
+        ["pause", "slow", "--user-id", "bob", "--group-id", "ops"],
+    )
     assert result.exit_code == 0
     pipeline = get_pipeline("slow")
     assert pipeline is not None and pipeline._paused is True
     assert thread.is_alive()
-    result = runner.invoke(app, ["resume", "slow", "--user-id", "bob"])
+    result = runner.invoke(
+        app,
+        ["resume", "slow", "--user-id", "bob", "--group-id", "ops"],
+    )
     assert result.exit_code == 0
     thread.join()
     assert pipeline._paused is False

@@ -37,10 +37,17 @@ def test_manual_trigger_cli(monkeypatch):
 
     from task_cascadence import ume
 
-    monkeypatch.setattr(ume, "emit_task_run", lambda run, user_id=None: None)
+    monkeypatch.setattr(
+        ume,
+        "emit_task_run",
+        lambda run, user_id=None, group_id=None: None,
+    )
 
     runner = CliRunner()
-    result = runner.invoke(app, ["trigger", "manual_demo", "--user-id", "bob"])
+    result = runner.invoke(
+        app,
+        ["trigger", "manual_demo", "--user-id", "bob", "--group-id", "team"],
+    )
 
     assert result.exit_code == 0
 
@@ -65,7 +72,18 @@ def test_run_command_temporal(monkeypatch):
     monkeypatch.setattr(backend, "run_workflow_sync", fake_run)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["run", "dummy", "--temporal", "--user-id", "bob"])
+    result = runner.invoke(
+        app,
+        [
+            "run",
+            "dummy",
+            "--temporal",
+            "--user-id",
+            "bob",
+            "--group-id",
+            "team",
+        ],
+    )
 
     assert result.exit_code == 0
     assert called["workflow"] == "DummyTask"
@@ -114,7 +132,16 @@ def test_cli_schedule_creates_entry(monkeypatch, tmp_path):
 
     runner = CliRunner()
     result = runner.invoke(
-        app, ["schedule", "example", "0 12 * * *", "--user-id", "alice"]
+        app,
+        [
+            "schedule",
+            "example",
+            "0 12 * * *",
+            "--user-id",
+            "alice",
+            "--group-id",
+            "ops",
+        ],
     )
 
     assert result.exit_code == 0
@@ -137,7 +164,15 @@ def test_cli_schedule_user_id(monkeypatch, tmp_path):
     runner = CliRunner()
     result = runner.invoke(
         app,
-        ["schedule", "example", "0 12 * * *", "--user-id", "charlie"],
+        [
+            "schedule",
+            "example",
+            "0 12 * * *",
+            "--user-id",
+            "charlie",
+            "--group-id",
+            "ops",
+        ],
     )
 
     assert result.exit_code == 0
@@ -156,10 +191,37 @@ def test_cli_schedule_unknown_task(monkeypatch):
 
     runner = CliRunner()
     result = runner.invoke(
-        app, ["schedule", "missing", "* * * * *", "--user-id", "alice"]
+        app,
+        [
+            "schedule",
+            "missing",
+            "* * * * *",
+            "--user-id",
+            "alice",
+            "--group-id",
+            "ops",
+        ],
     )
 
     assert result.exit_code == 1
+
+
+def test_cli_schedule_requires_group_id(monkeypatch):
+    from task_cascadence.scheduler import CronScheduler
+    from task_cascadence.plugins import ExampleTask
+
+    sched = CronScheduler(storage_path="/tmp/dummy.yml")
+    sched.register_task(name_or_task="example", task_or_expr=ExampleTask())
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        app,
+        ["schedule", "example", "* * * * *", "--user-id", "alice"],
+    )
+
+    assert result.exit_code == 2
+    assert "--group-id" in result.stderr
 
 
 def test_cli_schedule_requires_cron_scheduler(monkeypatch):
@@ -172,7 +234,16 @@ def test_cli_schedule_requires_cron_scheduler(monkeypatch):
 
     runner = CliRunner()
     result = runner.invoke(
-        app, ["schedule", "example", "0 12 * * *", "--user-id", "alice"]
+        app,
+        [
+            "schedule",
+            "example",
+            "0 12 * * *",
+            "--user-id",
+            "alice",
+            "--group-id",
+            "ops",
+        ],
     )
 
     assert result.exit_code == 1
@@ -187,7 +258,16 @@ def test_cli_schedule_env_base(monkeypatch):
     task_cascadence.initialize()
     runner = CliRunner()
     result = runner.invoke(
-        app, ["schedule", "example", "0 12 * * *", "--user-id", "alice"]
+        app,
+        [
+            "schedule",
+            "example",
+            "0 12 * * *",
+            "--user-id",
+            "alice",
+            "--group-id",
+            "ops",
+        ],
     )
     assert result.exit_code == 1
     assert "scheduler lacks cron capabilities" in result.output
@@ -341,7 +421,7 @@ def test_cli_run_user_id(monkeypatch):
 
     from task_cascadence.ume import _hash_user_id
 
-    def fake_emit(run, user_id=None):
+    def fake_emit(run, user_id=None, group_id=None):
         if user_id is not None:
             run.user_hash = _hash_user_id(user_id)
         captured["run"] = run
@@ -349,12 +429,30 @@ def test_cli_run_user_id(monkeypatch):
     monkeypatch.setattr(ume, "emit_task_run", fake_emit)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["run", "manual_demo", "--user-id", "alice"])
+    result = runner.invoke(
+        app,
+        ["run", "manual_demo", "--user-id", "alice", "--group-id", "ops"],
+    )
 
     assert result.exit_code == 0
     assert "run" in captured
     assert captured["run"].user_hash is not None
     assert captured["run"].user_hash != "alice"
+
+
+def test_cli_run_requires_group_id(monkeypatch):
+    initialize()
+    from typing import cast
+    from task_cascadence.scheduler import CronScheduler
+
+    sched = cast(CronScheduler, get_default_scheduler())
+    sched.register_task(name_or_task="manual_demo", task_or_expr=ManualTask())
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["run", "manual_demo", "--user-id", "alice"])
+
+    assert result.exit_code == 2
+    assert "--group-id" in result.stderr
 
 
 def test_cli_schedules_lists_entries(monkeypatch, tmp_path):
@@ -440,7 +538,10 @@ def test_cli_run_pipeline_task(monkeypatch):
     monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda *a, **k: None)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["run", "pipe_demo", "--user-id", "alice"])
+    result = runner.invoke(
+        app,
+        ["run", "pipe_demo", "--user-id", "alice", "--group-id", "ops"],
+    )
 
     assert result.exit_code == 0
     assert steps == ["intake", "run"]
@@ -484,7 +585,16 @@ def test_cli_unschedule(monkeypatch, tmp_path):
 
     runner = CliRunner()
     result = runner.invoke(
-        app, ["schedule", "example", "0 12 * * *", "--user-id", "alice"]
+        app,
+        [
+            "schedule",
+            "example",
+            "0 12 * * *",
+            "--user-id",
+            "alice",
+            "--group-id",
+            "ops",
+        ],
     )
     assert result.exit_code == 0
 
@@ -528,7 +638,10 @@ def test_cli_run_async(monkeypatch):
     monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda *a, **k: None)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["run-async", "async_demo", "--user-id", "alice"])
+    result = runner.invoke(
+        app,
+        ["run-async", "async_demo", "--user-id", "alice", "--group-id", "ops"],
+    )
 
 
     assert result.exit_code == 0
@@ -558,7 +671,7 @@ def test_cli_run_async_user_id(monkeypatch):
     from task_cascadence import ume
     from task_cascadence.ume import _hash_user_id
 
-    def fake_emit(run, user_id=None):
+    def fake_emit(run, user_id=None, group_id=None):
         if user_id is not None:
             run.user_hash = _hash_user_id(user_id)
         captured["run"] = run
@@ -566,7 +679,10 @@ def test_cli_run_async_user_id(monkeypatch):
     monkeypatch.setattr(ume, "emit_task_run", fake_emit)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["run-async", "async_demo", "--user-id", "bob"])
+    result = runner.invoke(
+        app,
+        ["run-async", "async_demo", "--user-id", "bob", "--group-id", "ops"],
+    )
 
     assert result.exit_code == 0
     assert steps == ["run"]
@@ -587,11 +703,14 @@ def test_cli_disable_prevents_run(monkeypatch):
     monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["disable", "demo"])
+    result = runner.invoke(app, ["disable", "demo", "--group-id", "ops"])
     assert result.exit_code == 0
     assert "demo disabled" in result.output
 
-    result = runner.invoke(app, ["run", "demo", "--user-id", "alice"])
+    result = runner.invoke(
+        app,
+        ["run", "demo", "--user-id", "alice", "--group-id", "ops"],
+    )
     assert result.exit_code != 0
     assert "disabled" in (result.stderr or result.output)
 

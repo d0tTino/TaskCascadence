@@ -159,12 +159,12 @@ After installing the package in an environment with ``typer`` available, the
 
 ```bash
 $ task list            # show all registered tasks
-$ task run NAME        # execute a task
-$ task trigger NAME    # run a manual trigger task
-$ task disable NAME    # disable a task
-$ task pause NAME      # pause a task
-$ task resume NAME     # resume a paused task
-$ task schedule NAME CRON  # register a cron schedule
+$ task run NAME --user-id USER --group-id GROUP
+$ task trigger NAME --user-id USER --group-id GROUP
+$ task disable NAME --group-id GROUP
+$ task pause NAME [--user-id USER] --group-id GROUP
+$ task resume NAME [--user-id USER] --group-id GROUP
+$ task schedule NAME CRON --user-id USER --group-id GROUP
 $ task unschedule NAME   # remove a cron schedule
 $ task schedules       # list configured schedules
 $ task ai-idea TEXT    # emit an idea seed via UME
@@ -534,7 +534,7 @@ register tasks, and configure the scheduler with environment variables.
 
    ```bash
    task list
-   task schedule demo "*/5 * * * *"
+   task schedule demo "*/5 * * * *" --user-id alice --group-id engineering
    ```
 
 
