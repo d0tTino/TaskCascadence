@@ -231,7 +231,7 @@ class BaseScheduler:
                         for attr in ("intake", "research", "plan", "verify")
                     ):
                         pipeline = TaskPipeline(task)
-                        add_pipeline(name, pipeline)
+                        add_pipeline(name, run_id, pipeline)
                         try:
                             result = pipeline.run(user_id=uid, group_id=group_id)
                             if inspect.isawaitable(result):
@@ -239,7 +239,7 @@ class BaseScheduler:
                                     cast(Coroutine[Any, Any, Any], result)
                                 )
                         finally:
-                            remove_pipeline(name)
+                            remove_pipeline(run_id)
                     else:
                         task.user_id = uid
                         task.group_id = group_id
