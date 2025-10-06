@@ -5,6 +5,8 @@ from task_cascadence.pipeline_registry import (
     remove_pipeline,
     list_pipelines,
     attach_pipeline_context,
+    get_pipeline,
+    get_latest_pipeline_for_task,
 )
 from task_cascadence.orchestrator import TaskPipeline
 from task_cascadence.plugins import ExampleTask
@@ -23,6 +25,11 @@ def test_thread_safe_registry():
             add_pipeline(name, run_id, pipeline)
             time.sleep(0.001)
             remove_pipeline(name, run_id)
+            task_name = f"task{worker_id}"
+            run_id = f"{task_name}_run_{i}"
+            add_pipeline(task_name, run_id, pipeline)
+            time.sleep(0.001)
+            remove_pipeline(run_id)
         if worker_id == 0:
             stop_event.set()
 
@@ -79,6 +86,11 @@ def test_attach_pipeline_context_exposes_pipeline(monkeypatch):
     try:
         assert attach_pipeline_context(
             "demo", {"payload": 1}, user_id="carol", group_id="g", run_id=run_id
+    run_id = "run-demo"
+    add_pipeline("demo", run_id, pipeline)
+    try:
+        assert attach_pipeline_context(
+            run_id, {"payload": 1}, user_id="carol", group_id="g"
         )
         result = pipeline.run(user_id="carol", group_id="g")
         assert result == "ok"
@@ -87,5 +99,30 @@ def test_attach_pipeline_context_exposes_pipeline(monkeypatch):
         assert ("context_attached", "{'payload': 1}") in audits
     finally:
         remove_pipeline("demo", run_id)
+        remove_pipeline(run_id)
 
     assert attach_pipeline_context("missing", "value") is False
+
+
+def test_pipeline_lookup_helpers():
+    class DummyTask:
+        def run(self):
+            return "done"
+
+    first_pipeline = TaskPipeline(DummyTask())
+    second_pipeline = TaskPipeline(DummyTask())
+
+    add_pipeline("demo", "run-1", first_pipeline)
+    add_pipeline("demo", "run-2", second_pipeline)
+
+    try:
+        assert get_pipeline("run-1") is first_pipeline
+        assert get_latest_pipeline_for_task("demo") is second_pipeline
+        # Removing the latest should cause the previous run to be returned next
+        remove_pipeline("run-2")
+        assert get_latest_pipeline_for_task("demo") is first_pipeline
+        # Fallback by task name should succeed while the first pipeline remains
+        assert attach_pipeline_context("demo", {"payload": 2}) is True
+    finally:
+        remove_pipeline("run-1")
+

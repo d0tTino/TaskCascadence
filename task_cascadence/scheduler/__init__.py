@@ -272,6 +272,7 @@ class BaseScheduler:
                                 )
                         finally:
                             remove_pipeline(name, run_id)
+                            remove_pipeline(run_id)
                     else:
                         task.user_id = uid
                         task.group_id = group_id
