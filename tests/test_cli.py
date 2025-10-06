@@ -1,15 +1,21 @@
 from click.exceptions import UsageError
+from typing import Any
+
 import pytest
 import time
 import asyncio
+import threading
 from typer.testing import CliRunner
+from fastapi.testclient import TestClient
 
 from task_cascadence.cli import app, main
+from task_cascadence.api import app as api_app
 from task_cascadence.plugins import ManualTrigger, CronTask
-from task_cascadence.scheduler import get_default_scheduler, BaseScheduler
+from task_cascadence.scheduler import get_default_scheduler, BaseScheduler, CronScheduler
 from task_cascadence import initialize
 from task_cascadence.temporal import TemporalBackend
 from task_cascadence import ume
+from task_cascadence.pipeline_registry import get_pipeline
 
 
 def test_cli_main_returns_none():
@@ -546,6 +552,87 @@ def test_cli_run_pipeline_task(monkeypatch):
     assert result.exit_code == 0
     assert steps == ["intake", "run"]
 
+
+def test_cli_run_outputs_run_id_and_supports_signal(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "cli_stages.yml"))
+    import task_cascadence.ume as ume_mod
+
+    ume_mod._stage_store = None
+
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_stage_update_event", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_audit_log", lambda *a, **k: None)
+
+    class CliContextTask(CronTask):
+        name = "cli-context"
+
+        def __init__(self) -> None:
+            self.research_started = threading.Event()
+            self.resume = threading.Event()
+            self.plan_contexts: list[list[dict[str, str]]] = []
+
+        def intake(self) -> None:
+            pass
+
+        def research(self) -> None:
+            self.research_started.set()
+            if not self.resume.wait(timeout=1):
+                raise AssertionError("research did not resume")
+
+        def plan(self) -> dict[str, str]:
+            snapshot = list(self.context)
+            self.plan_contexts.append(snapshot)
+            return snapshot[-1] if snapshot else {}
+
+        def run(self, plan_result: dict[str, str]) -> dict[str, str]:
+            return plan_result
+
+    sched = CronScheduler(storage_path=tmp_path / "sched.yml")
+    task = CliContextTask()
+    sched.register_task(name_or_task="cli-context", task_or_expr=task)
+
+    monkeypatch.setattr("task_cascadence.cli.get_default_scheduler", lambda: sched)
+    monkeypatch.setattr("task_cascadence.api.get_default_scheduler", lambda: sched)
+
+    client = TestClient(api_app)
+    runner = CliRunner()
+    result_box: dict[str, Any] = {}
+
+    def invoke_cli() -> None:
+        result_box["result"] = runner.invoke(
+            app,
+            ["run", "cli-context", "--user-id", "alice", "--group-id", "team"],
+        )
+
+    thread = threading.Thread(target=invoke_cli, daemon=True)
+    thread.start()
+
+    assert task.research_started.wait(timeout=1)
+
+    pipeline = get_pipeline("cli-context")
+    assert pipeline is not None
+    run_id = pipeline.current_run_id
+    assert run_id is not None
+
+    resp = client.post(
+        f"/tasks/{run_id}/signal",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        json={"kind": "context", "value": {"note": "cli"}},
+    )
+    assert resp.status_code == 202
+
+    task.resume.set()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+
+    result = result_box["result"]
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.startswith("run-id")]
+    assert lines
+    reported_run_id = lines[-1].split("\t", 1)[1]
+    assert reported_run_id == run_id
+    assert task.plan_contexts == [[{"note": "cli"}]]
 
 def test_cli_watch_plugins(monkeypatch, tmp_path):
     events = []

@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 import tempfile
 
 from task_cascadence.api import app
-from task_cascadence.scheduler import CronScheduler
+from task_cascadence.scheduler import CronScheduler, TaskExecutionResult
 from task_cascadence.plugins import CronTask
 import yaml
 
@@ -84,7 +84,9 @@ def test_run_task(monkeypatch, tmp_path):
         headers={"X-User-ID": "alice", "X-Group-ID": "team"},
     )
     assert resp.status_code == 200
-    assert resp.json() == {"result": "ok"}
+    data = resp.json()
+    assert data["result"] == "ok"
+    assert data["run_id"]
     assert task.ran == 1
 
 
@@ -106,18 +108,20 @@ def test_run_task_async_endpoint(monkeypatch, tmp_path):
     )
 
     assert resp.status_code == 200
-    assert resp.json() == {"result": "async"}
+    data = resp.json()
+    assert data["result"] == "async"
+    assert data["run_id"]
 
 
 def test_run_task_user_header(monkeypatch, tmp_path):
     called = {}
 
-    def fake_run(name, use_temporal=False, user_id=None, group_id=None):
+    def fake_run_with_metadata(name, use_temporal=False, user_id=None, group_id=None):
         called["uid"] = user_id
-        return "r"
+        return TaskExecutionResult(run_id="test-run", result="r")
 
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
-    monkeypatch.setattr(sched, "run_task", fake_run)
+    monkeypatch.setattr(sched, "run_task_with_metadata", fake_run_with_metadata)
     client = TestClient(app)
     client.post(
         "/tasks/dummy/run",
@@ -129,12 +133,12 @@ def test_run_task_user_header(monkeypatch, tmp_path):
 def test_run_task_group_header(monkeypatch, tmp_path):
     called = {}
 
-    def fake_run(name, use_temporal=False, user_id=None, group_id=None):
+    def fake_run_with_metadata(name, use_temporal=False, user_id=None, group_id=None):
         called["gid"] = group_id
-        return "r"
+        return TaskExecutionResult(run_id="test-run", result="r")
 
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
-    monkeypatch.setattr(sched, "run_task", fake_run)
+    monkeypatch.setattr(sched, "run_task_with_metadata", fake_run_with_metadata)
     client = TestClient(app)
     client.post(
         "/tasks/dummy/run",
@@ -169,8 +173,14 @@ def test_stage_update_event_includes_headers(monkeypatch, tmp_path):
     headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
     resp = client.post("/tasks/pipe/run", headers=headers)
     assert resp.status_code == 200
+    run_id = resp.json()["run_id"]
     assert events
-    assert all(e["user_id"] == "alice" and e["group_id"] == "team" for e in events)
+    assert all(
+        e["user_id"] == "alice"
+        and e["group_id"] == "team"
+        and e.get("run_id") == run_id
+        for e in events
+    )
 
 
 def test_stage_update_event_includes_headers_async(monkeypatch, tmp_path):
@@ -199,8 +209,14 @@ def test_stage_update_event_includes_headers_async(monkeypatch, tmp_path):
     headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
     resp = client.post("/tasks/asyncpipe/run-async", headers=headers)
     assert resp.status_code == 200
+    run_id = resp.json()["run_id"]
     assert events
-    assert all(e["user_id"] == "alice" and e["group_id"] == "team" for e in events)
+    assert all(
+        e["user_id"] == "alice"
+        and e["group_id"] == "team"
+        and e.get("run_id") == run_id
+        for e in events
+    )
 
 
 def test_schedule_task_group_header(monkeypatch, tmp_path):

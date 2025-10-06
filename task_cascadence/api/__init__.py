@@ -103,8 +103,8 @@ def run_task(
             "user_id": user_id,
             "group_id": group_id,
         }
-        result = sched.run_task(name, **kwargs)
-        return {"result": result}
+        execution = sched.run_task_with_metadata(name, **kwargs)
+        return {"result": execution.result, "run_id": execution.run_id}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -127,10 +127,11 @@ async def run_task_async(
             "user_id": user_id,
             "group_id": group_id,
         }
-        result = sched.run_task(name, **kwargs)
+        execution = sched.run_task_with_metadata(name, **kwargs)
+        result = execution.result
         if inspect.isawaitable(result):
             result = await result
-        return {"result": result}
+        return {"result": result, "run_id": execution.run_id}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -225,16 +226,16 @@ def resume_task(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/tasks/{name}/signal")
+@app.post("/tasks/{job_id}/signal")
 def signal_task(
-    name: str,
+    job_id: str,
     payload: SignalPayload,
     user_id: str = Depends(get_user_id),
     group_id: str = Depends(get_group_id),
 ):
     """Deliver a signal to a running pipeline."""
 
-    pipeline = get_pipeline(name)
+    pipeline = get_pipeline(job_id)
     if pipeline is None:
         raise HTTPException(404, "pipeline not running")
 
