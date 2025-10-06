@@ -271,8 +271,7 @@ class BaseScheduler:
                                     cast(Coroutine[Any, Any, Any], result)
                                 )
                         finally:
-                            remove_pipeline(name, run_id)
-                            remove_pipeline(run_id)
+                            remove_pipeline(run_id, task_name=name)
                     else:
                         task.user_id = uid
                         task.group_id = group_id

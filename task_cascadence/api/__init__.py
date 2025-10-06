@@ -106,6 +106,8 @@ def run_task(
         metadata = sched.run_task_with_metadata(name, **kwargs)
         result = metadata.result
         return {"run_id": metadata.run_id, "result": result}
+        execution = sched.run_task_with_metadata(name, **kwargs)
+        return {"result": execution.result, "run_id": execution.run_id}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -133,6 +135,11 @@ async def run_task_async(
         if inspect.isawaitable(result):
             result = await result
         return {"run_id": metadata.run_id, "result": result}
+        execution = sched.run_task_with_metadata(name, **kwargs)
+        result = execution.result
+        if inspect.isawaitable(result):
+            result = await result
+        return {"result": result, "run_id": execution.run_id}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

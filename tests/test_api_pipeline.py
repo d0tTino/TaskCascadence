@@ -6,7 +6,8 @@ from task_cascadence.api import app
 from task_cascadence.scheduler import CronScheduler
 from task_cascadence.plugins import ExampleTask
 from task_cascadence.stage_store import StageStore
-from task_cascadence.pipeline_registry import get_pipeline
+from task_cascadence.pipeline_registry import add_pipeline, get_pipeline, remove_pipeline
+from task_cascadence.orchestrator import TaskPipeline
 import threading
 import time
 
@@ -177,6 +178,11 @@ def test_api_context_signal(monkeypatch, tmp_path):
     assert pipeline is not None
     run_id = pipeline.current_run_id
 
+    pipeline = get_pipeline("contextsignal")
+    assert pipeline is not None
+    run_id = pipeline.current_run_id
+    assert run_id is not None
+
     resp = client.post(
         f"/tasks/{run_id}/signal",
         headers={"X-User-ID": "alice", "X-Group-ID": "team"},
@@ -206,3 +212,105 @@ def test_api_context_signal(monkeypatch, tmp_path):
         and event.get("status") == "consumed"
         for event in audit_events
     )
+
+    resp = client.post(
+        f"/tasks/{run_id}/signal",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        json={"kind": "context", "value": {"note": "later"}},
+    )
+    assert resp.status_code == 404
+
+
+def test_parallel_context_signals_route_to_matching_pipeline(monkeypatch):
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_stage_update_event", lambda *a, **k: None)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_audit_log", lambda *a, **k: None)
+
+    class ParallelContextTask(ExampleTask):
+        name = "parallel-context"
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.research_ready = threading.Event()
+            self.allow_plan = threading.Event()
+            self.plan_contexts: list[list[dict[str, Any]]] = []
+            self.run_contexts: list[list[dict[str, Any]]] = []
+
+        def intake(self) -> None:
+            pass
+
+        def research(self) -> None:
+            self.research_ready.set()
+            if not self.allow_plan.wait(timeout=1):
+                raise AssertionError("research did not resume")
+
+        def plan(self) -> dict[str, Any]:
+            snapshot = list(self.context)
+            self.plan_contexts.append(snapshot)
+            return snapshot[-1] if snapshot else {}
+
+        def run(self, plan_result: dict[str, Any]) -> dict[str, Any]:
+            self.run_contexts.append(list(self.context))
+            return plan_result
+
+    task_one = ParallelContextTask()
+    task_two = ParallelContextTask()
+
+    pipeline_one = TaskPipeline(task_one)
+    pipeline_two = TaskPipeline(task_two)
+
+    run_one = "run-one"
+    run_two = "run-two"
+    pipeline_one.current_run_id = run_one
+    pipeline_two.current_run_id = run_two
+
+    add_pipeline("parallel-context", run_one, pipeline_one)
+    add_pipeline("parallel-context", run_two, pipeline_two)
+
+    client = TestClient(app)
+
+    thread_one = threading.Thread(
+        target=lambda: pipeline_one.run(user_id="alice", group_id="team"), daemon=True
+    )
+    thread_two = threading.Thread(
+        target=lambda: pipeline_two.run(user_id="bob", group_id="ops"), daemon=True
+    )
+
+    thread_one.start()
+    thread_two.start()
+
+    try:
+        assert task_one.research_ready.wait(timeout=1)
+        assert task_two.research_ready.wait(timeout=1)
+
+        resp_one = client.post(
+            f"/tasks/{run_one}/signal",
+            headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+            json={"kind": "context", "value": {"note": "one"}},
+        )
+        resp_two = client.post(
+            f"/tasks/{run_two}/signal",
+            headers={"X-User-ID": "bob", "X-Group-ID": "ops"},
+            json={"kind": "context", "value": {"note": "two"}},
+        )
+
+        assert resp_one.status_code == 202
+        assert resp_two.status_code == 202
+
+        task_one.allow_plan.set()
+        task_two.allow_plan.set()
+
+        thread_one.join(timeout=2)
+        thread_two.join(timeout=2)
+
+        assert not thread_one.is_alive()
+        assert not thread_two.is_alive()
+
+        assert task_one.plan_contexts == [[{"note": "one"}]]
+        assert task_two.plan_contexts == [[{"note": "two"}]]
+        assert task_one.run_contexts == [[{"note": "one"}]]
+        assert task_two.run_contexts == [[{"note": "two"}]]
+    finally:
+        remove_pipeline(run_one, task_name="parallel-context")
+        remove_pipeline(run_two, task_name="parallel-context")

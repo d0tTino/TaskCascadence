@@ -119,11 +119,13 @@ def run_task(
             group_id=group_id,
         )
         metadata = get_default_scheduler().run_task_with_metadata(
+        execution = get_default_scheduler().run_task_with_metadata(
             name,
             use_temporal=temporal,
             user_id=user_id,
             group_id=group_id,
         )
+        typer.echo(f"run-id\t{execution.run_id}")
         emit_stage_update_event(
             name,
             "finish",
@@ -164,14 +166,17 @@ def run_task_async(
             group_id=group_id,
         )
         metadata = get_default_scheduler().run_task_with_metadata(
+        execution = get_default_scheduler().run_task_with_metadata(
             name,
             use_temporal=temporal,
             user_id=user_id,
             group_id=group_id,
         )
         result = metadata.result
+        result = execution.result
         if inspect.isawaitable(result):
             result = run_coroutine(cast(Coroutine[Any, Any, Any], result))
+        typer.echo(f"run-id\t{execution.run_id}")
         emit_stage_update_event(
             name,
             "finish",

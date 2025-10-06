@@ -86,12 +86,72 @@ def get_pipeline(identifier: str, run_id: Optional[str] = None) -> Optional[Task
             return pipeline
         return _get_latest_pipeline_for_task_locked(identifier)
 
+def remove_pipeline(run_id: str, task_name: str | None = None) -> None:
+    """Remove the pipeline registered under *run_id* if present."""
+
+    with _registry_lock:
+        _running_pipelines.pop(run_id, None)
+        resolved_task = task_name or _pipeline_tasks.pop(run_id, None)
+        if resolved_task is None:
+            return
+        runs_for_task = _task_run_index.get(resolved_task)
+        if not runs_for_task:
+            return
+        try:
+            runs_for_task.remove(run_id)
+        except ValueError:  # pragma: no cover - defensive cleanup
+            pass
+        if not runs_for_task:
+            _task_run_index.pop(resolved_task, None)
+
+
+def _clean_latest_for_task(task_name: str) -> Optional[TaskPipeline]:
+    """Return the latest pipeline for *task_name* while pruning stale entries."""
+
+    run_ids = _task_run_index.get(task_name)
+    if not run_ids:
+        return None
+
+    for index in range(len(run_ids) - 1, -1, -1):
+        run_id = run_ids[index]
+        pipeline = _running_pipelines.get(run_id)
+        if pipeline is not None:
+            return pipeline
+        # Stale identifier encountered; remove it before continuing.
+        del run_ids[index]
+    if not run_ids:
+        _task_run_index.pop(task_name, None)
+    return None
+
+
+def get_pipeline(identifier: str, *, run_id: str | None = None) -> Optional[TaskPipeline]:
+    """Return the pipeline registered as *identifier*.
+
+    ``identifier`` is treated as a run identifier first. For backward
+    compatibility, when no pipeline exists for the identifier it falls back to
+    the most recent pipeline registered for the task of the same name. A
+    specific *run_id* can be provided to bypass the lookup heuristic.
+    """
+
+    with _registry_lock:
+        return _get_latest_pipeline_for_task_locked(task_name)
+        if run_id is not None:
+            pipeline = _running_pipelines.get(run_id)
+            if pipeline is not None:
+                return pipeline
+
+        pipeline = _running_pipelines.get(identifier)
+        if pipeline is not None:
+            return pipeline
+
+        return _clean_latest_for_task(identifier)
+
 
 def get_latest_pipeline_for_task(task_name: str) -> Optional[TaskPipeline]:
     """Return the most recently registered pipeline for *task_name* if running."""
 
     with _registry_lock:
-        return _get_latest_pipeline_for_task_locked(task_name)
+        return _clean_latest_for_task(task_name)
 
 
 def list_pipelines() -> Dict[str, TaskPipeline]:
@@ -107,7 +167,6 @@ def attach_pipeline_context(
     *,
     user_id: str | None = None,
     group_id: str | None = None,
-    run_id: str | None = None,
 ) -> bool:
     """Attach *context* to the running pipeline identified by *run_id_or_task*.
 
@@ -128,6 +187,9 @@ def attach_pipeline_context(
     if pipeline is None:
         return False
 
+    pipeline = get_pipeline(run_id_or_task)
+    if pipeline is None:
+        return False
     pipeline.attach_context(context, user_id=user_id, group_id=group_id)
     return True
 

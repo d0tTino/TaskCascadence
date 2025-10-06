@@ -197,6 +197,7 @@ def test_api_context_signal_delivery(monkeypatch: pytest.MonkeyPatch, tmp_path) 
     pipeline = get_pipeline("api-context")
     assert pipeline is not None
     run_id = pipeline.current_run_id
+    assert run_id is not None
 
     resp = client.post(
         f"/tasks/{run_id}/signal",
@@ -233,6 +234,7 @@ def test_api_context_signal_rejects_unsupported_kind(
     pipeline = get_pipeline("api-context")
     assert pipeline is not None
     run_id = pipeline.current_run_id
+    assert run_id is not None
 
     resp = client.post(
         f"/tasks/{run_id}/signal",
@@ -258,6 +260,7 @@ def test_api_context_signal_missing_headers(headers, expected) -> None:
     client = TestClient(app)
     resp = client.post(
         "/tasks/demo-run/signal",
+        "/tasks/run-123/signal",
         headers=headers,
         json={"kind": "context", "value": {}},
     )
