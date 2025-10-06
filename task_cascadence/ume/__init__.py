@@ -86,12 +86,20 @@ def emit_stage_update(
     stage: str,
     user_id: str | None = None,
     group_id: str | None = None,
+    *,
+    run_id: str | None = None,
 ) -> None:
     """Persist a pipeline stage event via :class:`StageStore`."""
 
     store = _get_stage_store()
     user_hash = _hash_user_id(user_id) if user_id is not None else None
-    store.add_event(task_name, stage, user_hash=user_hash, group_id=group_id)
+    store.add_event(
+        task_name,
+        stage,
+        user_hash=user_hash,
+        group_id=group_id,
+        run_id=run_id,
+    )
 
 
 def emit_stage_update_event(
@@ -103,10 +111,17 @@ def emit_stage_update_event(
     event_id: str | None = None,
     *,
     use_asyncio: bool = False,
+    run_id: str | None = None,
 ) -> asyncio.Task | threading.Thread | None:
     """Persist and emit ``StageUpdate`` using the configured transport."""
 
-    emit_stage_update(task_name, stage, user_id=user_id, group_id=group_id)
+    emit_stage_update(
+        task_name,
+        stage,
+        user_id=user_id,
+        group_id=group_id,
+        run_id=run_id,
+    )
     target = client or _default_client
     if target is None:
         return None
@@ -136,6 +151,7 @@ def emit_audit_log(
     group_id: str | None = None,
 
     use_asyncio: bool = False,
+    run_id: str | None = None,
 ) -> asyncio.Task | threading.Thread | None:
     """Persist and emit an audit log entry using the configured transport.
 
@@ -156,6 +172,7 @@ def emit_audit_log(
         output=output,
         partial=partial,
         category="audit",
+        run_id=run_id,
     )
     target = client or _default_client
     if target is None:

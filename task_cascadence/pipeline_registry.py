@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional
 
 from .orchestrator import TaskPipeline
 
+# Running pipelines keyed by task name and run identifier
+_running_pipelines: Dict[str, Dict[str, TaskPipeline]] = {}
 # Running pipelines keyed by run/job identifier
 _running_pipelines: Dict[str, TaskPipeline] = {}
 # Mapping of run/job identifier back to originating task name
@@ -17,6 +19,13 @@ _task_run_index: Dict[str, list[str]] = {}
 _registry_lock = Lock()
 
 
+def add_pipeline(name: str, run_id: str, pipeline: TaskPipeline) -> None:
+    """Register *pipeline* under *name* and *run_id*."""
+
+    with _registry_lock:
+        pipelines = _running_pipelines.setdefault(name, {})
+        pipelines[run_id] = pipeline
+
 def add_pipeline(task_name: str, run_id: str, pipeline: TaskPipeline) -> None:
     """Register *pipeline* for *task_name* under the unique *run_id*."""
 
@@ -26,7 +35,16 @@ def add_pipeline(task_name: str, run_id: str, pipeline: TaskPipeline) -> None:
         runs_for_task = _task_run_index.setdefault(task_name, [])
         runs_for_task.append(run_id)
 
+def remove_pipeline(name: str, run_id: str) -> None:
+    """Remove the pipeline registered under *name*/*run_id* if present."""
 
+    with _registry_lock:
+        pipelines = _running_pipelines.get(name)
+        if not pipelines:
+            return
+        pipelines.pop(run_id, None)
+        if not pipelines:
+            _running_pipelines.pop(name, None)
 def remove_pipeline(run_id: str) -> None:
     """Remove the pipeline registered under *run_id* if present."""
 
@@ -50,6 +68,8 @@ def get_pipeline(run_id: str) -> Optional[TaskPipeline]:
     with _registry_lock:
         return _running_pipelines.get(run_id)
 
+def get_pipeline(name: str, run_id: Optional[str] = None) -> Optional[TaskPipeline]:
+    """Return the pipeline registered as *name* (optionally filtered by *run_id*)."""
 
 def get_latest_pipeline_for_task(task_name: str) -> Optional[TaskPipeline]:
     """Return the most recently registered pipeline for *task_name* if running."""
@@ -72,12 +92,24 @@ def get_latest_pipeline_for_task(task_name: str) -> Optional[TaskPipeline]:
             _task_run_index.pop(task_name, None)
         return None
 
+    with _registry_lock:
+        pipelines = _running_pipelines.get(name)
+        if not pipelines:
+            return None
+        if run_id is not None:
+            return pipelines.get(run_id)
+        if len(pipelines) == 1:
+            return next(iter(pipelines.values()))
+        return None
 
+
+def list_pipelines() -> Dict[str, Dict[str, TaskPipeline]]:
+    """Return a copy of the currently registered pipelines."""
 def list_pipelines() -> Dict[str, TaskPipeline]:
     """Return a copy of the currently registered pipelines keyed by run id."""
 
     with _registry_lock:
-        return dict(_running_pipelines)
+        return {name: dict(pipes) for name, pipes in _running_pipelines.items()}
 
 
 def attach_pipeline_context(
@@ -86,6 +118,7 @@ def attach_pipeline_context(
     *,
     user_id: str | None = None,
     group_id: str | None = None,
+    run_id: str | None = None,
 ) -> bool:
     """Attach *context* to the running pipeline identified by *run_id_or_task*.
 
@@ -95,6 +128,7 @@ def attach_pipeline_context(
     Returns ``True`` when a pipeline was found and context enqueued.
     """
 
+    pipeline = get_pipeline(name, run_id=run_id)
     pipeline = get_pipeline(run_id_or_task)
     if pipeline is None:
         pipeline = get_latest_pipeline_for_task(run_id_or_task)

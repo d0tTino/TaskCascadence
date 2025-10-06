@@ -272,6 +272,10 @@ def test_yaml_calendar_event_multiple_recurrences(tmp_path, monkeypatch):
 
     pr_mod = types.ModuleType("task_cascadence.pipeline_registry")
 
+    def add_pipeline(name, run_id, pipeline):  # pragma: no cover - stub
+        pass
+
+    def remove_pipeline(name, run_id):  # pragma: no cover - stub
     def add_pipeline(task_name, run_id, pipeline):  # pragma: no cover - stub
         pass
 

@@ -82,6 +82,7 @@ class StageStore:
         output: str | None = None,
         partial: Any | None = None,
         category: str = "stage",
+        run_id: str | None = None,
     ) -> None:
         entry: Dict[str, Any] = {
             "stage": stage,
@@ -99,6 +100,8 @@ class StageStore:
             entry["user_hash"] = user_hash
         if group_id is not None:
             entry["group_id"] = group_id
+        if run_id is not None:
+            entry["run_id"] = run_id
         key = task_name if category == "stage" else f"{task_name}:{category}"
         events = self._data.setdefault(key, [])
         events.append(entry)
