@@ -19,7 +19,7 @@ def test_disambiguation_with_context(monkeypatch):
     resp = client.post(
         '/intent',
         json={'message': 'Schedule it for tomorrow', 'context': ['send email to bob@example.com']},
-        headers={'X-User-ID': 'u1'}
+        headers={'X-User-ID': 'u1', 'X-Group-ID': 'g1'}
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -35,7 +35,11 @@ def test_clarification_triggered(monkeypatch):
 
     monkeypatch.setattr('task_cascadence.intent.gather', fake_gather)
     client = TestClient(app)
-    resp = client.post('/intent', json={'message': 'do something', 'context': []}, headers={'X-User-ID': 'u1'})
+    resp = client.post(
+        '/intent',
+        json={'message': 'do something', 'context': []},
+        headers={'X-User-ID': 'u1', 'X-Group-ID': 'g1'}
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert data['clarification']
@@ -52,7 +56,11 @@ def test_sanitization_prevents_injection(monkeypatch):
     monkeypatch.setattr('task_cascadence.intent.gather', fake_gather)
     client = TestClient(app)
     malicious = "<script>alert('x')</script>; rm -rf / 4111111111111111 bob@example.com"
-    resp = client.post('/intent', json={'message': malicious, 'context': []}, headers={'X-User-ID': 'u1'})
+    resp = client.post(
+        '/intent',
+        json={'message': malicious, 'context': []},
+        headers={'X-User-ID': 'u1', 'X-Group-ID': 'g1'}
+    )
     assert resp.status_code == 200
     prompt = captured['prompt']
     assert '<script>' not in prompt

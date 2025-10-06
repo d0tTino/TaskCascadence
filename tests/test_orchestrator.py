@@ -89,8 +89,17 @@ def test_pipeline_group_id(monkeypatch):
     def fake_run(run, user_id=None, group_id=None):
         emitted.append(("run", group_id))
 
-    def fake_stage(task_name, stage, client=None, user_id=None, group_id=None, use_asyncio=False):
-        emitted.append((stage, group_id))
+    def fake_stage(
+        task_name,
+        stage,
+        client=None,
+        user_id=None,
+        group_id=None,
+        use_asyncio=False,
+        run_id=None,
+        **_kwargs,
+    ):
+        emitted.append((stage, group_id, run_id))
 
     monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", fake_spec)
     monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", fake_run)
@@ -105,7 +114,7 @@ def test_pipeline_group_id(monkeypatch):
     pipeline = TaskPipeline(Simple())
     pipeline.run(user_id="alice", group_id="team1")
 
-    gids = [g for _, g in emitted]
+    gids = [entry[1] for entry in emitted]
     assert gids and all(g == "team1" for g in gids)
 
 

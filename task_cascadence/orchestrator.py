@@ -6,7 +6,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from threading import Lock
-from typing import Any, Coroutine, Deque, cast
+from typing import Any, Coroutine, Deque, TypedDict, cast
 from uuid import uuid4
 import asyncio
 import inspect
@@ -28,6 +28,17 @@ from .ume.models import TaskRun, TaskSpec
 from . import research
 from .async_utils import run_coroutine
 import time
+
+
+class EventKwargs(TypedDict, total=False):
+    user_id: str
+    group_id: str
+    run_id: str
+
+
+class SpecKwargs(TypedDict, total=False):
+    user_id: str
+    group_id: str
 
 
 class PrecheckError(RuntimeError):
@@ -65,7 +76,7 @@ class TaskPipeline:
             name=self.task.__class__.__name__,
             description=stage,
         )
-        spec_kwargs: dict[str, str | None] = {}
+        spec_kwargs: SpecKwargs = {}
         if user_id is not None:
             spec_kwargs["user_id"] = user_id
         if group_id is not None:
@@ -99,8 +110,8 @@ class TaskPipeline:
 
     def _event_kwargs(
         self, user_id: str | None, group_id: str | None
-    ) -> dict[str, str | None]:
-        kwargs: dict[str, str | None] = {}
+    ) -> EventKwargs:
+        kwargs: EventKwargs = {}
         if user_id is not None:
             kwargs["user_id"] = user_id
         if group_id is not None:

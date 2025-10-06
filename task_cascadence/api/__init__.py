@@ -103,8 +103,9 @@ def run_task(
             "user_id": user_id,
             "group_id": group_id,
         }
-        result = sched.run_task(name, **kwargs)
-        return {"result": result}
+        metadata = sched.run_task_with_metadata(name, **kwargs)
+        result = metadata.result
+        return {"run_id": metadata.run_id, "result": result}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -127,10 +128,11 @@ async def run_task_async(
             "user_id": user_id,
             "group_id": group_id,
         }
-        result = sched.run_task(name, **kwargs)
+        metadata = sched.run_task_with_metadata(name, **kwargs)
+        result = metadata.result
         if inspect.isawaitable(result):
             result = await result
-        return {"result": result}
+        return {"run_id": metadata.run_id, "result": result}
     except Exception as exc:  # pragma: no cover - passthrough
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -182,13 +184,20 @@ def disable_task(
 @app.post("/tasks/{name}/pause")
 def pause_task(
     name: str,
+    job_id: str | None = None,
     user_id: str = Depends(get_user_id),
     group_id: str = Depends(get_group_id),
 ):
     """Pause ``name`` so it temporarily stops running."""
     sched = get_default_scheduler()
     try:
-        pipeline = get_pipeline(name)
+        pipeline = None
+        if job_id is not None:
+            pipeline = get_pipeline(name, run_id=job_id)
+            if pipeline is None:
+                raise HTTPException(404, "pipeline not running")
+        else:
+            pipeline = get_pipeline(name)
         if pipeline:
             if user_id is None:
                 raise HTTPException(400, "user_id is required")
@@ -205,13 +214,20 @@ def pause_task(
 @app.post("/tasks/{name}/resume")
 def resume_task(
     name: str,
+    job_id: str | None = None,
     user_id: str = Depends(get_user_id),
     group_id: str = Depends(get_group_id),
 ):
     """Resume a previously paused task."""
     sched = get_default_scheduler()
     try:
-        pipeline = get_pipeline(name)
+        pipeline = None
+        if job_id is not None:
+            pipeline = get_pipeline(name, run_id=job_id)
+            if pipeline is None:
+                raise HTTPException(404, "pipeline not running")
+        else:
+            pipeline = get_pipeline(name)
         if pipeline:
             if user_id is None:
                 raise HTTPException(400, "user_id is required")
@@ -225,16 +241,16 @@ def resume_task(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/tasks/{name}/signal")
+@app.post("/tasks/{job_id}/signal")
 def signal_task(
-    name: str,
+    job_id: str,
     payload: SignalPayload,
     user_id: str = Depends(get_user_id),
     group_id: str = Depends(get_group_id),
 ):
     """Deliver a signal to a running pipeline."""
 
-    pipeline = get_pipeline(name)
+    pipeline = get_pipeline(job_id)
     if pipeline is None:
         raise HTTPException(404, "pipeline not running")
 

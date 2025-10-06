@@ -87,6 +87,9 @@ curl -X POST http://localhost:8000/tasks/example/run \
      -H "X-Group-ID: engineering"
 ```
 
+The response includes the unique run identifier alongside the task output, e.g.
+``{"run_id": "20240101T120000Z", "result": "ok"}``.
+
 In code, pass the same information via ``user_id`` and ``group_id`` arguments:
 
 ```python
@@ -302,10 +305,11 @@ Example usage with ``httpx``:
 import httpx
 
 tasks = httpx.get("http://localhost:8000/tasks").json()
-httpx.post(
+run = httpx.post(
     "http://localhost:8000/tasks/example/run",
     headers={"X-User-ID": "bob", "X-Group-ID": "engineering"},
-)
+).json()
+print(f"Started job {run['run_id']} with result {run['result']}")
 
 # capture a task definition from another machine
 httpx.post(

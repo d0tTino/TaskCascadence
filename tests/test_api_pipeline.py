@@ -173,9 +173,12 @@ def test_api_context_signal(monkeypatch, tmp_path):
     thread.start()
 
     assert task.research_started.wait(timeout=1)
+    pipeline = get_pipeline("contextsignal")
+    assert pipeline is not None
+    run_id = pipeline.current_run_id
 
     resp = client.post(
-        "/tasks/contextsignal/signal",
+        f"/tasks/{run_id}/signal",
         headers={"X-User-ID": "alice", "X-Group-ID": "team"},
         json={"kind": "context", "value": {"note": "hi"}},
     )

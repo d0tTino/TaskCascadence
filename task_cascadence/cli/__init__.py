@@ -118,7 +118,7 @@ def run_task(
             user_id=user_id,
             group_id=group_id,
         )
-        get_default_scheduler().run_task(
+        metadata = get_default_scheduler().run_task_with_metadata(
             name,
             use_temporal=temporal,
             user_id=user_id,
@@ -130,6 +130,7 @@ def run_task(
             user_id=user_id,
             group_id=group_id,
         )
+        typer.echo(f"run id: {metadata.run_id}")
     except Exception as exc:  # pragma: no cover - simple error propagation
         emit_stage_update_event(
             name,
@@ -162,12 +163,13 @@ def run_task_async(
             user_id=user_id,
             group_id=group_id,
         )
-        result = get_default_scheduler().run_task(
+        metadata = get_default_scheduler().run_task_with_metadata(
             name,
             use_temporal=temporal,
             user_id=user_id,
             group_id=group_id,
         )
+        result = metadata.result
         if inspect.isawaitable(result):
             result = run_coroutine(cast(Coroutine[Any, Any, Any], result))
         emit_stage_update_event(
@@ -176,6 +178,7 @@ def run_task_async(
             user_id=user_id,
             group_id=group_id,
         )
+        typer.echo(f"run id: {metadata.run_id}")
     except Exception as exc:  # pragma: no cover - simple error propagation
         emit_stage_update_event(
             name,
@@ -200,7 +203,8 @@ def manual_trigger(
     if not task_info or not isinstance(task_info["task"], plugins.ManualTrigger):
         typer.echo(f"error: '{name}' is not a manual task", err=True)
         raise typer.Exit(code=1)
-    sched.run_task(name, user_id=user_id, group_id=group_id)
+    metadata = sched.run_task_with_metadata(name, user_id=user_id, group_id=group_id)
+    typer.echo(f"run id: {metadata.run_id}")
 
 
 
@@ -222,13 +226,20 @@ def disable_task(
 @app.command("pause")
 def pause_task(
     name: str,
+    job_id: str | None = typer.Option(None, "--job-id", help="Specific run identifier"),
     user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
     group_id: str = typer.Option(..., "--group-id", help="Group ID for UME events"),
 ) -> None:
     """Pause ``NAME`` so it temporarily stops running."""
 
     try:
-        pipeline = get_pipeline(name)
+        pipeline = None
+        if job_id is not None:
+            pipeline = get_pipeline(name, run_id=job_id)
+            if pipeline is None:
+                raise ValueError("pipeline not running")
+        else:
+            pipeline = get_pipeline(name)
         if pipeline:
             if user_id is None:
                 raise typer.BadParameter("--user-id is required when pausing a running task")
@@ -244,13 +255,20 @@ def pause_task(
 @app.command("resume")
 def resume_task(
     name: str,
+    job_id: str | None = typer.Option(None, "--job-id", help="Specific run identifier"),
     user_id: str | None = typer.Option(None, "--user-id", help="User ID for UME events"),
     group_id: str = typer.Option(..., "--group-id", help="Group ID for UME events"),
 ) -> None:
     """Resume a paused task called ``NAME``."""
 
     try:
-        pipeline = get_pipeline(name)
+        pipeline = None
+        if job_id is not None:
+            pipeline = get_pipeline(name, run_id=job_id)
+            if pipeline is None:
+                raise ValueError("pipeline not running")
+        else:
+            pipeline = get_pipeline(name)
         if pipeline:
             if user_id is None:
                 raise typer.BadParameter("--user-id is required when resuming a running task")
