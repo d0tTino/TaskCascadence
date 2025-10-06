@@ -1,4 +1,5 @@
 import threading
+
 import yaml
 from task_cascadence.stage_store import StageStore
 
@@ -60,3 +61,11 @@ def test_per_user_and_group_isolation(monkeypatch, tmp_path):
     assert [e["stage"] for e in store.get_events("t", u1, "g2")] == ["s2"]
     assert [e["stage"] for e in store.get_events("t", u2, "g1")] == ["s3"]
     assert store.get_events("t", u2, "g2") == []
+
+
+def test_run_id_is_recorded(tmp_path):
+    store = StageStore(path=tmp_path / "stages.yml")
+    store.add_event("demo", "run", None, run_id="run-123")
+
+    events = store.get_events("demo")
+    assert events[0]["run_id"] == "run-123"

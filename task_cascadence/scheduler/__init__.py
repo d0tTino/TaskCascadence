@@ -8,10 +8,12 @@ APScheduler.
 
 from __future__ import annotations
 
-from pathlib import Path
 import os
+from dataclasses import dataclass
+from pathlib import Path
 import threading
 import re
+from uuid import uuid4
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -47,6 +49,14 @@ def _maybe_hash_group_id(group_id: str) -> str:
     """Return ``group_id`` hashed unless it already appears hashed."""
 
     return group_id if _HASH_RE.match(group_id) else _hash_user_id(group_id)
+
+
+@dataclass(frozen=True)
+class TaskExecutionResult:
+    """Wrapper containing metadata for a task execution."""
+
+    run_id: str
+    result: Any
 
 
 class BaseScheduler:
@@ -113,6 +123,24 @@ class BaseScheduler:
         group_id: str | None = None,
     ) -> Any:
         """Run a task by name if it exists and is enabled."""
+
+        result = self.run_task_with_metadata(
+            name,
+            use_temporal=use_temporal,
+            user_id=user_id,
+            group_id=group_id,
+        )
+        return result.result
+
+    def run_task_with_metadata(
+        self,
+        name: str,
+        *,
+        use_temporal: bool | None = None,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> TaskExecutionResult:
+        """Run a task and return its :class:`TaskExecutionResult`."""
         try:  # pragma: no cover - allow tests to omit audit logging
             from ..ume import emit_audit_log
             from ..ume.models import AuditEvent
@@ -173,6 +201,8 @@ class BaseScheduler:
             uid = user_id
             task = info["task"]
 
+        run_id = str(uuid4())
+
         if (use_temporal or (use_temporal is None and self._temporal)):
             if not self._temporal:
                 reason = "Temporal backend not configured"
@@ -183,6 +213,7 @@ class BaseScheduler:
                     reason=reason,
                     user_id=user_id,
                     group_id=group_id,
+                    run_id=run_id,
                 )
                 raise RuntimeError(reason)
             workflow = getattr(task, "workflow", task.__class__.__name__)
@@ -196,6 +227,7 @@ class BaseScheduler:
                     reason=str(exc),
                     user_id=user_id,
                     group_id=group_id,
+                    run_id=run_id,
                 )
                 raise
             emit_audit_log(
@@ -204,12 +236,12 @@ class BaseScheduler:
                 "success",
                 user_id=user_id,
                 group_id=group_id,
+                run_id=run_id,
             )
-            return result
+            return TaskExecutionResult(run_id=run_id, result=result)
 
         if hasattr(task, "run"):
             from datetime import datetime
-            from uuid import uuid4
 
             from ..ume import emit_task_run
             from ..ume.models import TaskRun, TaskSpec
@@ -220,7 +252,6 @@ class BaseScheduler:
 
             @metrics.track_task(name=task.__class__.__name__)
             def runner():
-                run_id = str(uuid4())
                 started = Timestamp()
                 started.FromDatetime(datetime.now())
                 status = "success"
@@ -231,7 +262,8 @@ class BaseScheduler:
                         for attr in ("intake", "research", "plan", "verify")
                     ):
                         pipeline = TaskPipeline(task)
-                        add_pipeline(name, pipeline)
+                        pipeline.current_run_id = run_id
+                        add_pipeline(name, run_id, pipeline)
                         try:
                             result = pipeline.run(user_id=uid, group_id=group_id)
                             if inspect.isawaitable(result):
@@ -239,7 +271,7 @@ class BaseScheduler:
                                     cast(Coroutine[Any, Any, Any], result)
                                 )
                         finally:
-                            remove_pipeline(name)
+                            remove_pipeline(name, run_id)
                     else:
                         task.user_id = uid
                         task.group_id = group_id
@@ -260,6 +292,7 @@ class BaseScheduler:
                             partial=partial_data,
                             user_id=user_id,
                             group_id=group_id,
+                            run_id=run_id,
                         )
                     else:
                         emit_audit_log(
@@ -270,6 +303,7 @@ class BaseScheduler:
                             output=partial_data,
                             user_id=user_id,
                             group_id=group_id,
+                            run_id=run_id,
                         )
                     raise
                 else:
@@ -279,6 +313,7 @@ class BaseScheduler:
                         "success",
                         user_id=user_id,
                         group_id=group_id,
+                        run_id=run_id,
                     )
                 finally:
                     finished = Timestamp()
@@ -298,7 +333,7 @@ class BaseScheduler:
                         emit_task_run(run, group_id=group_id)
                     else:
                         emit_task_run(run, user_id=user_id, group_id=group_id)
-                return result
+                return TaskExecutionResult(run_id=run_id, result=result)
 
             return runner()
         reason = f"Task '{name}' has no run() method"
@@ -401,6 +436,18 @@ class TemporalScheduler(BaseScheduler):
         group_id: str | None = None,
     ) -> Any:
         return super().run_task(
+            name, use_temporal=True, user_id=user_id, group_id=group_id
+        )
+
+    def run_task_with_metadata(
+        self,
+        name: str,
+        *,
+        use_temporal: bool | None = None,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> TaskExecutionResult:
+        return super().run_task_with_metadata(
             name, use_temporal=True, user_id=user_id, group_id=group_id
         )
 

@@ -19,9 +19,10 @@ def test_thread_safe_registry():
         # Add and remove multiple pipelines
         for i in range(100):
             name = f"p{worker_id}_{i}"
-            add_pipeline(name, pipeline)
+            run_id = f"{name}-run"
+            add_pipeline(name, run_id, pipeline)
             time.sleep(0.001)
-            remove_pipeline(name)
+            remove_pipeline(name, run_id)
         if worker_id == 0:
             stop_event.set()
 
@@ -72,10 +73,12 @@ def test_attach_pipeline_context_exposes_pipeline(monkeypatch):
             return "ok"
 
     pipeline = TaskPipeline(SimpleTask())
-    add_pipeline("demo", pipeline)
+    run_id = "demo-run"
+    pipeline.current_run_id = run_id
+    add_pipeline("demo", run_id, pipeline)
     try:
         assert attach_pipeline_context(
-            "demo", {"payload": 1}, user_id="carol", group_id="g"
+            "demo", {"payload": 1}, user_id="carol", group_id="g", run_id=run_id
         )
         result = pipeline.run(user_id="carol", group_id="g")
         assert result == "ok"
@@ -83,6 +86,6 @@ def test_attach_pipeline_context_exposes_pipeline(monkeypatch):
         assert stages.count("context_attached") == 1
         assert ("context_attached", "{'payload': 1}") in audits
     finally:
-        remove_pipeline("demo")
+        remove_pipeline("demo", run_id)
 
     assert attach_pipeline_context("missing", "value") is False

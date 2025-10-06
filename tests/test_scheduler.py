@@ -231,14 +231,16 @@ def test_metrics_increment_for_job(tmp_path, monkeypatch):
 
 def test_run_task_user_id(monkeypatch):
     emitted = None
+    emitted_run_id = None
 
     from task_cascadence.ume import _hash_user_id
 
     def fake_emit(run, user_id=None):
-        nonlocal emitted
+        nonlocal emitted, emitted_run_id
         if user_id is not None:
             run.user_hash = _hash_user_id(user_id)
         emitted = run
+        emitted_run_id = run.run_id
 
     monkeypatch.setattr("task_cascadence.ume.emit_task_run", fake_emit)
 
@@ -250,11 +252,13 @@ def test_run_task_user_id(monkeypatch):
 
     task = SimpleTask()
     sched.register_task("simple", task)
-    sched.run_task("simple", user_id="bob")
+    execution = sched.run_task_with_metadata("simple", user_id="bob")
 
     assert emitted is not None
     assert emitted.user_hash is not None
     assert emitted.user_hash != "bob"
+    assert execution.result == "ok"
+    assert execution.run_id == emitted_run_id
 
 
 def test_wrap_task_user_id(monkeypatch):
@@ -284,7 +288,13 @@ def test_wrap_task_user_id(monkeypatch):
 def test_run_task_metrics_success(monkeypatch):
     from task_cascadence import metrics
 
-    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run, user_id=None: None)
+    emitted_run_id = None
+
+    def fake_emit(run, user_id=None):
+        nonlocal emitted_run_id
+        emitted_run_id = run.run_id
+
+    monkeypatch.setattr("task_cascadence.ume.emit_task_run", fake_emit)
 
     sched = BaseScheduler()
 
@@ -301,9 +311,10 @@ def test_run_task_metrics_success(monkeypatch):
     before_success = success._value.get()
     before_failure = failure._value.get()
 
-    result = sched.run_task("simple", user_id="alice")
+    execution = sched.run_task_with_metadata("simple", user_id="alice")
 
-    assert result == "ok"
+    assert execution.result == "ok"
+    assert execution.run_id == emitted_run_id
     assert success._value.get() == before_success + 1
     assert failure._value.get() == before_failure
 

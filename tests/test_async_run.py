@@ -14,5 +14,6 @@ def test_async_run(monkeypatch):
 
     sched = BaseScheduler()
     sched.register_task("async", AsyncTask())
-    result = sched.run_task("async", user_id="alice")
-    assert result == "async"
+    execution = sched.run_task_with_metadata("async", user_id="alice")
+    assert execution.result == "async"
+    assert execution.run_id

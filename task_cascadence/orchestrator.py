@@ -52,6 +52,7 @@ class TaskPipeline:
     _paused: bool = field(default=False, init=False, repr=False)
     _context_queue: Deque[Any] = field(default_factory=deque, init=False, repr=False)
     _context_lock: Lock = field(default_factory=Lock, init=False, repr=False)
+    current_run_id: str | None = field(default=None, init=False)
 
     def _emit_stage(
         self,
@@ -64,19 +65,17 @@ class TaskPipeline:
             name=self.task.__class__.__name__,
             description=stage,
         )
-        if group_id is None:
-            emit_task_spec(spec, user_id=user_id)
-            emit_stage_update_event(
-                self.task.__class__.__name__, stage, user_id=user_id
-            )
-        else:
-            emit_task_spec(spec, user_id=user_id, group_id=group_id)
-            emit_stage_update_event(
-                self.task.__class__.__name__,
-                stage,
-                user_id=user_id,
-                group_id=group_id,
-            )
+        spec_kwargs: dict[str, str | None] = {}
+        if user_id is not None:
+            spec_kwargs["user_id"] = user_id
+        if group_id is not None:
+            spec_kwargs["group_id"] = group_id
+        emit_task_spec(spec, **spec_kwargs)
+        emit_stage_update_event(
+            self.task.__class__.__name__,
+            stage,
+            **self._event_kwargs(user_id, group_id),
+        )
 
     _context: deque[Any] = field(default_factory=deque, init=False, repr=False)
     _context_store: list[Any] = field(default_factory=list, init=False, repr=False)
@@ -98,9 +97,26 @@ class TaskPipeline:
         if updated or not hasattr(self.task, "context"):
             self.task.context = self._context_store
 
+    def _event_kwargs(
+        self, user_id: str | None, group_id: str | None
+    ) -> dict[str, str | None]:
+        kwargs: dict[str, str | None] = {}
+        if user_id is not None:
+            kwargs["user_id"] = user_id
+        if group_id is not None:
+            kwargs["group_id"] = group_id
+        if self.current_run_id is not None:
+            kwargs["run_id"] = self.current_run_id
+        return kwargs
+
     def intake(self, *, user_id: str, group_id: str | None = None) -> None:
         task_name = self.task.__class__.__name__
-        emit_audit_log(task_name, "intake", "started", user_id=user_id, group_id=group_id)
+        emit_audit_log(
+            task_name,
+            "intake",
+            "started",
+            **self._event_kwargs(user_id, group_id),
+        )
         result: Any | None = None
         try:
             if hasattr(self.task, "intake"):
@@ -114,8 +130,7 @@ class TaskPipeline:
                 "error",
                 reason=str(exc),
                 output=repr(partial) if partial is not None else None,
-                user_id=user_id,
-                group_id=group_id,
+                **self._event_kwargs(user_id, group_id),
             )
             raise
         self._emit_stage("intake", user_id, group_id)
@@ -124,21 +139,28 @@ class TaskPipeline:
             "intake",
             "success",
             output=repr(result) if result is not None else None,
-            user_id=user_id,
-            group_id=group_id,
+            **self._event_kwargs(user_id, group_id),
         )
 
     def research(self, *, user_id: str, group_id: str | None = None) -> Any:
         """Perform optional research for the task."""
         task_name = self.task.__class__.__name__
-        emit_audit_log(task_name, "research", "started", user_id=user_id, group_id=group_id)
+        emit_audit_log(
+            task_name,
+            "research",
+            "started",
+            **self._event_kwargs(user_id, group_id),
+        )
         if not hasattr(self.task, "research"):
             # Even if a task has no dedicated research step, emit the standard
             # stage notification so downstream consumers observe a "research"
             # phase was considered and skipped.
             self._emit_stage("research", user_id, group_id)
             emit_audit_log(
-                task_name, "research", "skipped", user_id=user_id, group_id=group_id
+                task_name,
+                "research",
+                "skipped",
+                **self._event_kwargs(user_id, group_id),
             )
             return None
 
@@ -157,8 +179,7 @@ class TaskPipeline:
                 "research",
                 "success",
                 output=repr(res) if res is not None else None,
-                user_id=user_id,
-                group_id=group_id,
+                **self._event_kwargs(user_id, group_id),
             )
             return res
 
@@ -171,8 +192,7 @@ class TaskPipeline:
                 "error",
                 reason=str(exc),
                 output=repr(audit_partial) if audit_partial is not None else None,
-                user_id=user_id,
-                group_id=group_id,
+                **self._event_kwargs(user_id, group_id),
             )
             return None
 
@@ -220,7 +240,12 @@ class TaskPipeline:
     def plan(self, *, user_id: str, group_id: str | None = None) -> Any:
         """Return a plan which may include subtasks."""
         task_name = self.task.__class__.__name__
-        emit_audit_log(task_name, "plan", "started", user_id=user_id, group_id=group_id)
+        emit_audit_log(
+            task_name,
+            "plan",
+            "started",
+            **self._event_kwargs(user_id, group_id),
+        )
         plan_result: Any | None = None
         try:
             if hasattr(self.task, "plan"):
@@ -240,8 +265,7 @@ class TaskPipeline:
                 "error",
                 reason=str(exc),
                 output=repr(partial) if partial is not None else None,
-                user_id=user_id,
-                group_id=group_id,
+                **self._event_kwargs(user_id, group_id),
             )
             raise
         self._emit_stage("planning", user_id, group_id)
@@ -250,8 +274,7 @@ class TaskPipeline:
             "plan",
             "success",
             output=repr(plan_result) if plan_result is not None else None,
-            user_id=user_id,
-            group_id=group_id,
+            **self._event_kwargs(user_id, group_id),
         )
         return plan_result
 
@@ -269,18 +292,22 @@ class TaskPipeline:
         status = "success"
         result: Any | None = None
         task_name = self.task.__class__.__name__
+        if self.current_run_id is None:
+            self.current_run_id = str(uuid4())
         emit_audit_log(
             task_name,
             "execute",
             "started",
-            user_id=user_id,
-            group_id=group_id,
+            **self._event_kwargs(user_id, group_id),
         )
 
         try:
             if hasattr(self.task, "precheck"):
                 emit_audit_log(
-                    task_name, "precheck", "started", user_id=user_id, group_id=group_id
+                    task_name,
+                    "precheck",
+                    "started",
+                    **self._event_kwargs(user_id, group_id),
                 )
                 try:
                     check = self.task.precheck()
@@ -305,8 +332,7 @@ class TaskPipeline:
                             "precheck",
                             "error",
                             reason=str(reason),
-                            user_id=user_id,
-                            group_id=group_id,
+                            **self._event_kwargs(user_id, group_id),
                         )
                         raise PrecheckError(str(reason))
                 except Exception as exc:
@@ -317,8 +343,7 @@ class TaskPipeline:
                         "precheck",
                         "error",
                         reason=str(exc),
-                        user_id=user_id,
-                        group_id=group_id,
+                        **self._event_kwargs(user_id, group_id),
                     )
                     raise
                 else:
@@ -327,8 +352,7 @@ class TaskPipeline:
                         task_name,
                         "precheck",
                         "success",
-                        user_id=user_id,
-                        group_id=group_id,
+                        **self._event_kwargs(user_id, group_id),
                     )
 
             parallel_tasks: list[Any] | None = None
@@ -342,6 +366,8 @@ class TaskPipeline:
 
                 async def _run_all() -> list[Any]:
                     async def _one(p: TaskPipeline) -> Any:
+                        if self.current_run_id is not None and p.current_run_id is None:
+                            p.current_run_id = self.current_run_id
                         r = p.run(user_id=user_id, group_id=group_id)
                         if inspect.isawaitable(r):
                             return await r
@@ -363,22 +389,18 @@ class TaskPipeline:
                 result = results
                 if hasattr(self.task, "run"):
                     result = self._call_run(results)
-                if group_id is None:
-                    emit_stage_update_event(
-                        self.task.__class__.__name__, "run", user_id=user_id
-                    )
-                else:
-                    emit_stage_update_event(
-                        self.task.__class__.__name__,
-                        "run",
-                        user_id=user_id,
-                        group_id=group_id,
-                    )
+                emit_stage_update_event(
+                    self.task.__class__.__name__,
+                    "run",
+                    **self._event_kwargs(user_id, group_id),
+                )
             elif isinstance(plan_result, list):
                 async def _run_all() -> list[Any]:
                     res: list[Any] = []
                     for sub in plan_result:
                         pipeline = sub if isinstance(sub, TaskPipeline) else TaskPipeline(sub)
+                        if self.current_run_id is not None and pipeline.current_run_id is None:
+                            pipeline.current_run_id = self.current_run_id
                         sub_result = pipeline.run(
                             user_id=user_id, group_id=group_id
                         )
@@ -405,17 +427,11 @@ class TaskPipeline:
             else:
                 result = self._call_run(plan_result)
 
-                if group_id is None:
-                    emit_stage_update_event(
-                        self.task.__class__.__name__, "run", user_id=user_id
-                    )
-                else:
-                    emit_stage_update_event(
-                        self.task.__class__.__name__,
-                        "run",
-                        user_id=user_id,
-                        group_id=group_id,
-                    )
+                emit_stage_update_event(
+                    self.task.__class__.__name__,
+                    "run",
+                    **self._event_kwargs(user_id, group_id),
+                )
         except Exception as exc:
             status = "error"
             partial = result if result is not None else getattr(exc, "partial", None)
@@ -425,8 +441,7 @@ class TaskPipeline:
                 "error",
                 reason=str(exc),
                 output=repr(partial) if partial is not None else None,
-                user_id=user_id,
-                group_id=group_id,
+                **self._event_kwargs(user_id, group_id),
             )
             raise
         finally:
@@ -437,7 +452,7 @@ class TaskPipeline:
                     id=self.task.__class__.__name__,
                     name=self.task.__class__.__name__,
                 ),
-                run_id=str(uuid4()),
+                run_id=self.current_run_id,
                 status=status,
                 started_at=start_ts,
                 finished_at=end_ts,
@@ -451,8 +466,7 @@ class TaskPipeline:
             "execute",
             status,
             output=repr(result) if status == "success" and result is not None else None,
-            user_id=user_id,
-            group_id=group_id,
+            **self._event_kwargs(user_id, group_id),
         )
         return result
 
@@ -464,7 +478,12 @@ class TaskPipeline:
         group_id: str | None = None,
     ) -> Any:
         task_name = self.task.__class__.__name__
-        emit_audit_log(task_name, "verify", "started", user_id=user_id, group_id=group_id)
+        emit_audit_log(
+            task_name,
+            "verify",
+            "started",
+            **self._event_kwargs(user_id, group_id),
+        )
         verify_result = exec_result
         try:
             if hasattr(self.task, "verify"):
@@ -494,8 +513,7 @@ class TaskPipeline:
                 "error",
                 reason=str(exc),
                 output=repr(partial) if partial is not None else None,
-                user_id=user_id,
-                group_id=group_id,
+                **self._event_kwargs(user_id, group_id),
             )
             raise
         self._emit_stage("verification", user_id, group_id)
@@ -504,8 +522,7 @@ class TaskPipeline:
             "verify",
             "success",
             output=repr(verify_result) if verify_result is not None else None,
-            user_id=user_id,
-            group_id=group_id,
+            **self._event_kwargs(user_id, group_id),
         )
         return verify_result
 
@@ -516,8 +533,7 @@ class TaskPipeline:
         emit_stage_update_event(
             self.task.__class__.__name__,
             "paused",
-            user_id=user_id,
-            group_id=group_id,
+            **self._event_kwargs(user_id, group_id),
         )
 
     def resume(self, *, user_id: str, group_id: str | None = None) -> None:
@@ -526,8 +542,7 @@ class TaskPipeline:
         emit_stage_update_event(
             self.task.__class__.__name__,
             "resumed",
-            user_id=user_id,
-            group_id=group_id,
+            **self._event_kwargs(user_id, group_id),
         )
 
     def attach_context(
@@ -560,8 +575,7 @@ class TaskPipeline:
             "context_attached",
             "received",
             output=repr(payload) if payload else None,
-            user_id=resolved_user_id,
-            group_id=resolved_group_id,
+            **self._event_kwargs(resolved_user_id, resolved_group_id),
         )
         return False
 
@@ -604,8 +618,7 @@ class TaskPipeline:
                 f"{stage}.context",
                 "consumed",
                 output=repr(ctx) if ctx else None,
-                user_id=user_id,
-                group_id=group_id,
+                **self._event_kwargs(user_id, group_id),
             )
 
     def _wait_if_paused(self) -> Any:
@@ -640,6 +653,8 @@ class TaskPipeline:
     def run(self, *, user_id: str, group_id: str | None = None) -> Any:
         self.task.user_id = user_id
         self.task.group_id = group_id
+        if self.current_run_id is None:
+            self.current_run_id = str(uuid4())
         self._reset_run_context()
         self._process_pending_context()
         loop_running = True
@@ -742,6 +757,8 @@ class TaskPipeline:
         """Asynchronously execute this pipeline."""
         self.task.user_id = user_id
         self.task.group_id = group_id
+        if self.current_run_id is None:
+            self.current_run_id = str(uuid4())
         self._reset_run_context()
         self._process_pending_context()
         self.intake(user_id=user_id, group_id=group_id)
