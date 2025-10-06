@@ -73,7 +73,10 @@ def test_cli_stage_events(monkeypatch, tmp_path):
     ume._stage_store = None
 
     runner = CliRunner()
-    result = runner.invoke(app, ["run", "example", "--user-id", "bob"])
+    result = runner.invoke(
+        app,
+        ["run", "example", "--user-id", "bob", "--group-id", "ops"],
+    )
     assert result.exit_code == 0
 
     data = yaml.safe_load(path.read_text())

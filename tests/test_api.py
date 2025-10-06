@@ -118,6 +118,10 @@ def test_run_task_user_header(monkeypatch, tmp_path):
 
     def fake_run_with_metadata(name, use_temporal=False, user_id=None, group_id=None):
         called["uid"] = user_id
+        return TaskExecutionResult(run_id="demo", result="r")
+
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    monkeypatch.setattr(sched, "run_task_with_metadata", fake_run)
         return TaskExecutionResult(run_id="test-run", result="r")
 
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
@@ -135,6 +139,10 @@ def test_run_task_group_header(monkeypatch, tmp_path):
 
     def fake_run_with_metadata(name, use_temporal=False, user_id=None, group_id=None):
         called["gid"] = group_id
+        return TaskExecutionResult(run_id="demo", result="r")
+
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    monkeypatch.setattr(sched, "run_task_with_metadata", fake_run)
         return TaskExecutionResult(run_id="test-run", result="r")
 
     sched, _ = setup_scheduler(monkeypatch, tmp_path)

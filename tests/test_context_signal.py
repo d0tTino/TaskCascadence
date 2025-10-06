@@ -259,6 +259,7 @@ def test_api_context_signal_rejects_unsupported_kind(
 def test_api_context_signal_missing_headers(headers, expected) -> None:
     client = TestClient(app)
     resp = client.post(
+        "/tasks/demo-run/signal",
         "/tasks/run-123/signal",
         headers=headers,
         json={"kind": "context", "value": {}},

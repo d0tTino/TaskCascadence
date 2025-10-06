@@ -174,6 +174,9 @@ def test_api_context_signal(monkeypatch, tmp_path):
     thread.start()
 
     assert task.research_started.wait(timeout=1)
+    pipeline = get_pipeline("contextsignal")
+    assert pipeline is not None
+    run_id = pipeline.current_run_id
 
     pipeline = get_pipeline("contextsignal")
     assert pipeline is not None

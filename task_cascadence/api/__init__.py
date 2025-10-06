@@ -103,6 +103,9 @@ def run_task(
             "user_id": user_id,
             "group_id": group_id,
         }
+        metadata = sched.run_task_with_metadata(name, **kwargs)
+        result = metadata.result
+        return {"run_id": metadata.run_id, "result": result}
         execution = sched.run_task_with_metadata(name, **kwargs)
         return {"result": execution.result, "run_id": execution.run_id}
     except Exception as exc:  # pragma: no cover - passthrough
@@ -127,6 +130,11 @@ async def run_task_async(
             "user_id": user_id,
             "group_id": group_id,
         }
+        metadata = sched.run_task_with_metadata(name, **kwargs)
+        result = metadata.result
+        if inspect.isawaitable(result):
+            result = await result
+        return {"run_id": metadata.run_id, "result": result}
         execution = sched.run_task_with_metadata(name, **kwargs)
         result = execution.result
         if inspect.isawaitable(result):
@@ -183,13 +191,20 @@ def disable_task(
 @app.post("/tasks/{name}/pause")
 def pause_task(
     name: str,
+    job_id: str | None = None,
     user_id: str = Depends(get_user_id),
     group_id: str = Depends(get_group_id),
 ):
     """Pause ``name`` so it temporarily stops running."""
     sched = get_default_scheduler()
     try:
-        pipeline = get_pipeline(name)
+        pipeline = None
+        if job_id is not None:
+            pipeline = get_pipeline(name, run_id=job_id)
+            if pipeline is None:
+                raise HTTPException(404, "pipeline not running")
+        else:
+            pipeline = get_pipeline(name)
         if pipeline:
             if user_id is None:
                 raise HTTPException(400, "user_id is required")
@@ -206,13 +221,20 @@ def pause_task(
 @app.post("/tasks/{name}/resume")
 def resume_task(
     name: str,
+    job_id: str | None = None,
     user_id: str = Depends(get_user_id),
     group_id: str = Depends(get_group_id),
 ):
     """Resume a previously paused task."""
     sched = get_default_scheduler()
     try:
-        pipeline = get_pipeline(name)
+        pipeline = None
+        if job_id is not None:
+            pipeline = get_pipeline(name, run_id=job_id)
+            if pipeline is None:
+                raise HTTPException(404, "pipeline not running")
+        else:
+            pipeline = get_pipeline(name)
         if pipeline:
             if user_id is None:
                 raise HTTPException(400, "user_id is required")

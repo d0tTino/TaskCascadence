@@ -1,4 +1,4 @@
-"""Registry of running :class:`~task_cascadence.orchestrator.TaskPipeline` instances."""
+"""Registry of active :class:`~task_cascadence.orchestrator.TaskPipeline` instances."""
 
 from __future__ import annotations
 
@@ -17,6 +17,26 @@ _task_run_index: Dict[str, list[str]] = {}
 _registry_lock = Lock()
 
 
+def _get_latest_pipeline_for_task_locked(task_name: str) -> Optional[TaskPipeline]:
+    """Return the most recent pipeline for *task_name* while holding the lock."""
+
+    run_ids = _task_run_index.get(task_name)
+    if not run_ids:
+        return None
+
+    for index in range(len(run_ids) - 1, -1, -1):
+        run_id = run_ids[index]
+        pipeline = _running_pipelines.get(run_id)
+        if pipeline is not None:
+            return pipeline
+        # Stale identifier encountered; remove it before continuing.
+        del run_ids[index]
+
+    if not run_ids:
+        _task_run_index.pop(task_name, None)
+    return None
+
+
 def add_pipeline(task_name: str, run_id: str, pipeline: TaskPipeline) -> None:
     """Register *pipeline* for *task_name* under the unique *run_id*."""
 
@@ -25,6 +45,46 @@ def add_pipeline(task_name: str, run_id: str, pipeline: TaskPipeline) -> None:
         _pipeline_tasks[run_id] = task_name
         _task_run_index.setdefault(task_name, []).append(run_id)
 
+
+def remove_pipeline(identifier: str, run_id: Optional[str] = None) -> None:
+    """Remove the pipeline identified by *run_id* (or legacy *identifier*).*"""
+
+    with _registry_lock:
+        run_id_key = run_id if run_id is not None else identifier
+        _running_pipelines.pop(run_id_key, None)
+
+        mapped_task = _pipeline_tasks.pop(run_id_key, None)
+        if mapped_task is None and run_id is not None:
+            mapped_task = identifier
+
+        if mapped_task:
+            runs_for_task = _task_run_index.get(mapped_task)
+            if runs_for_task:
+                try:
+                    runs_for_task.remove(run_id_key)
+                except ValueError:  # pragma: no cover - defensive cleanup
+                    pass
+                if not runs_for_task:
+                    _task_run_index.pop(mapped_task, None)
+
+
+def get_pipeline(identifier: str, run_id: Optional[str] = None) -> Optional[TaskPipeline]:
+    """Return the pipeline registered under *identifier* or *run_id* if running."""
+
+    with _registry_lock:
+        if run_id is not None:
+            pipeline = _running_pipelines.get(run_id)
+            if pipeline is None:
+                return None
+            mapped_task = _pipeline_tasks.get(run_id)
+            if mapped_task is None or mapped_task == identifier:
+                return pipeline
+            return None
+
+        pipeline = _running_pipelines.get(identifier)
+        if pipeline is not None:
+            return pipeline
+        return _get_latest_pipeline_for_task_locked(identifier)
 
 def remove_pipeline(run_id: str, task_name: str | None = None) -> None:
     """Remove the pipeline registered under *run_id* if present."""
@@ -74,6 +134,7 @@ def get_pipeline(identifier: str, *, run_id: str | None = None) -> Optional[Task
     """
 
     with _registry_lock:
+        return _get_latest_pipeline_for_task_locked(task_name)
         if run_id is not None:
             pipeline = _running_pipelines.get(run_id)
             if pipeline is not None:
@@ -114,6 +175,17 @@ def attach_pipeline_context(
     the task of the same name when no pipeline exists for the identifier.
     Returns ``True`` when a pipeline was found and context enqueued.
     """
+
+    with _registry_lock:
+        if run_id is not None:
+            pipeline = _running_pipelines.get(run_id)
+        else:
+            pipeline = _running_pipelines.get(run_id_or_task)
+            if pipeline is None:
+                pipeline = _get_latest_pipeline_for_task_locked(run_id_or_task)
+
+    if pipeline is None:
+        return False
 
     pipeline = get_pipeline(run_id_or_task)
     if pipeline is None:
