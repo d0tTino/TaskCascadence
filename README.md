@@ -364,7 +364,21 @@ can observe them. Retrieve stored logs through the API:
 curl http://localhost:8000/pipeline/MyTask
 ```
 
-This endpoint returns the chronological audit trail for ``MyTask``.
+This endpoint returns the chronological stage progression for ``MyTask``.
+
+To retrieve audit records, call the dedicated endpoint:
+
+```bash
+curl "http://localhost:8000/pipeline/MyTask/audit"
+```
+
+Audit responses can be narrowed to a specific hashed user or group by
+supplying ``user_hash`` or ``group_id`` query parameters:
+
+```bash
+curl "http://localhost:8000/pipeline/MyTask/audit?user_hash=abc123"
+curl "http://localhost:8000/pipeline/MyTask/audit?group_id=engineering"
+```
 
 ## Recurring Schedule YAML Format
 

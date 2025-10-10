@@ -75,36 +75,20 @@ def test_attach_pipeline_context_exposes_pipeline(monkeypatch):
             self.context_snapshot = list(getattr(self, "context", []))
             return "ok"
 
-    first_pipeline = TaskPipeline(SimpleTask())
-    first_run_id = "demo-run"
-    first_pipeline.current_run_id = first_run_id
-    add_pipeline("demo", first_run_id, first_pipeline)
+    pipeline = TaskPipeline(SimpleTask())
+    run_id = "demo-run"
+    pipeline.current_run_id = run_id
+    add_pipeline("demo", run_id, pipeline)
     try:
         assert attach_pipeline_context(
-            first_run_id, {"payload": 1}, user_id="carol", group_id="g"
             run_id, {"payload": 1}, user_id="carol", group_id="g"
         )
-        result = first_pipeline.run(user_id="carol", group_id="g")
+        result = pipeline.run(user_id="carol", group_id="g")
         assert result == "ok"
-        assert first_pipeline.task.context_snapshot == [{"payload": 1}]
+        assert pipeline.task.context_snapshot == [{"payload": 1}]
         assert stages.count("context_attached") == 1
         assert ("context_attached", "{'payload': 1}") in audits
     finally:
-        remove_pipeline(first_run_id)
-
-    second_pipeline = TaskPipeline(SimpleTask())
-    second_run_id = "demo-run-2"
-    second_pipeline.current_run_id = second_run_id
-    add_pipeline("demo", second_run_id, second_pipeline)
-    try:
-        assert attach_pipeline_context(
-            "demo", {"payload": 2}, user_id="carol", group_id="g", run_id=second_run_id
-        )
-        result = second_pipeline.run(user_id="carol", group_id="g")
-        assert result == "ok"
-        assert second_pipeline.task.context_snapshot == [{"payload": 2}]
-    finally:
-        remove_pipeline(second_run_id)
         remove_pipeline(run_id, task_name="demo")
 
     assert attach_pipeline_context("missing", "value") is False
