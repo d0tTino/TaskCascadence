@@ -279,6 +279,23 @@ def pipeline_status(name: str):
     return store.get_events(name)
 
 
+@app.get("/pipeline/{name}/audit")
+def pipeline_audit(
+    name: str,
+    user_hash: str | None = None,
+    group_id: str | None = None,
+):
+    """Return stored audit events for ``name`` filtered by the optional criteria."""
+
+    store = StageStore()
+    return store.get_events(
+        name,
+        user_hash=user_hash,
+        group_id=group_id,
+        category="audit",
+    )
+
+
 @app.post("/pointers/{name}")
 def pointer_add(name: str, user_id: str, run_id: str):
     """Add a pointer for ``name``."""

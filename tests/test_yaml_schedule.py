@@ -275,7 +275,6 @@ def test_yaml_calendar_event_multiple_recurrences(tmp_path, monkeypatch):
     def add_pipeline(task_name, run_id, pipeline):  # pragma: no cover - stub
         pass
 
-    def remove_pipeline(identifier, run_id=None):  # pragma: no cover - stub
     def remove_pipeline(run_id, task_name=None):  # pragma: no cover - stub
         pass
 

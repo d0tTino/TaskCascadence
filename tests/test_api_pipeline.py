@@ -108,6 +108,48 @@ def test_api_pipeline_status(monkeypatch, tmp_path):
     assert resp.json() == events
 
 
+def test_api_pipeline_audit(monkeypatch, tmp_path):
+    path = tmp_path / "audit.yml"
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(path))
+    store = StageStore()
+    store.add_event(
+        "example",
+        "submitted",
+        "user-a",
+        group_id="alpha",
+        category="audit",
+    )
+    store.add_event(
+        "example",
+        "approved",
+        "user-b",
+        group_id="beta",
+        category="audit",
+    )
+
+    all_events = store.get_events("example", category="audit")
+    filtered_user = store.get_events(
+        "example", user_hash="user-a", category="audit"
+    )
+    filtered_group = store.get_events(
+        "example", group_id="beta", category="audit"
+    )
+
+    client = TestClient(app)
+
+    resp = client.get("/pipeline/example/audit")
+    assert resp.status_code == 200
+    assert resp.json() == all_events
+
+    resp = client.get("/pipeline/example/audit", params={"user_hash": "user-a"})
+    assert resp.status_code == 200
+    assert resp.json() == filtered_user
+
+    resp = client.get("/pipeline/example/audit", params={"group_id": "beta"})
+    assert resp.status_code == 200
+    assert resp.json() == filtered_group
+
+
 class ContextSignalTask(ExampleTask):
     name = "contextsignal"
 
