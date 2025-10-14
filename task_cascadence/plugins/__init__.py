@@ -87,9 +87,10 @@ class PointerTask(BaseTask):
     ) -> None:
         from ..ume import _hash_user_id
 
-        self.pointers.append(
-            TaskPointer(run_id=run_id, user_hash=_hash_user_id(user_id))
-        )
+        pointer = TaskPointer(run_id=run_id, user_hash=_hash_user_id(user_id))
+        if group_id is not None:
+            pointer.group_id = group_id
+        self.pointers.append(pointer)
         self.store.add_pointer(self.name, user_id, run_id, group_id=group_id)
 
 

@@ -28,6 +28,8 @@ class Suggestion:
     task_name: str | None = None
     context: Dict[str, Any] = field(default_factory=dict)
     state: str = "pending"  # pending, snoozed, dismissed, accepted
+    user_id: str | None = None
+    group_id: str | None = None
 
 
 class SuggestionEngine:
@@ -98,6 +100,8 @@ class SuggestionEngine:
                 related_entities=pattern.get("related", []),
                 task_name=pattern.get("task_name"),
                 context=pattern.get("context", {}),
+                user_id=user_id,
+                group_id=group_id,
             )
             self._suggestions[suggestion.id] = suggestion
 
@@ -117,8 +121,16 @@ class SuggestionEngine:
             loop = asyncio.get_running_loop()
             self._task = loop.create_task(self._loop())
 
-    def list(self) -> List[Suggestion]:
-        return [s for s in self._suggestions.values() if s.state != "dismissed"]
+    def list(
+        self, user_id: str | None = None, group_id: str | None = None
+    ) -> List[Suggestion]:
+        return [
+            s
+            for s in self._suggestions.values()
+            if s.state != "dismissed"
+            and (user_id is None or s.user_id == user_id)
+            and (group_id is None or s.group_id == group_id)
+        ]
 
     def get(self, suggestion_id: str) -> Suggestion:
         return self._suggestions[suggestion_id]

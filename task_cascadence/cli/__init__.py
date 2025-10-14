@@ -21,6 +21,7 @@ from ..pipeline_registry import get_pipeline
 from .. import plugins  # noqa: F401
 from ..metrics import start_metrics_server  # noqa: F401
 from ..pointer_store import PointerStore
+from ..ume import _hash_user_id
 import task_cascadence as tc
 from ..n8n import export_workflow
 
@@ -417,44 +418,69 @@ def reload_plugins_cmd() -> None:
 
 
 
-def _pointer_add(name: str, user_id: str, run_id: str) -> None:
+def _pointer_add(
+    name: str,
+    user_id: str,
+    run_id: str,
+    group_id: str | None = None,
+) -> None:
     sched = get_default_scheduler()
     task_info = dict(sched._tasks).get(name)
     if not task_info or not isinstance(task_info["task"], plugins.PointerTask):
         raise ValueError(f"'{name}' is not a pointer task")
 
     task: plugins.PointerTask = task_info["task"]
-    task.add_pointer(user_id, run_id)
+    task.add_pointer(user_id, run_id, group_id=group_id)
 
 
 @app.command("pointer-add")
-def pointer_add(name: str, user_id: str, run_id: str) -> None:
+def pointer_add(
+    name: str,
+    user_id: str,
+    run_id: str,
+    group_id: str | None = typer.Option(
+        None, "--group-id", help="Group ID to associate with the pointer"
+    ),
+) -> None:
     """Add a pointer to ``NAME`` for ``USER_ID`` and ``RUN_ID``."""
 
     try:
-        _pointer_add(name, user_id, run_id)
+        _pointer_add(name, user_id, run_id, group_id=group_id)
         typer.echo("pointer added")
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
         raise typer.Exit(code=1) from exc
 
 
-def _pointer_list(name: str) -> list[dict[str, str]]:
+def _pointer_list(
+    name: str,
+    user_id: str | None = None,
+    group_id: str | None = None,
+) -> list[dict[str, str]]:
     sched = get_default_scheduler()
     task_info = dict(sched._tasks).get(name)
     if not task_info or not isinstance(task_info["task"], plugins.PointerTask):
         raise ValueError(f"'{name}' is not a pointer task")
 
     store = PointerStore()
-    return store.get_pointers(name)
+    user_hash = _hash_user_id(user_id) if user_id is not None else None
+    return store.get_pointers(name, user_hash=user_hash, group_id=group_id)
 
 
 @app.command("pointer-list")
-def pointer_list(name: str) -> None:
+def pointer_list(
+    name: str,
+    user_id: str | None = typer.Option(
+        None, "--user-id", help="Filter pointers for the specified user"
+    ),
+    group_id: str | None = typer.Option(
+        None, "--group-id", help="Filter pointers for the specified group"
+    ),
+) -> None:
     """List pointers for ``NAME``."""
 
     try:
-        for entry in _pointer_list(name):
+        for entry in _pointer_list(name, user_id=user_id, group_id=group_id):
             typer.echo(f"{entry['run_id']}\t{entry['user_hash']}")
     except ValueError as exc:
         typer.echo(f"error: {exc}", err=True)
@@ -475,18 +501,33 @@ def pointer_send(name: str, user_id: str, run_id: str) -> None:
     typer.echo("pointer sent")
 
 
-def _pointer_receive(name: str, run_id: str, user_hash: str) -> None:
+def _pointer_receive(
+    name: str,
+    run_id: str,
+    user_hash: str,
+    group_id: str | None = None,
+) -> None:
     store = PointerStore()
     from ..ume.models import PointerUpdate
 
-    store.apply_update(PointerUpdate(task_name=name, run_id=run_id, user_hash=user_hash))
+    store.apply_update(
+        PointerUpdate(task_name=name, run_id=run_id, user_hash=user_hash),
+        group_id=group_id,
+    )
 
 
 @app.command("pointer-receive")
-def pointer_receive(name: str, run_id: str, user_hash: str) -> None:
+def pointer_receive(
+    name: str,
+    run_id: str,
+    user_hash: str,
+    group_id: str | None = typer.Option(
+        None, "--group-id", help="Group ID associated with the pointer"
+    ),
+) -> None:
     """Store a received pointer update."""
 
-    _pointer_receive(name, run_id, user_hash)
+    _pointer_receive(name, run_id, user_hash, group_id=group_id)
     typer.echo("pointer stored")
 
 

@@ -297,11 +297,16 @@ def pipeline_audit(
 
 
 @app.post("/pointers/{name}")
-def pointer_add(name: str, user_id: str, run_id: str):
+def pointer_add(
+    name: str,
+    run_id: str,
+    user_id: str = Depends(get_user_id),
+    group_id: str = Depends(get_group_id),
+):
     """Add a pointer for ``name``."""
 
     try:
-        _pointer_add(name, user_id, run_id)
+        _pointer_add(name, user_id, run_id, group_id=group_id)
         return {"status": "added"}
     except ValueError as exc:  # pragma: no cover - validation
         raise HTTPException(400, str(exc)) from exc
@@ -309,30 +314,46 @@ def pointer_add(name: str, user_id: str, run_id: str):
 
 
 @app.get("/pointers/{name}")
-def pointer_list(name: str):
+def pointer_list(
+    name: str,
+    user_id: str = Depends(get_user_id),
+    group_id: str = Depends(get_group_id),
+):
     """List pointers for ``name``."""
 
     try:
-        return _pointer_list(name)
+        return _pointer_list(name, user_id=user_id, group_id=group_id)
     except ValueError as exc:  # pragma: no cover - validation
         raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/pointers/{name}/receive")
-def pointer_receive(name: str, run_id: str, user_hash: str):
+def pointer_receive(
+    name: str,
+    run_id: str,
+    user_hash: str,
+    _user_id: str = Depends(get_user_id),
+    group_id: str = Depends(get_group_id),
+):
     """Store a received pointer update."""
 
-    _pointer_receive(name, run_id, user_hash)
+    _pointer_receive(name, run_id, user_hash, group_id=group_id)
 
     return {"status": "stored"}
 
 
 @app.get("/suggestions")
-def suggestion_list():
+def suggestion_list(
+    user_id: str = Depends(get_user_id),
+    group_id: str = Depends(get_group_id),
+):
     """Return all generated suggestions."""
 
     engine = get_default_engine()
-    return [s.__dict__ for s in engine.list()]
+    return [
+        s.__dict__
+        for s in engine.list(user_id=user_id, group_id=group_id)
+    ]
 
 
 @app.post("/suggestions/{suggestion_id}/accept")
