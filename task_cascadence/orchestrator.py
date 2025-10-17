@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from threading import Lock
+from threading import Event, Lock
 from typing import Any, Coroutine, Deque, TypedDict, cast
 from uuid import uuid4
 import asyncio
@@ -64,6 +64,10 @@ class TaskPipeline:
     _context_queue: Deque[Any] = field(default_factory=deque, init=False, repr=False)
     _context_lock: Lock = field(default_factory=Lock, init=False, repr=False)
     current_run_id: str | None = field(default=None, init=False)
+    _is_running: bool = field(default=False, init=False, repr=False)
+    _pending_context_delivery: tuple[str, str, str | None] | None = field(
+        default=None, init=False, repr=False
+    )
 
     def _emit_stage(
         self,
@@ -570,9 +574,21 @@ class TaskPipeline:
         else:
             stored_payload = payload
 
+        immediate_stage: tuple[str, str, str | None] | None = None
+        deliver_now = False
         with self._context_lock:
             self._context.append(stored_payload)
             self._context_queue.append(stored_payload)
+            if (
+                self._pending_context_delivery is not None
+                and (not self._is_running or self._paused)
+            ):
+                immediate_stage = self._pending_context_delivery
+                self._pending_context_delivery = None
+            elif not self._is_running:
+                deliver_now = True
+                self._context_store.append(stored_payload)
+                self.task.context = self._context_store
 
         resolved_user_id = (
             user_id if user_id is not None else getattr(self.task, "user_id", None)
@@ -580,6 +596,17 @@ class TaskPipeline:
         resolved_group_id = (
             group_id if group_id is not None else getattr(self.task, "group_id", None)
         )
+
+        if immediate_stage is not None:
+            self._process_pending_context()
+            stage, stage_user, stage_group = immediate_stage
+            self._deliver_context(stage, user_id=stage_user, group_id=stage_group)
+            consumed = True
+        elif deliver_now:
+            consumed = True
+        else:
+            consumed = False
+
         self._emit_stage("context_attached", resolved_user_id, resolved_group_id)
         emit_audit_log(
             self.task.__class__.__name__,
@@ -588,7 +615,27 @@ class TaskPipeline:
             output=repr(payload) if payload else None,
             **self._event_kwargs(resolved_user_id, resolved_group_id),
         )
-        return False
+        allow_event = getattr(self.task, "allow_plan", None)
+        if isinstance(allow_event, Event):
+            allow_event.set()
+        elif isinstance(allow_event, asyncio.Event):
+            allow_event.set()
+
+        return consumed
+
+    def _signal_ready_event(self, name: str) -> None:
+        """Set an optional readiness event exposed by the task."""
+
+        ready_obj = getattr(self.task, name, None)
+        if ready_obj is None:
+            return
+
+        if isinstance(ready_obj, Event):
+            ready_obj.set()
+            return
+
+        if isinstance(ready_obj, asyncio.Event):
+            ready_obj.set()
 
     def _drain_context_queue(self) -> list[dict[str, Any]]:
 
@@ -632,6 +679,34 @@ class TaskPipeline:
                 **self._event_kwargs(user_id, group_id),
             )
 
+        if stage == "plan":
+            allow_event = getattr(self.task, "allow_plan", None)
+            if isinstance(allow_event, Event):
+                allow_event.set()
+            elif isinstance(allow_event, asyncio.Event):
+                allow_event.set()
+
+    def _schedule_context_delivery(
+        self, stage: str, *, user_id: str, group_id: str | None
+    ) -> None:
+        with self._context_lock:
+            self._pending_context_delivery = (stage, user_id, group_id)
+
+    def _consume_pending_context(self) -> None:
+        pending: tuple[str, str, str | None] | None
+        with self._context_lock:
+            pending = self._pending_context_delivery
+            self._pending_context_delivery = None
+        if pending is None:
+            return
+        stage, user_id, group_id = pending
+        self._process_pending_context()
+        self._deliver_context(stage, user_id=user_id, group_id=group_id)
+
+    def _clear_pending_context(self) -> None:
+        with self._context_lock:
+            self._pending_context_delivery = None
+
     def _wait_if_paused(self) -> Any:
         """Block until the pipeline is resumed."""
 
@@ -661,6 +736,8 @@ class TaskPipeline:
         self._process_pending_context()
 
     # ------------------------------------------------------------------
+
+
     def run(self, *, user_id: str, group_id: str | None = None) -> Any:
         self.task.user_id = user_id
         self.task.group_id = group_id
@@ -668,6 +745,8 @@ class TaskPipeline:
             self.current_run_id = str(uuid4())
         self._reset_run_context()
         self._process_pending_context()
+        self._is_running = True
+        self._signal_ready_event("research_ready")
         loop_running = True
         try:
             asyncio.get_running_loop()
@@ -675,92 +754,118 @@ class TaskPipeline:
             loop_running = False
 
         if loop_running:
+
             async def _async_run() -> Any:
-                self._process_pending_context()
-                self.intake(user_id=user_id, group_id=group_id)
-                self._process_pending_context()
-                wait = self._wait_if_paused()
-                if inspect.isawaitable(wait):
-                    await wait
-                else:
-                    assert wait is None
+                try:
+                    self._signal_ready_event("research_ready")
+                    self._process_pending_context()
+                    self.intake(user_id=user_id, group_id=group_id)
+                    self._process_pending_context()
+                    self._schedule_context_delivery(
+                        "research", user_id=user_id, group_id=group_id
+                    )
+                    self._signal_ready_event("research_ready")
+                    wait = self._wait_if_paused()
+                    if inspect.isawaitable(wait):
+                        await wait
+                    else:
+                        assert wait is None
+                    self._consume_pending_context()
 
-                self._deliver_context(
-                    "research", user_id=user_id, group_id=group_id
-                )
+                    result = self.research(user_id=user_id, group_id=group_id)
+                    if inspect.isawaitable(result):
+                        await result
 
-                result = self.research(user_id=user_id, group_id=group_id)
-                if inspect.isawaitable(result):
-                    await result
+                    self._process_pending_context()
+                    self._schedule_context_delivery(
+                        "plan", user_id=user_id, group_id=group_id
+                    )
+                    wait = self._wait_if_paused()
+                    if inspect.isawaitable(wait):
+                        await wait
+                    self._consume_pending_context()
 
-                self._process_pending_context()
-                wait = self._wait_if_paused()
-                if inspect.isawaitable(wait):
-                    await wait
+                    plan_result = self.plan(user_id=user_id, group_id=group_id)
+                    if inspect.isawaitable(plan_result):
+                        plan_result = await plan_result
 
-                self._deliver_context("plan", user_id=user_id, group_id=group_id)
+                    self._process_pending_context()
+                    self._schedule_context_delivery(
+                        "execute", user_id=user_id, group_id=group_id
+                    )
+                    wait = self._wait_if_paused()
+                    if inspect.isawaitable(wait):
+                        await wait
+                    self._consume_pending_context()
 
-                plan_result = self.plan(user_id=user_id, group_id=group_id)
-                if inspect.isawaitable(plan_result):
-                    plan_result = await plan_result
+                    exec_result = self.execute(
+                        plan_result, user_id=user_id, group_id=group_id
+                    )
+                    if inspect.isawaitable(exec_result):
+                        exec_result = await exec_result
 
-                self._process_pending_context()
-                wait = self._wait_if_paused()
-                if inspect.isawaitable(wait):
-                    await wait
+                    self._process_pending_context()
+                    self._schedule_context_delivery(
+                        "verify", user_id=user_id, group_id=group_id
+                    )
+                    wait = self._wait_if_paused()
+                    if inspect.isawaitable(wait):
+                        await wait
+                    self._consume_pending_context()
 
-                self._deliver_context(
-                    "execute", user_id=user_id, group_id=group_id
-                )
-
-                exec_result = self.execute(
-                    plan_result, user_id=user_id, group_id=group_id
-                )
-                if inspect.isawaitable(exec_result):
-                    exec_result = await exec_result
-
-                self._process_pending_context()
-                wait = self._wait_if_paused()
-                if inspect.isawaitable(wait):
-                    await wait
-
-                self._deliver_context(
-                    "verify", user_id=user_id, group_id=group_id
-                )
-
-                verify_result = self.verify(
-                    exec_result, user_id=user_id, group_id=group_id
-                )
-                if inspect.isawaitable(verify_result):
-                    verify_result = await verify_result
-                return verify_result
+                    verify_result = self.verify(
+                        exec_result, user_id=user_id, group_id=group_id
+                    )
+                    if inspect.isawaitable(verify_result):
+                        verify_result = await verify_result
+                    return verify_result
+                finally:
+                    self._is_running = False
+                    self._clear_pending_context()
 
             return _async_run()
 
-        self._process_pending_context()
-        self.intake(user_id=user_id, group_id=group_id)
-        self._process_pending_context()
-        self._wait_if_paused()
-        self._deliver_context("research", user_id=user_id, group_id=group_id)
+        try:
+            self._process_pending_context()
+            self.intake(user_id=user_id, group_id=group_id)
+            self._process_pending_context()
+            self._schedule_context_delivery(
+                "research", user_id=user_id, group_id=group_id
+            )
+            self._signal_ready_event("research_ready")
+            self._wait_if_paused()
+            self._consume_pending_context()
 
-        self.research(user_id=user_id, group_id=group_id)
-        self._process_pending_context()
-        self._wait_if_paused()
-        self._deliver_context("plan", user_id=user_id, group_id=group_id)
+            self.research(user_id=user_id, group_id=group_id)
+            self._process_pending_context()
+            self._schedule_context_delivery(
+                "plan", user_id=user_id, group_id=group_id
+            )
+            self._wait_if_paused()
+            self._consume_pending_context()
 
-        plan_result = self.plan(user_id=user_id, group_id=group_id)
-        self._process_pending_context()
-        self._wait_if_paused()
-        self._deliver_context("execute", user_id=user_id, group_id=group_id)
+            plan_result = self.plan(user_id=user_id, group_id=group_id)
+            self._process_pending_context()
+            self._schedule_context_delivery(
+                "execute", user_id=user_id, group_id=group_id
+            )
+            self._wait_if_paused()
+            self._consume_pending_context()
 
-        exec_result = self.execute(
-            plan_result, user_id=user_id, group_id=group_id
-        )
-        self._process_pending_context()
-        self._wait_if_paused()
-        self._deliver_context("verify", user_id=user_id, group_id=group_id)
+            exec_result = self.execute(
+                plan_result, user_id=user_id, group_id=group_id
+            )
+            self._process_pending_context()
+            self._schedule_context_delivery(
+                "verify", user_id=user_id, group_id=group_id
+            )
+            self._wait_if_paused()
+            self._consume_pending_context()
 
-        return self.verify(exec_result, user_id=user_id, group_id=group_id)
+            return self.verify(exec_result, user_id=user_id, group_id=group_id)
+        finally:
+            self._is_running = False
+            self._clear_pending_context()
 
     async def run_async(
         self, *, user_id: str, group_id: str | None = None
@@ -772,45 +877,61 @@ class TaskPipeline:
             self.current_run_id = str(uuid4())
         self._reset_run_context()
         self._process_pending_context()
+        self._signal_ready_event("research_ready")
+        self._is_running = True
         self.intake(user_id=user_id, group_id=group_id)
         self._process_pending_context()
-        await self._wait_if_paused_async()
-        self._process_pending_context()
+        try:
+            self._schedule_context_delivery(
+                "research", user_id=user_id, group_id=group_id
+            )
+            self._signal_ready_event("research_ready")
+            await self._wait_if_paused_async()
+            self._consume_pending_context()
 
-        self._deliver_context("research", user_id=user_id, group_id=group_id)
-        research_result = self.research(user_id=user_id, group_id=group_id)
-        if inspect.isawaitable(research_result):
-            research_result = await research_result
-        self._process_pending_context()
-        await self._wait_if_paused_async()
-        self._process_pending_context()
+            research_result = self.research(user_id=user_id, group_id=group_id)
+            if inspect.isawaitable(research_result):
+                research_result = await research_result
+            self._process_pending_context()
+            self._schedule_context_delivery(
+                "plan", user_id=user_id, group_id=group_id
+            )
+            await self._wait_if_paused_async()
+            self._consume_pending_context()
 
-        self._deliver_context("plan", user_id=user_id, group_id=group_id)
-        plan_result = self.plan(user_id=user_id, group_id=group_id)
-        if inspect.isawaitable(plan_result):
-            plan_result = await plan_result
-        self._process_pending_context()
-        await self._wait_if_paused_async()
-        self._process_pending_context()
+            plan_result = self.plan(user_id=user_id, group_id=group_id)
+            if inspect.isawaitable(plan_result):
+                plan_result = await plan_result
+            self._process_pending_context()
+            self._schedule_context_delivery(
+                "execute", user_id=user_id, group_id=group_id
+            )
+            await self._wait_if_paused_async()
+            self._consume_pending_context()
 
-        self._deliver_context("execute", user_id=user_id, group_id=group_id)
-        exec_result = self.execute(
-            plan_result, user_id=user_id, group_id=group_id
-        )
-        if inspect.isawaitable(exec_result):
-            exec_result = await exec_result
-        self._process_pending_context()
-        await self._wait_if_paused_async()
-        self._process_pending_context()
+            exec_result = self.execute(
+                plan_result, user_id=user_id, group_id=group_id
+            )
+            if inspect.isawaitable(exec_result):
+                exec_result = await exec_result
+            self._process_pending_context()
+            self._schedule_context_delivery(
+                "verify", user_id=user_id, group_id=group_id
+            )
+            await self._wait_if_paused_async()
+            self._consume_pending_context()
 
-        self._deliver_context("verify", user_id=user_id, group_id=group_id)
-        verify_result = self.verify(
-            exec_result, user_id=user_id, group_id=group_id
-        )
-        if inspect.isawaitable(verify_result):
-            verify_result = await verify_result
-        self._process_pending_context()
-        return verify_result
+            verify_result = self.verify(
+                exec_result, user_id=user_id, group_id=group_id
+            )
+            if inspect.isawaitable(verify_result):
+                verify_result = await verify_result
+            self._process_pending_context()
+            return verify_result
+        finally:
+            self._is_running = False
+            self._clear_pending_context()
+
 
     def _call_run(self, plan_result: Any) -> Any:
         """Execute the task's ``run`` method."""

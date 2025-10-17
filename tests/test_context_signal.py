@@ -1,5 +1,6 @@
 import asyncio
 import threading
+import time
 from typing import Any
 
 import pytest
@@ -66,7 +67,10 @@ def test_pipeline_delivers_mid_run_context(monkeypatch: pytest.MonkeyPatch) -> N
     thread.start()
 
     assert task.research_ready.wait(timeout=1)
-    pipeline.attach_context({"note": "hello"}, user_id="alice", group_id="team")
+    consumed = pipeline.attach_context(
+        {"note": "hello"}, user_id="alice", group_id="team"
+    )
+    assert consumed is False
     task.resume_research.set()
     thread.join(timeout=2)
     assert not thread.is_alive()
@@ -120,7 +124,10 @@ async def test_pipeline_delivers_mid_run_context_async(monkeypatch: pytest.Monke
     run_task = asyncio.create_task(pipeline.run_async(user_id="bob", group_id="builders"))
 
     await asyncio.wait_for(task.research_ready.wait(), timeout=1)
-    pipeline.attach_context({"note": "async"}, user_id="bob", group_id="builders")
+    consumed = pipeline.attach_context(
+        {"note": "async"}, user_id="bob", group_id="builders"
+    )
+    assert consumed is False
     task.resume_research.set()
     result = await asyncio.wait_for(run_task, timeout=2)
     assert result == {"context": {"note": "async"}}
@@ -205,7 +212,7 @@ def test_api_context_signal_delivery(monkeypatch: pytest.MonkeyPatch, tmp_path) 
         json={"kind": "context", "value": {"note": "hello"}},
     )
     assert resp.status_code == 202
-    assert resp.json() == {"status": "accepted"}
+    assert resp.json() == {"status": "accepted", "delivered": False}
 
     task.allow_plan.set()
     thread.join(timeout=2)
@@ -215,6 +222,61 @@ def test_api_context_signal_delivery(monkeypatch: pytest.MonkeyPatch, tmp_path) 
     assert task.run_contexts == [[{"note": "hello"}]]
     assert task.verify_contexts == [[{"note": "hello"}]]
     assert get_pipeline("api-context") is None
+
+
+def test_api_context_signal_immediate_delivery(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    sched, task = _setup_api_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+
+    thread = threading.Thread(
+        target=lambda: sched.run_task("api-context", user_id="alice", group_id="team"),
+        daemon=True,
+    )
+    thread.start()
+
+    assert task.research_started.wait(timeout=1)
+    pipeline = get_pipeline("api-context")
+    assert pipeline is not None
+    run_id = pipeline.current_run_id
+    assert run_id is not None
+
+    pipeline.pause(user_id="alice", group_id="team")
+    task.allow_plan.set()
+
+    for _ in range(20):
+        pending = getattr(pipeline, "_pending_context_delivery", None)
+        if pending and pending[0] == "plan":
+            break
+        time.sleep(0.05)
+
+    resp = client.post(
+        f"/tasks/{run_id}/signal",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        json={"kind": "context", "value": {"note": "instant"}},
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "delivered", "delivered": True}
+
+    pipeline.resume(user_id="alice", group_id="team")
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+
+    assert task.plan_contexts == [[{"note": "instant"}]]
+    assert task.run_contexts == [[{"note": "instant"}]]
+    assert task.verify_contexts == [[{"note": "instant"}]]
+    assert get_pipeline("api-context") is None
+
+
+def test_pipeline_acknowledges_idle_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    _silence_pipeline_events(monkeypatch)
+    task = SyncContextTask()
+    pipeline = TaskPipeline(task)
+
+    delivered = pipeline.attach_context({"note": "idle"}, user_id="idle")
+    assert delivered is True
+    assert list(task.context) == [{"note": "idle"}]
 
 
 def test_api_context_signal_rejects_unsupported_kind(

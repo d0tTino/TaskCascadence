@@ -2,10 +2,18 @@ from __future__ import annotations
 
 from pathlib import Path
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Type, cast
+from threading import RLock
 from datetime import datetime, timezone
 
 import yaml
+
+try:  # pragma: no cover - depends on optional libyaml acceleration
+    _YAML_DUMPER: Type[yaml.SafeDumper] = cast(  # type: ignore[misc]
+        Type[yaml.SafeDumper], yaml.CSafeDumper
+    )
+except AttributeError:  # pragma: no cover - fallback when C bindings missing
+    _YAML_DUMPER = yaml.SafeDumper
 
 from .config import load_config
 
@@ -24,12 +32,27 @@ class StageStore:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.touch(exist_ok=True)
+        self._lock = RLock()
         self._data: Dict[str, List[Dict[str, Any]]] = self._load()
 
     def _load(self) -> Dict[str, List[Dict[str, Any]]]:
         if self.path.exists():
             with open(self.path, "r") as fh:
-                data = yaml.safe_load(fh) or {}
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)  # type: ignore[attr-defined]
+                else:
+                    import fcntl
+
+                    fcntl.flock(fh.fileno(), fcntl.LOCK_SH)
+                try:
+                    data = yaml.safe_load(fh) or {}
+                finally:
+                    if os.name == "nt":
+                        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
+                    else:
+                        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
                 if isinstance(data, dict):
                     for key, events in data.items():
                         if isinstance(events, list):
@@ -49,6 +72,17 @@ class StageStore:
 
     def _save(self) -> None:
         """Persist data to disk with an exclusive file lock."""
+        with self._lock:
+            self._save_locked()
+
+    def _save_locked(self) -> None:
+        rendered = yaml.dump(
+            self._data,
+            Dumper=_YAML_DUMPER,
+            sort_keys=False,
+            allow_unicode=True,
+            default_flow_style=False,
+        )
         mode = "r+" if self.path.exists() else "w+"
         with open(self.path, mode) as fh:
             if os.name == "nt":
@@ -61,7 +95,7 @@ class StageStore:
                 fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
             try:
                 fh.seek(0)
-                yaml.safe_dump(self._data, fh)
+                fh.write(rendered)
                 fh.truncate()
                 fh.flush()
             finally:
@@ -103,9 +137,10 @@ class StageStore:
         if run_id is not None:
             entry["run_id"] = run_id
         key = task_name if category == "stage" else f"{task_name}:{category}"
-        events = self._data.setdefault(key, [])
-        events.append(entry)
-        self._save()
+        with self._lock:
+            events = self._data.setdefault(key, [])
+            events.append(entry)
+            self._save_locked()
 
     def get_events(
         self,
