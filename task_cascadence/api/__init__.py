@@ -268,7 +268,10 @@ def signal_task(
         payload.value, user_id=user_id, group_id=group_id
     )
     status_code = 200 if consumed else 202
-    body = {"status": "delivered" if consumed else "accepted"}
+    body = {
+        "status": "delivered" if consumed else "accepted",
+        "delivered": consumed,
+    }
     return JSONResponse(body, status_code=status_code)
 
 
