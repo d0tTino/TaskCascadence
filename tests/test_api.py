@@ -329,7 +329,11 @@ def test_resume_task(monkeypatch, tmp_path):
 def test_register_task(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    resp = client.post("/tasks", params={"path": "tests.test_api:DynamicTask"})
+    resp = client.post(
+        "/tasks",
+        params={"path": "tests.test_api:DynamicTask"},
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
     assert resp.status_code == 200
     assert "dynamic" in [name for name, _ in sched.list_tasks()]
     yaml.safe_load(open(tmp_path / "tasks.yml").read())
@@ -348,6 +352,7 @@ def test_register_task_with_schedule(monkeypatch, tmp_path):
     resp = client.post(
         "/tasks",
         params={"path": "tests.test_api:DynamicTask", "schedule": "*/5 * * * *"},
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
     )
     assert resp.status_code == 200
     job = sched.scheduler.get_job("DynamicTask")
@@ -357,7 +362,33 @@ def test_register_task_with_schedule(monkeypatch, tmp_path):
 def test_register_task_invalid_path(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    resp = client.post("/tasks", params={"path": "no.module:Missing"})
+    resp = client.post(
+        "/tasks",
+        params={"path": "no.module:Missing"},
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
     assert resp.status_code == 400
     assert "no" in resp.json()["detail"]
+
+
+def test_register_task_missing_user_header(monkeypatch, tmp_path):
+    setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.post(
+        "/tasks",
+        params={"path": "tests.test_api:DynamicTask"},
+        headers={"X-Group-ID": "team"},
+    )
+    assert resp.status_code == 400
+
+
+def test_register_task_missing_group_header(monkeypatch, tmp_path):
+    setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.post(
+        "/tasks",
+        params={"path": "tests.test_api:DynamicTask"},
+        headers={"X-User-ID": "alice"},
+    )
+    assert resp.status_code == 400
 

@@ -66,7 +66,12 @@ def list_tasks():
 
 
 @app.post("/tasks")
-def register_task(path: str, schedule: str | None = None):
+def register_task(
+    path: str,
+    schedule: str | None = None,
+    user_id: str = Depends(get_user_id),
+    group_id: str = Depends(get_group_id),
+):
     """Load a task plugin and optionally schedule it."""
     sched = get_default_scheduler()
     try:
