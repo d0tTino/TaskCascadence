@@ -16,7 +16,10 @@ def setup_scheduler(monkeypatch, tmp_path):
     task = DummyTask()
     sched.register_task(name_or_task="dummy", task_or_expr=task)
     monkeypatch.setattr("task_cascadence.api.get_default_scheduler", lambda: sched)
-    monkeypatch.setattr("task_cascadence.ume.emit_task_run", lambda run, user_id=None: None)
+    monkeypatch.setattr(
+        "task_cascadence.ume.emit_task_run",
+        lambda run, user_id=None, group_id=None: None,
+    )
     tmp = tempfile.NamedTemporaryFile(delete=False)
     monkeypatch.setenv("CASCADENCE_POINTERS_PATH", tmp.name)
     monkeypatch.setenv("CASCADENCE_TASKS_PATH", str(tmp_path / "tasks.yml"))
@@ -26,6 +29,10 @@ def setup_scheduler(monkeypatch, tmp_path):
 def test_register_task_bad_format(monkeypatch, tmp_path):
     setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    resp = client.post("/tasks", params={"path": "bad:format:extra"})
+    resp = client.post(
+        "/tasks",
+        params={"path": "bad:format:extra"},
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
     assert resp.status_code == 400
     assert "module:Class" in resp.json()["detail"]
