@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, Depends, HTTPException, Header
+from fastapi import FastAPI, Depends, HTTPException, Header, Query
 from fastapi.responses import JSONResponse
 import inspect
 from pydantic import BaseModel, Field
 from typing import Any, Dict
+import re
 
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
@@ -14,6 +15,16 @@ from ..plugins import load_plugin
 from ..task_store import TaskStore
 from ..suggestions.engine import get_default_engine
 from ..intent import resolve_intent, sanitize_input
+from ..ume import _hash_user_id
+
+
+_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _ensure_hash(value: str) -> str:
+    """Return ``value`` if already hashed otherwise return its hashed form."""
+
+    return value if _HASH_RE.match(value) else _hash_user_id(value)
 
 app = FastAPI()
 
@@ -281,25 +292,52 @@ def signal_task(
 
 
 @app.get("/pipeline/{name}")
-def pipeline_status(name: str):
+def pipeline_status(
+    name: str,
+    user_id: str = Depends(get_user_id),
+    group_id: str = Depends(get_group_id),
+):
     """Return stored pipeline stage events for ``name``."""
     store = StageStore()
-    return store.get_events(name)
+    return store.get_events(
+        name,
+        user_hash=_ensure_hash(user_id),
+        group_id=_ensure_hash(group_id),
+    )
 
 
 @app.get("/pipeline/{name}/audit")
 def pipeline_audit(
     name: str,
     user_hash: str | None = None,
-    group_id: str | None = None,
+    group_filter: str | None = Query(default=None, alias="group_id"),
+    user_id: str = Depends(get_user_id),
+    group_id: str = Depends(get_group_id),
 ):
     """Return stored audit events for ``name`` filtered by the optional criteria."""
 
     store = StageStore()
+    scoped_user_hash = _ensure_hash(user_id)
+    scoped_group_hash = _ensure_hash(group_id)
+
+    if user_hash is not None:
+        requested_user_hash = _ensure_hash(user_hash)
+        if requested_user_hash != scoped_user_hash:
+            raise HTTPException(403, "cannot access requested user scope")
+    else:
+        requested_user_hash = scoped_user_hash
+
+    if group_filter is not None:
+        requested_group_hash = _ensure_hash(group_filter)
+        if requested_group_hash != scoped_group_hash:
+            raise HTTPException(403, "cannot access requested group scope")
+    else:
+        requested_group_hash = scoped_group_hash
+
     return store.get_events(
         name,
-        user_hash=user_hash,
-        group_id=group_id,
+        user_hash=requested_user_hash,
+        group_id=requested_group_hash,
         category="audit",
     )
 
