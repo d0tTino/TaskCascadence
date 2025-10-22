@@ -8,6 +8,10 @@ from task_cascadence.plugins import CronTask
 import yaml
 
 
+REQUIRED_HEADERS = {"X-User-ID": "alice", "X-Group-ID": "team"}
+USER_ONLY_HEADERS = {"X-User-ID": "alice"}
+
+
 class DummyTask(CronTask):
     name = "dummy"
 
@@ -76,6 +80,7 @@ def test_list_tasks(monkeypatch, tmp_path):
         "/tasks",
         headers={"X-User-ID": "alice", "X-Group-ID": "team"},
     )
+    resp = client.get("/tasks", headers=REQUIRED_HEADERS)
     assert resp.status_code == 200
     assert resp.json() == [{"name": "dummy", "disabled": False}]
 
@@ -116,12 +121,19 @@ def test_list_tasks_emits_audit_log(monkeypatch, tmp_path):
     assert calls["kwargs"]["output"] == "1"
 
 
+def test_list_tasks_missing_group_header(monkeypatch, tmp_path):
+    setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.get("/tasks", headers=USER_ONLY_HEADERS)
+    assert resp.status_code == 400
+
+
 def test_run_task(monkeypatch, tmp_path):
     sched, task = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
     resp = client.post(
         "/tasks/dummy/run",
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -133,7 +145,7 @@ def test_run_task(monkeypatch, tmp_path):
 def test_run_task_missing_group_header(monkeypatch, tmp_path):
     setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    resp = client.post("/tasks/dummy/run", headers={"X-User-ID": "alice"})
+    resp = client.post("/tasks/dummy/run", headers=USER_ONLY_HEADERS)
     assert resp.status_code == 400
 
 
@@ -144,7 +156,7 @@ def test_run_task_async_endpoint(monkeypatch, tmp_path):
     client = TestClient(app)
     resp = client.post(
         "/tasks/async/run-async",
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
 
     assert resp.status_code == 200
@@ -165,7 +177,7 @@ def test_run_task_user_header(monkeypatch, tmp_path):
     client = TestClient(app)
     client.post(
         "/tasks/dummy/run",
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
     assert called["uid"] == "alice"
 
@@ -182,7 +194,7 @@ def test_run_task_group_header(monkeypatch, tmp_path):
     client = TestClient(app)
     client.post(
         "/tasks/dummy/run",
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
     assert called["gid"] == "team"
 
@@ -210,7 +222,7 @@ def test_stage_update_event_includes_headers(monkeypatch, tmp_path):
     )
 
     client = TestClient(app)
-    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
+    headers = REQUIRED_HEADERS
     resp = client.post("/tasks/pipe/run", headers=headers)
     assert resp.status_code == 200
     run_id = resp.json()["run_id"]
@@ -246,7 +258,7 @@ def test_stage_update_event_includes_headers_async(monkeypatch, tmp_path):
     )
 
     client = TestClient(app)
-    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
+    headers = REQUIRED_HEADERS
     resp = client.post("/tasks/asyncpipe/run-async", headers=headers)
     assert resp.status_code == 200
     run_id = resp.json()["run_id"]
@@ -271,7 +283,7 @@ def test_schedule_task_group_header(monkeypatch, tmp_path):
     client.post(
         "/tasks/dummy/schedule",
         params={"expression": "*/5 * * * *"},
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
     assert called["gid"] == "team"
 
@@ -282,7 +294,7 @@ def test_schedule_task(monkeypatch, tmp_path):
     resp = client.post(
         "/tasks/dummy/schedule",
         params={"expression": "*/5 * * * *"},
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
     assert resp.status_code == 200
     job = sched.scheduler.get_job("DummyTask")
@@ -295,7 +307,7 @@ def test_schedule_task_missing_group_header(monkeypatch, tmp_path):
     resp = client.post(
         "/tasks/dummy/schedule",
         params={"expression": "*/5 * * * *"},
-        headers={"X-User-ID": "alice"},
+        headers=USER_ONLY_HEADERS,
     )
     assert resp.status_code == 400
 
@@ -303,7 +315,7 @@ def test_schedule_task_missing_group_header(monkeypatch, tmp_path):
 def test_disable_task_missing_headers(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    resp = client.post("/tasks/dummy/disable", headers={"X-User-ID": "alice"})
+    resp = client.post("/tasks/dummy/disable", headers=USER_ONLY_HEADERS)
 
     assert resp.status_code == 400
     assert sched._tasks["dummy"]["disabled"] is False
@@ -314,7 +326,7 @@ def test_disable_task(monkeypatch, tmp_path):
     client = TestClient(app)
     resp = client.post(
         "/tasks/dummy/disable",
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
 
     assert resp.status_code == 200
@@ -332,7 +344,7 @@ def test_pause_task_missing_headers(monkeypatch, tmp_path):
 def test_pause_task_missing_group_header(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    resp = client.post("/tasks/dummy/pause", headers={"X-User-ID": "alice"})
+    resp = client.post("/tasks/dummy/pause", headers=USER_ONLY_HEADERS)
     assert resp.status_code == 400
     assert sched._tasks["dummy"]["paused"] is False
 
@@ -340,7 +352,7 @@ def test_pause_task_missing_group_header(monkeypatch, tmp_path):
 def test_pause_task(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
+    headers = REQUIRED_HEADERS
     resp = client.post("/tasks/dummy/pause", headers=headers)
     assert resp.status_code == 200
     assert sched._tasks["dummy"]["paused"] is True
@@ -349,9 +361,9 @@ def test_pause_task(monkeypatch, tmp_path):
 def test_resume_task_missing_headers(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
+    headers = REQUIRED_HEADERS
     client.post("/tasks/dummy/pause", headers=headers)
-    resp = client.post("/tasks/dummy/resume", headers={"X-User-ID": "alice"})
+    resp = client.post("/tasks/dummy/resume", headers=USER_ONLY_HEADERS)
     assert resp.status_code == 400
     assert sched._tasks["dummy"]["paused"] is True
 
@@ -359,7 +371,7 @@ def test_resume_task_missing_headers(monkeypatch, tmp_path):
 def test_resume_task(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
-    headers = {"X-User-ID": "alice", "X-Group-ID": "team"}
+    headers = REQUIRED_HEADERS
     client.post("/tasks/dummy/pause", headers=headers)
     resp = client.post("/tasks/dummy/resume", headers=headers)
     assert resp.status_code == 200
@@ -372,14 +384,14 @@ def test_register_task(monkeypatch, tmp_path):
     resp = client.post(
         "/tasks",
         params={"path": "tests.test_api:DynamicTask"},
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
     assert resp.status_code == 200
     assert "dynamic" in [name for name, _ in sched.list_tasks()]
     yaml.safe_load(open(tmp_path / "tasks.yml").read())
     run = client.post(
         "/tasks/dynamic/run",
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
 
     assert run.status_code == 200
@@ -392,7 +404,7 @@ def test_register_task_with_schedule(monkeypatch, tmp_path):
     resp = client.post(
         "/tasks",
         params={"path": "tests.test_api:DynamicTask", "schedule": "*/5 * * * *"},
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
     assert resp.status_code == 200
     job = sched.scheduler.get_job("DynamicTask")
@@ -405,7 +417,7 @@ def test_register_task_invalid_path(monkeypatch, tmp_path):
     resp = client.post(
         "/tasks",
         params={"path": "no.module:Missing"},
-        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        headers=REQUIRED_HEADERS,
     )
     assert resp.status_code == 400
     assert "no" in resp.json()["detail"]
@@ -428,7 +440,7 @@ def test_register_task_missing_group_header(monkeypatch, tmp_path):
     resp = client.post(
         "/tasks",
         params={"path": "tests.test_api:DynamicTask"},
-        headers={"X-User-ID": "alice"},
+        headers=USER_ONLY_HEADERS,
     )
     assert resp.status_code == 400
 
