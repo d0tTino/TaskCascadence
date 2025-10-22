@@ -109,9 +109,8 @@ def test_api_pipeline_status(monkeypatch, tmp_path, auth_headers):
 
     resp = client.get(
         "/pipeline/example",
-        headers={"X-User-ID": "bob", "X-Group-ID": "builders"},
+        headers=auth_headers("bob", "builders"),
     )
-    resp = client.get("/pipeline/example", headers=auth_headers())
     assert resp.status_code == 200
     assert resp.json() == events
 
@@ -158,10 +157,9 @@ def test_api_pipeline_audit(monkeypatch, tmp_path, auth_headers):
 
     client = TestClient(app)
 
-    headers = {"X-User-ID": "user-a", "X-Group-ID": "alpha"}
+    headers = auth_headers("user-a", "alpha")
 
     resp = client.get("/pipeline/example/audit", headers=headers)
-    resp = client.get("/pipeline/example/audit", headers=auth_headers())
     assert resp.status_code == 200
     assert resp.json() == scoped_events
 
@@ -169,8 +167,6 @@ def test_api_pipeline_audit(monkeypatch, tmp_path, auth_headers):
         "/pipeline/example/audit",
         params={"user_hash": "user-a"},
         headers=headers,
-        headers=auth_headers(),
-        params={"user_hash": "user-a"},
     )
     assert resp.status_code == 200
     assert resp.json() == scoped_events
@@ -179,8 +175,6 @@ def test_api_pipeline_audit(monkeypatch, tmp_path, auth_headers):
         "/pipeline/example/audit",
         params={"group_id": "alpha"},
         headers=headers,
-        headers=auth_headers(),
-        params={"group_id": "beta"},
     )
     assert resp.status_code == 200
     assert resp.json() == scoped_events

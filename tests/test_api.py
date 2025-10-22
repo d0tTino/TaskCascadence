@@ -69,15 +69,56 @@ def setup_scheduler(monkeypatch, tmp_path):
     tmp = tempfile.NamedTemporaryFile(delete=False)
     monkeypatch.setenv("CASCADENCE_POINTERS_PATH", tmp.name)
     monkeypatch.setenv("CASCADENCE_TASKS_PATH", str(tmp_path / "tasks.yml"))
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
     return sched, task
 
 
 def test_list_tasks(monkeypatch, tmp_path):
     sched, _task = setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
+    resp = client.get(
+        "/tasks",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
     resp = client.get("/tasks", headers=REQUIRED_HEADERS)
     assert resp.status_code == 200
     assert resp.json() == [{"name": "dummy", "disabled": False}]
+
+
+def test_list_tasks_missing_user_header(monkeypatch, tmp_path):
+    setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.get("/tasks", headers={"X-Group-ID": "team"})
+    assert resp.status_code == 400
+
+
+def test_list_tasks_missing_group_header(monkeypatch, tmp_path):
+    setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.get("/tasks", headers={"X-User-ID": "alice"})
+    assert resp.status_code == 400
+
+
+def test_list_tasks_emits_audit_log(monkeypatch, tmp_path):
+    setup_scheduler(monkeypatch, tmp_path)
+    calls: dict[str, tuple[str, str, str]] = {}
+
+    def fake_emit(task_name, stage, status, **kwargs):
+        calls["args"] = (task_name, stage, status)
+        calls["kwargs"] = kwargs
+
+    monkeypatch.setattr("task_cascadence.api.emit_audit_log", fake_emit)
+    client = TestClient(app)
+    resp = client.get(
+        "/tasks",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+    )
+
+    assert resp.status_code == 200
+    assert calls["args"] == ("api", "tasks", "list")
+    assert calls["kwargs"]["user_id"] == "alice"
+    assert calls["kwargs"]["group_id"] == "team"
+    assert calls["kwargs"]["output"] == "1"
 
 
 def test_list_tasks_missing_group_header(monkeypatch, tmp_path):
