@@ -95,7 +95,7 @@ def test_api_pause_running_pipeline(monkeypatch, tmp_path):
     assert pipeline._paused is False
 
 
-def test_api_pipeline_status(monkeypatch, tmp_path):
+def test_api_pipeline_status(monkeypatch, tmp_path, auth_headers):
     monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
     user_hash = _hash_user_id("bob")
     group_hash = _hash_user_id("builders")
@@ -111,11 +111,18 @@ def test_api_pipeline_status(monkeypatch, tmp_path):
         "/pipeline/example",
         headers={"X-User-ID": "bob", "X-Group-ID": "builders"},
     )
+    resp = client.get("/pipeline/example", headers=auth_headers())
     assert resp.status_code == 200
     assert resp.json() == events
 
+    resp = client.get("/pipeline/example", headers={"X-Group-ID": "team"})
+    assert resp.status_code == 400
 
-def test_api_pipeline_audit(monkeypatch, tmp_path):
+    resp = client.get("/pipeline/example", headers={"X-User-ID": "alice"})
+    assert resp.status_code == 400
+
+
+def test_api_pipeline_audit(monkeypatch, tmp_path, auth_headers):
     path = tmp_path / "audit.yml"
     monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(path))
     store = StageStore()
@@ -154,6 +161,7 @@ def test_api_pipeline_audit(monkeypatch, tmp_path):
     headers = {"X-User-ID": "user-a", "X-Group-ID": "alpha"}
 
     resp = client.get("/pipeline/example/audit", headers=headers)
+    resp = client.get("/pipeline/example/audit", headers=auth_headers())
     assert resp.status_code == 200
     assert resp.json() == scoped_events
 
@@ -161,6 +169,8 @@ def test_api_pipeline_audit(monkeypatch, tmp_path):
         "/pipeline/example/audit",
         params={"user_hash": "user-a"},
         headers=headers,
+        headers=auth_headers(),
+        params={"user_hash": "user-a"},
     )
     assert resp.status_code == 200
     assert resp.json() == scoped_events
@@ -169,6 +179,8 @@ def test_api_pipeline_audit(monkeypatch, tmp_path):
         "/pipeline/example/audit",
         params={"group_id": "alpha"},
         headers=headers,
+        headers=auth_headers(),
+        params={"group_id": "beta"},
     )
     assert resp.status_code == 200
     assert resp.json() == scoped_events
@@ -186,6 +198,12 @@ def test_api_pipeline_audit(monkeypatch, tmp_path):
         headers=headers,
     )
     assert resp.status_code == 403
+
+    resp = client.get("/pipeline/example/audit", headers={"X-Group-ID": "team"})
+    assert resp.status_code == 400
+
+    resp = client.get("/pipeline/example/audit", headers={"X-User-ID": "alice"})
+    assert resp.status_code == 400
 
 
 class ContextSignalTask(ExampleTask):

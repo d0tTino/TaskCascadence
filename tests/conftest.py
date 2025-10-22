@@ -78,3 +78,15 @@ def stub_ume(monkeypatch):
             pass
 
     monkeypatch.setattr("task_cascadence.ume._default_client", DummyClient())
+
+
+@pytest.fixture
+def auth_headers():
+    """Return a factory that yields the authorization headers required by the API."""
+
+    def _factory(user_id: str = "alice", group_id: str = "team", **extra: str):
+        headers = {"X-User-ID": user_id, "X-Group-ID": group_id}
+        headers.update(extra)
+        return headers
+
+    return _factory
