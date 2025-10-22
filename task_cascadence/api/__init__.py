@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from fastapi import FastAPI, Depends, HTTPException, Header, Query
-from fastapi.responses import JSONResponse
 import inspect
-from pydantic import BaseModel, Field
-from typing import Any, Dict
 import re
+from typing import Any, Dict
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
@@ -15,7 +16,7 @@ from ..plugins import load_plugin
 from ..task_store import TaskStore
 from ..suggestions.engine import get_default_engine
 from ..intent import resolve_intent, sanitize_input
-from ..ume import _hash_user_id
+from ..ume import _hash_user_id, emit_audit_log
 
 
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -67,13 +68,30 @@ def get_group_id(x_group_id: str | None = Header(default=None)) -> str:
 
 
 @app.get("/tasks")
-def list_tasks():
+def list_tasks(
+    user_id: str = Depends(get_user_id),
+    group_id: str = Depends(get_group_id),
+):
     """Return all registered tasks."""
     sched = get_default_scheduler()
-    return [
+    tasks = [
         {"name": name, "disabled": disabled}
         for name, disabled in sched.list_tasks()
     ]
+
+    try:  # pragma: no cover - audit logging should not break the endpoint
+        emit_audit_log(
+            "api",
+            "tasks",
+            "list",
+            user_id=user_id,
+            group_id=group_id,
+            output=str(len(tasks)),
+        )
+    except Exception:  # pragma: no cover - optional audit logging
+        pass
+
+    return tasks
 
 
 @app.post("/tasks")
@@ -315,7 +333,6 @@ def pipeline_audit(
     group_filter: str | None = Query(default=None, alias="group_id"),
     user_id: str = Depends(get_user_id),
     group_id: str = Depends(get_group_id),
-    group_id: str | None = None,
     _user_id: str = Depends(get_user_id),
     _caller_group_id: str = Depends(get_group_id),
 ):
