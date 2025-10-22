@@ -281,7 +281,11 @@ def signal_task(
 
 
 @app.get("/pipeline/{name}")
-def pipeline_status(name: str):
+def pipeline_status(
+    name: str,
+    _user_id: str = Depends(get_user_id),
+    _group_id: str = Depends(get_group_id),
+):
     """Return stored pipeline stage events for ``name``."""
     store = StageStore()
     return store.get_events(name)
@@ -292,6 +296,8 @@ def pipeline_audit(
     name: str,
     user_hash: str | None = None,
     group_id: str | None = None,
+    _user_id: str = Depends(get_user_id),
+    _caller_group_id: str = Depends(get_group_id),
 ):
     """Return stored audit events for ``name`` filtered by the optional criteria."""
 
