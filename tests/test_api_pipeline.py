@@ -6,6 +6,7 @@ from task_cascadence.api import app
 from task_cascadence.scheduler import CronScheduler
 from task_cascadence.plugins import ExampleTask
 from task_cascadence.stage_store import StageStore
+from task_cascadence.ume import _hash_user_id
 from task_cascadence.pipeline_registry import add_pipeline, get_pipeline, remove_pipeline
 from task_cascadence.orchestrator import TaskPipeline
 import threading
@@ -96,13 +97,20 @@ def test_api_pause_running_pipeline(monkeypatch, tmp_path):
 
 def test_api_pipeline_status(monkeypatch, tmp_path, auth_headers):
     monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
-    StageStore().add_event("example", "start", None)
-    StageStore().add_event("example", "finish", None)
-    events = StageStore().get_events("example")
+    user_hash = _hash_user_id("bob")
+    group_hash = _hash_user_id("builders")
+    StageStore().add_event("example", "start", user_hash, group_id=group_hash)
+    StageStore().add_event("example", "finish", user_hash, group_id=group_hash)
+    StageStore().add_event("example", "other", _hash_user_id("alice"), group_id=_hash_user_id("artists"))
+    events = StageStore().get_events("example", user_hash=user_hash, group_id=group_hash)
 
     setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
 
+    resp = client.get(
+        "/pipeline/example",
+        headers={"X-User-ID": "bob", "X-Group-ID": "builders"},
+    )
     resp = client.get("/pipeline/example", headers=auth_headers())
     assert resp.status_code == 200
     assert resp.json() == events
@@ -118,50 +126,78 @@ def test_api_pipeline_audit(monkeypatch, tmp_path, auth_headers):
     path = tmp_path / "audit.yml"
     monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(path))
     store = StageStore()
+    user_hash = _hash_user_id("user-a")
+    group_hash = _hash_user_id("alpha")
+    other_user_hash = _hash_user_id("user-b")
+    other_group_hash = _hash_user_id("beta")
     store.add_event(
         "example",
         "submitted",
-        "user-a",
-        group_id="alpha",
+        user_hash,
+        group_id=group_hash,
         category="audit",
     )
     store.add_event(
         "example",
         "approved",
-        "user-b",
-        group_id="beta",
+        user_hash,
+        group_id=group_hash,
+        category="audit",
+    )
+    store.add_event(
+        "example",
+        "other",
+        other_user_hash,
+        group_id=other_group_hash,
         category="audit",
     )
 
-    all_events = store.get_events("example", category="audit")
-    filtered_user = store.get_events(
-        "example", user_hash="user-a", category="audit"
-    )
-    filtered_group = store.get_events(
-        "example", group_id="beta", category="audit"
+    scoped_events = store.get_events(
+        "example", user_hash=user_hash, group_id=group_hash, category="audit"
     )
 
     client = TestClient(app)
 
+    headers = {"X-User-ID": "user-a", "X-Group-ID": "alpha"}
+
+    resp = client.get("/pipeline/example/audit", headers=headers)
     resp = client.get("/pipeline/example/audit", headers=auth_headers())
     assert resp.status_code == 200
-    assert resp.json() == all_events
+    assert resp.json() == scoped_events
 
     resp = client.get(
         "/pipeline/example/audit",
+        params={"user_hash": "user-a"},
+        headers=headers,
         headers=auth_headers(),
         params={"user_hash": "user-a"},
     )
     assert resp.status_code == 200
-    assert resp.json() == filtered_user
+    assert resp.json() == scoped_events
 
     resp = client.get(
         "/pipeline/example/audit",
+        params={"group_id": "alpha"},
+        headers=headers,
         headers=auth_headers(),
         params={"group_id": "beta"},
     )
     assert resp.status_code == 200
-    assert resp.json() == filtered_group
+    assert resp.json() == scoped_events
+
+    resp = client.get(
+        "/pipeline/example/audit",
+        params={"group_id": "beta"},
+        headers=headers,
+    )
+    assert resp.status_code == 403
+
+    resp = client.get(
+        "/pipeline/example/audit",
+        params={"user_hash": "user-b"},
+        headers=headers,
+    )
+    assert resp.status_code == 403
 
     resp = client.get("/pipeline/example/audit", headers={"X-Group-ID": "team"})
     assert resp.status_code == 400
