@@ -199,6 +199,33 @@ def test_run_task_group_header(monkeypatch, tmp_path):
     assert called["gid"] == "team"
 
 
+def test_run_task_scheduler_called_once(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    call_count: list[tuple[str, bool]] = []
+
+    def fake_run_with_metadata(name, use_temporal=False, user_id=None, group_id=None):
+        call_count.append((name, use_temporal))
+        return TaskExecutionResult(run_id="run-id", result="ok")
+
+    monkeypatch.setattr(sched, "run_task_with_metadata", fake_run_with_metadata)
+    client = TestClient(app)
+
+    resp = client.post(
+        "/tasks/dummy/run",
+        headers=REQUIRED_HEADERS,
+    )
+    assert resp.status_code == 200
+    assert call_count == [("dummy", False)]
+
+    call_count.clear()
+
+    resp_async = client.post(
+        "/tasks/dummy/run-async",
+        headers=REQUIRED_HEADERS,
+    )
+    assert resp_async.status_code == 200
+    assert call_count == [("dummy", False)]
+
 def test_stage_update_event_includes_headers(monkeypatch, tmp_path):
     sched, _ = setup_scheduler(monkeypatch, tmp_path)
     pipeline = PipelineTask()
