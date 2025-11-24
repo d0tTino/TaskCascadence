@@ -430,7 +430,17 @@ class TaskPipeline:
                         parent_res = self._call_run(res)
                         if inspect.isawaitable(parent_res):
                             parent_res = await cast(Coroutine[Any, Any, Any], parent_res)
+                        emit_stage_update_event(
+                            self.task.__class__.__name__,
+                            "run",
+                            **self._event_kwargs(user_id, group_id),
+                        )
                         return parent_res
+                    emit_stage_update_event(
+                        self.task.__class__.__name__,
+                        "run",
+                        **self._event_kwargs(user_id, group_id),
+                    )
                     return res
 
                 try:
