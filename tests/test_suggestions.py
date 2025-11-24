@@ -11,7 +11,7 @@ async def _prepare_engine(monkeypatch, events=None, tmp_path=None):
         )
     engine = SuggestionEngine()
 
-    async def fake_query():
+    async def fake_query(user_id=None, group_id=None):
         return events or [
             {
                 "title": "Example",

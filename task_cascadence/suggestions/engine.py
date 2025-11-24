@@ -42,10 +42,12 @@ class SuggestionEngine:
         self._user_id: str | None = None
         self._group_id: str | None = None
 
-    async def _query_ume(self) -> List[dict]:
+    async def _query_ume(
+        self, user_id: str | None = None, group_id: str | None = None
+    ) -> List[dict]:
         """Return user-event patterns from UME."""
 
-        return detect_event_patterns()
+        return detect_event_patterns(user_id=user_id, group_id=group_id)
 
     async def generate(
         self, user_id: str | None = None, group_id: str | None = None
@@ -63,7 +65,7 @@ class SuggestionEngine:
             return
         disabled_categories = set(cfg.get("categories", []))
 
-        patterns = await self._query_ume()
+        patterns = await self._query_ume(user_id=user_id, group_id=group_id)
         for pattern in patterns:
             if is_private_event(pattern):
                 continue
