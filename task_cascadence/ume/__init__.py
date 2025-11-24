@@ -416,17 +416,15 @@ def record_suggestion_decision(
     store.add_decision(title, decision, user_hash, group_id=group_id)
 
 
-def detect_event_patterns(user_id: str | None = None) -> list[dict[str, Any]]:
+def detect_event_patterns(
+    user_id: str | None = None, group_id: str | None = None
+) -> list[dict[str, Any]]:
     """Detect simple event patterns such as repeated bookmarks."""
 
     idea_store = _get_idea_store()
-    seeds = idea_store.get_seeds()
     user_hash = _hash_user_id(user_id) if user_id is not None else None
-    texts = [
-        seed["text"]
-        for seed in seeds
-        if user_hash is None or seed.get("user_hash") == user_hash
-    ]
+    seeds = idea_store.get_seeds(user_hash=user_hash, group_id=group_id)
+    texts = [seed["text"] for seed in seeds]
     counter = Counter(texts)
     patterns: list[dict[str, Any]] = []
 
