@@ -461,6 +461,46 @@ def test_run_async_parallel_plan(monkeypatch, tmp_path):
     assert [e["stage"] for e in events] == ["intake", "research", "planning", "run", "verification"]
 
 
+def test_run_list_plan_emits_run_stage(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
+    import task_cascadence.ume as ume
+
+    ume._stage_store = None
+
+    stages: list[str] = []
+
+    def fake_spec(spec, user_id=None):
+        if spec.name == "Parent":
+            stages.append(spec.description)
+
+    def fake_run(run, user_id=None):
+        if run.spec.name == "Parent":
+            stages.append("run")
+
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_spec", fake_spec)
+    monkeypatch.setattr("task_cascadence.orchestrator.emit_task_run", fake_run)
+
+    class Child:
+        def __init__(self, name: str):
+            self.name = name
+
+        def run(self) -> str:
+            return self.name
+
+    class Parent:
+        def plan(self):
+            return [Child("a"), Child("b")]
+
+    pipeline = TaskPipeline(Parent())
+    result = pipeline.run(user_id="alice")
+
+    assert result == ["a", "b"]
+    assert stages == ["intake", "research", "planning", "run", "verification"]
+
+    events = StageStore(path=tmp_path / "stages.yml").get_events("Parent")
+    assert [e["stage"] for e in events] == ["intake", "research", "planning", "run", "verification"]
+
+
 def test_run_error_logs(monkeypatch):
     monkeypatch.setattr(
         "task_cascadence.orchestrator.emit_task_spec", lambda *a, **k: None
