@@ -26,7 +26,11 @@ class DummyTask(CronTask):
 class DynamicTask(CronTask):
     name = "dynamic"
 
+    def __init__(self):
+        self.ran = 0
+
     def run(self):
+        self.ran += 1
         return "dyn"
 
 
@@ -436,6 +440,14 @@ def test_register_task_with_schedule(monkeypatch, tmp_path):
     assert resp.status_code == 200
     job = sched.scheduler.get_job("DynamicTask")
     assert job is not None
+    task_info = sched._tasks.get("DynamicTask")
+    assert task_info is not None
+    assert task_info["user_id"] == "alice"
+    assert task_info["group_id"] == "team"
+
+    runner = sched._wrap_task(task_info["task"])
+    runner()
+    assert task_info["task"].ran == 1
 
 
 def test_register_task_invalid_path(monkeypatch, tmp_path):
