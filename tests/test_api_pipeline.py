@@ -6,7 +6,7 @@ from task_cascadence.api import app
 from task_cascadence.scheduler import CronScheduler
 from task_cascadence.plugins import ExampleTask
 from task_cascadence.stage_store import StageStore
-from task_cascadence.ume import _hash_user_id
+from task_cascadence.ume import _hash_user_id, emit_audit_log, emit_stage_update_event
 from task_cascadence.pipeline_registry import add_pipeline, get_pipeline, remove_pipeline
 from task_cascadence.orchestrator import TaskPipeline
 import threading
@@ -97,22 +97,39 @@ def test_api_pause_running_pipeline(monkeypatch, tmp_path):
 
 def test_api_pipeline_status(monkeypatch, tmp_path, auth_headers):
     monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "stages.yml"))
+    import task_cascadence.ume as ume
+
+    ume._stage_store = None
     user_hash = _hash_user_id("bob")
     group_hash = _hash_user_id("builders")
     StageStore().add_event("example", "start", user_hash, group_id=group_hash)
     StageStore().add_event("example", "finish", user_hash, group_id=group_hash)
-    StageStore().add_event("example", "other", _hash_user_id("alice"), group_id=_hash_user_id("artists"))
+    StageStore().add_event(
+        "example", "other", _hash_user_id("alice"), group_id=_hash_user_id("artists")
+    )
     events = StageStore().get_events("example", user_hash=user_hash, group_id=group_hash)
+
+    emit_stage_update_event("example", "queued", user_id="carol", group_id="crew")
+    raw_group_events = StageStore().get_events(
+        "example", user_hash=_hash_user_id("carol"), group_id="crew"
+    )
 
     setup_scheduler(monkeypatch, tmp_path)
     client = TestClient(app)
 
     resp = client.get(
         "/pipeline/example",
-        headers=auth_headers("bob", "builders"),
+        headers=auth_headers("bob", group_hash),
     )
     assert resp.status_code == 200
     assert resp.json() == events
+
+    resp = client.get(
+        "/pipeline/example",
+        headers=auth_headers("carol", "crew"),
+    )
+    assert resp.status_code == 200
+    assert resp.json() == raw_group_events
 
     resp = client.get("/pipeline/example", headers={"X-Group-ID": "team"})
     assert resp.status_code == 400
@@ -124,6 +141,9 @@ def test_api_pipeline_status(monkeypatch, tmp_path, auth_headers):
 def test_api_pipeline_audit(monkeypatch, tmp_path, auth_headers):
     path = tmp_path / "audit.yml"
     monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(path))
+    import task_cascadence.ume as ume
+
+    ume._stage_store = None
     store = StageStore()
     user_hash = _hash_user_id("user-a")
     group_hash = _hash_user_id("alpha")
@@ -157,7 +177,7 @@ def test_api_pipeline_audit(monkeypatch, tmp_path, auth_headers):
 
     client = TestClient(app)
 
-    headers = auth_headers("user-a", "alpha")
+    headers = auth_headers("user-a", group_hash)
 
     resp = client.get("/pipeline/example/audit", headers=headers)
     assert resp.status_code == 200
@@ -171,9 +191,27 @@ def test_api_pipeline_audit(monkeypatch, tmp_path, auth_headers):
     assert resp.status_code == 200
     assert resp.json() == scoped_events
 
+    emit_audit_log(
+        "example",
+        "reviewed",
+        "ok",
+        user_id="carol",
+        group_id="crew",
+    )
+    raw_group_audit = StageStore().get_events(
+        "example", user_hash=_hash_user_id("carol"), group_id="crew", category="audit"
+    )
+
     resp = client.get(
         "/pipeline/example/audit",
-        params={"group_id": "alpha"},
+        headers=auth_headers("carol", "crew"),
+    )
+    assert resp.status_code == 200
+    assert resp.json() == raw_group_audit
+
+    resp = client.get(
+        "/pipeline/example/audit",
+        params={"group_id": group_hash},
         headers=headers,
     )
     assert resp.status_code == 200
