@@ -106,12 +106,19 @@ def register_task(
     try:
         task = load_plugin(path)
         TaskStore().add_path(path)
-        sched.register_task(task.name, task)
+        sched.register_task(task.name, task, user_id=user_id, group_id=group_id)
         if schedule:
             if isinstance(sched, CronScheduler):
-                sched.register_task(task, schedule)
+                sched.register_task(
+                    task, schedule, user_id=user_id, group_id=group_id
+                )
             elif hasattr(sched, "schedule_task"):
-                sched.schedule_task(task.name, schedule)
+                sched.schedule_task(
+                    task.name,
+                    schedule,
+                    user_id=user_id,
+                    group_id=group_id,
+                )
             else:
                 raise HTTPException(400, "scheduler lacks cron capabilities")
         return {"status": "registered", "name": task.name}
