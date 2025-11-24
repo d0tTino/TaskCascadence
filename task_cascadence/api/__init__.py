@@ -315,7 +315,7 @@ def pipeline_status(
     return store.get_events(
         name,
         user_hash=_ensure_hash(user_id),
-        group_id=_ensure_hash(group_id),
+        group_id=group_id,
     )
 
 
@@ -334,6 +334,7 @@ def pipeline_audit(
     store = StageStore()
     scoped_user_hash = _ensure_hash(user_id)
     scoped_group_hash = _ensure_hash(group_id)
+    scoped_group_id = group_id
 
     if user_hash is not None:
         requested_user_hash = _ensure_hash(user_hash)
@@ -346,13 +347,15 @@ def pipeline_audit(
         requested_group_hash = _ensure_hash(group_filter)
         if requested_group_hash != scoped_group_hash:
             raise HTTPException(403, "cannot access requested group scope")
+        requested_group_id = group_filter
     else:
         requested_group_hash = scoped_group_hash
+        requested_group_id = scoped_group_id
 
     return store.get_events(
         name,
         user_hash=requested_user_hash,
-        group_id=requested_group_hash,
+        group_id=requested_group_id,
         category="audit",
     )
 
