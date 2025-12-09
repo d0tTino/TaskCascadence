@@ -2,26 +2,33 @@
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import threading
 import time
-import asyncio
-from typing import Any
-import hashlib
 from collections import Counter
 from datetime import datetime, timezone, timedelta
+from typing import Any
 
 from ..config import load_config
 
-from ..transport import BaseTransport, AsyncBaseTransport, get_client
+from ..transport import (
+    AsyncBaseTransport,
+    AsyncGrpcClient,
+    AsyncNatsClient,
+    BaseTransport,
+    GrpcClient,
+    NatsClient,
+    get_client,
+)
 from .models import (
     TaskRun,
     TaskSpec,
     PointerUpdate,
     TaskNote,
     IdeaSeed,
-    StageUpdate,
-    AuditEvent,
 )
+from .schema_public import AuditEventSchema, StageUpdateSchema, TaskRunSchema, TaskSpecSchema
 from ..stage_store import StageStore
 from ..idea_store import IdeaStore
 from ..suggestion_store import SuggestionStore
@@ -31,6 +38,25 @@ _default_client: BaseTransport | AsyncBaseTransport | None = None
 _stage_store: StageStore | None = None
 _idea_store: IdeaStore | None = None
 _suggestion_store: SuggestionStore | None = None
+
+
+def _prepare_for_transport(obj: Any, client: Any) -> Any:
+    """Convert *obj* to the appropriate representation for *client*.
+
+    gRPC transports expect protobuf payloads while other transports can consume
+    the versioned public schemas. When a schema dataclass is provided we attach
+    the version metadata and return a ``dict`` for non-gRPC clients.
+    """
+
+    if isinstance(client, (GrpcClient, AsyncGrpcClient)) and hasattr(obj, "to_proto"):
+        return obj.to_proto()
+    if isinstance(client, (NatsClient, AsyncNatsClient)) and hasattr(obj, "to_dict"):
+        return obj.to_dict()
+    if hasattr(obj, "to_proto"):
+        return obj.to_proto()
+    if hasattr(obj, "to_dict"):
+        return obj.to_dict()
+    return obj
 
 
 def _hash_user_id(user_id: str) -> str:
@@ -125,17 +151,19 @@ def emit_stage_update_event(
     target = client or _default_client
     if target is None:
         return None
-    update = StageUpdate(task_name=task_name, stage=stage)
-    if user_id is not None:
-        update.user_id = user_id
-        update.user_hash = _hash_user_id(user_id)
-    if group_id is not None:
-        update.group_id = group_id
+    update = StageUpdateSchema(
+        task_name=task_name,
+        stage=stage,
+        user_id=user_id,
+        user_hash=_hash_user_id(user_id) if user_id is not None else None,
+        group_id=group_id,
+    )
+    payload = _prepare_for_transport(update, target)
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
-            _async_queue_within_deadline(update, target)
+            _async_queue_within_deadline(payload, target)
         )
-    return _queue_within_deadline(update, target)
+    return _queue_within_deadline(payload, target)
 
 
 def emit_audit_log(
@@ -177,23 +205,23 @@ def emit_audit_log(
     target = client or _default_client
     if target is None:
         return None
-    event = AuditEvent(task_name=task_name, stage=stage, status=status)
-    if reason is not None:
-        event.reason = reason
-    if output is not None:
-        event.output = output
-    if partial is not None:
-        event.partial = partial
-    if user_id is not None:
-        event.user_id = user_id
-        event.user_hash = _hash_user_id(user_id)
-    if group_id is not None:
-        event.group_id = group_id
+    event = AuditEventSchema(
+        task_name=task_name,
+        stage=stage,
+        status=status,
+        reason=reason,
+        output=output,
+        partial=partial,
+        user_id=user_id,
+        user_hash=_hash_user_id(user_id) if user_id is not None else None,
+        group_id=group_id,
+    )
+    payload = _prepare_for_transport(event, target)
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
-            _async_queue_within_deadline(event, target)
+            _async_queue_within_deadline(payload, target)
         )
-    return _queue_within_deadline(event, target)
+    return _queue_within_deadline(payload, target)
 
 
 def configure_transport(transport: str, **kwargs: Any) -> None:
@@ -275,11 +303,12 @@ def emit_task_spec(
         spec.user_hash = _hash_user_id(user_id)
     if group_id is not None:
         spec.group_id = group_id
+    payload = _prepare_for_transport(TaskSpecSchema.from_proto(spec), target)
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
-            _async_queue_within_deadline(spec, target)
+            _async_queue_within_deadline(payload, target)
         )
-    return _queue_within_deadline(spec, target)
+    return _queue_within_deadline(payload, target)
 
 
 def emit_task_run(
@@ -300,11 +329,12 @@ def emit_task_run(
         run.user_hash = _hash_user_id(user_id)
     if group_id is not None:
         run.group_id = group_id
+    payload = _prepare_for_transport(TaskRunSchema.from_proto(run), target)
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
-            _async_queue_within_deadline(run, target)
+            _async_queue_within_deadline(payload, target)
         )
-    return _queue_within_deadline(run, target)
+    return _queue_within_deadline(payload, target)
 
 
 def emit_pointer_update(

@@ -680,6 +680,18 @@ conn = NATS()
 ume.configure_transport("nats", connection=conn, subject="events")
 ```
 
+### UME public schemas
+
+REST and CLI clients consume versioned public schemas that mirror the protobuf
+models used by UME. Import :mod:`task_cascadence.ume.schema_public` to access
+dataclass definitions such as :class:`StageUpdateSchema`,
+:class:`AuditEventSchema`, and :class:`TaskRunSchema`. Each schema includes the
+``schema_version`` metadata (currently ``2024.09.0``) so dashboards and agents
+can lock to a compatible version when parsing emitted events. The transport
+helpers automatically coerce outgoing events to these schemas for non-gRPC
+clients, keeping the CLI and REST documentation aligned with what external
+observers receive.
+
 
 Install ``tino_storm`` to allow tasks to perform research queries during the
 ``research`` pipeline stage.

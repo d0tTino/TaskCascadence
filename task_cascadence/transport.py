@@ -2,7 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
+
+
+def _encode_payload(obj: Any) -> Any:
+    """Serialize *obj* for transports that require JSON-compatible payloads."""
+
+    if hasattr(obj, "SerializeToString"):
+        return obj.SerializeToString()
+    if isinstance(obj, (bytes, bytearray)):
+        return bytes(obj)
+    if isinstance(obj, str):
+        return obj
+    return json.dumps(obj)
 
 
 class BaseTransport:
@@ -41,7 +54,7 @@ class NatsClient(BaseTransport):
         self._subject = subject
 
     def enqueue(self, obj: Any, timeout: float = 0.2) -> None:  # pragma: no cover - simple delegation
-        self._connection.publish(self._subject, obj)
+        self._connection.publish(self._subject, _encode_payload(obj))
         self._connection.flush(timeout=timeout)
 
 
@@ -65,7 +78,7 @@ class AsyncNatsClient(AsyncBaseTransport):
         self._subject = subject
 
     async def enqueue(self, obj: Any, timeout: float = 0.2) -> None:  # pragma: no cover - simple delegation
-        await self._connection.publish(self._subject, obj)
+        await self._connection.publish(self._subject, _encode_payload(obj))
         await self._connection.flush(timeout=timeout)
 
 

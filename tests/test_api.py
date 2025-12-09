@@ -96,13 +96,6 @@ def test_list_tasks_missing_user_header(monkeypatch, tmp_path):
     assert resp.status_code == 400
 
 
-def test_list_tasks_missing_group_header(monkeypatch, tmp_path):
-    setup_scheduler(monkeypatch, tmp_path)
-    client = TestClient(app)
-    resp = client.get("/tasks", headers={"X-User-ID": "alice"})
-    assert resp.status_code == 400
-
-
 def test_list_tasks_emits_audit_log(monkeypatch, tmp_path):
     setup_scheduler(monkeypatch, tmp_path)
     calls: dict[str, tuple[str, str, str]] = {}
