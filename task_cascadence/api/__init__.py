@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import inspect
+import json
 import re
-from typing import Any, Dict
+from typing import Any, Dict, Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
@@ -17,6 +18,7 @@ from ..task_store import TaskStore
 from ..suggestions.engine import get_default_engine
 from ..intent import resolve_intent, sanitize_input
 from ..ume import _hash_user_id, emit_audit_log
+from ..orchestrator import MAX_CONTEXT_PAYLOAD_BYTES
 
 
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -46,11 +48,42 @@ class IntentResponse(BaseModel):
     clarification: bool
 
 
+class SignalContextValue(BaseModel):
+    """Context payload for signals delivered to running pipelines."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(default=None)
+    url: str | None = Field(default=None)
+
+    @model_validator(mode="before")
+    def _validate_fields(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        data = dict(values) if isinstance(values, dict) else {}
+        note = data.get("note")
+        url = data.get("url")
+        if not note and not url:
+            raise HTTPException(400, "note or url is required")
+
+        if note is not None:
+            if not isinstance(note, str):
+                raise HTTPException(400, "note must be a string")
+            if len(note) > 2048:
+                raise HTTPException(400, "note exceeds maximum length")
+
+        if url is not None:
+            if not isinstance(url, str):
+                raise HTTPException(400, "url must be a string")
+            if len(url) > 2048:
+                raise HTTPException(400, "url exceeds maximum length")
+
+        return data
+
+
 class SignalPayload(BaseModel):
     """Schema for signals sent to a running pipeline."""
 
-    kind: str
-    value: Dict[str, Any]
+    kind: Literal["context"]
+    value: SignalContextValue
 
 
 def get_user_id(x_user_id: str | None = Header(default=None)) -> str:
@@ -298,9 +331,17 @@ def signal_task(
     if payload.kind != "context":
         raise HTTPException(400, "unsupported signal kind")
 
-    consumed = pipeline.attach_context(
-        payload.value, user_id=user_id, group_id=group_id
-    )
+    context_value = payload.value.model_dump(exclude_none=True)
+    serialized_value = json.dumps(context_value, ensure_ascii=False)
+    if len(serialized_value) > MAX_CONTEXT_PAYLOAD_BYTES:
+        raise HTTPException(400, "context payload too large")
+
+    try:
+        consumed = pipeline.attach_context(
+            context_value, user_id=user_id, group_id=group_id
+        )
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc)) from exc
     status_code = 200 if consumed else 202
     body = {
         "status": "delivered" if consumed else "accepted",

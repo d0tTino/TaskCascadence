@@ -10,6 +10,7 @@ from typing import Any, Coroutine, Deque, TypedDict, cast
 from uuid import uuid4
 import asyncio
 import inspect
+import json
 
 try:
     import ai_plan  # type: ignore
@@ -17,6 +18,7 @@ except Exception:  # pragma: no cover - optional dependency may be missing
     ai_plan = None  # type: ignore
 
 from google.protobuf.timestamp_pb2 import Timestamp
+from pydantic import ValidationError
 
 from .ume import (
     emit_task_spec,
@@ -28,6 +30,9 @@ from .ume.models import TaskRun, TaskSpec
 from . import research
 from .async_utils import run_coroutine
 import time
+
+MAX_CONTEXT_PAYLOAD_BYTES = 3072
+AUDIT_CONTEXT_PREVIEW_LENGTH = 256
 
 
 class EventKwargs(TypedDict, total=False):
@@ -43,6 +48,67 @@ class SpecKwargs(TypedDict, total=False):
 
 class PrecheckError(RuntimeError):
     """Raised when a task precheck fails."""
+
+
+def _normalize_context_payload(payload: Any) -> Any:
+    """Ensure *payload* is safe to queue and below size limits."""
+
+    normalized = payload
+    if hasattr(payload, "dict") and not isinstance(payload, dict):
+        try:
+            normalized = payload.dict(exclude_none=True)
+        except Exception:
+            normalized = payload
+
+    if isinstance(normalized, dict) and ("note" in normalized or "url" in normalized):
+        try:
+            from task_cascadence.api import SignalContextValue
+
+            context_model = SignalContextValue.model_validate(normalized)
+            normalized = context_model.model_dump(exclude_none=True)
+        except (ValidationError, Exception) as exc:  # pragma: no cover - converted below
+            raise ValueError(str(getattr(exc, "detail", exc))) from exc
+    elif isinstance(normalized, dict):
+        normalized = dict(normalized)
+
+    serialized = json.dumps(normalized, default=str, ensure_ascii=False)
+    if len(serialized) > MAX_CONTEXT_PAYLOAD_BYTES:
+        raise ValueError("context payload too large")
+
+    return normalized
+
+
+def _redact_context_for_audit(payload: Any) -> str | None:
+    """Return a redacted, size-limited representation for audit logs."""
+
+    if payload is None:
+        return None
+
+    if isinstance(payload, dict):
+        redacted: dict[str, str] = {}
+        if "note" in payload and payload.get("note"):
+            note = str(payload["note"])
+            preview = note[:AUDIT_CONTEXT_PREVIEW_LENGTH]
+            if len(note) > AUDIT_CONTEXT_PREVIEW_LENGTH:
+                preview += "..."
+            redacted["note"] = preview
+        if "url" in payload and payload.get("url"):
+            url = str(payload["url"])
+            preview = url[:AUDIT_CONTEXT_PREVIEW_LENGTH]
+            if len(url) > AUDIT_CONTEXT_PREVIEW_LENGTH:
+                preview += "..."
+            redacted["url"] = preview
+        if not redacted:
+            return None
+        return repr(redacted)
+
+    text = str(payload)
+    if not text:
+        return None
+    preview = text[:AUDIT_CONTEXT_PREVIEW_LENGTH]
+    if len(text) > AUDIT_CONTEXT_PREVIEW_LENGTH:
+        preview += "..."
+    return repr(preview)
 
 
 @dataclass
@@ -579,10 +645,10 @@ class TaskPipeline:
     ) -> bool:
         """Queue *payload* to be delivered to the next pipeline stage."""
 
-        if isinstance(payload, dict):
-            stored_payload: Any = dict(payload)
-        else:
-            stored_payload = payload
+        try:
+            stored_payload: Any = _normalize_context_payload(payload)
+        except ValueError:
+            raise
 
         immediate_stage: tuple[str, str, str | None] | None = None
         deliver_now = False
@@ -622,7 +688,7 @@ class TaskPipeline:
             self.task.__class__.__name__,
             "context_attached",
             "received",
-            output=repr(payload) if payload else None,
+            output=_redact_context_for_audit(stored_payload),
             **self._event_kwargs(resolved_user_id, resolved_group_id),
         )
         allow_event = getattr(self.task, "allow_plan", None)
@@ -685,7 +751,7 @@ class TaskPipeline:
                 task_name,
                 f"{stage}.context",
                 "consumed",
-                output=repr(ctx) if ctx else None,
+                output=_redact_context_for_audit(ctx),
                 **self._event_kwargs(user_id, group_id),
             )
 

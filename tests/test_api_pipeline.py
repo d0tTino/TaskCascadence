@@ -274,7 +274,7 @@ class ContextSignalTask(ExampleTask):
         self.contexts.append(payload)
 
 
-def test_api_context_signal(monkeypatch, tmp_path):
+def _start_context_signal_pipeline(monkeypatch, tmp_path):
     monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "sig_stages.yml"))
     import task_cascadence.ume as ume
 
@@ -297,7 +297,6 @@ def test_api_context_signal(monkeypatch, tmp_path):
     monkeypatch.setattr("task_cascadence.api.get_default_scheduler", lambda: sched)
 
     client = TestClient(app)
-
     thread = threading.Thread(
         target=lambda: sched.run_task("contextsignal", user_id="alice")
     )
@@ -307,11 +306,13 @@ def test_api_context_signal(monkeypatch, tmp_path):
     pipeline = get_pipeline("contextsignal")
     assert pipeline is not None
     run_id = pipeline.current_run_id
-
-    pipeline = get_pipeline("contextsignal")
-    assert pipeline is not None
-    run_id = pipeline.current_run_id
     assert run_id is not None
+
+    return client, task, run_id, thread
+
+
+def test_api_context_signal(monkeypatch, tmp_path):
+    client, task, run_id, thread = _start_context_signal_pipeline(monkeypatch, tmp_path)
 
     resp = client.post(
         f"/tasks/{run_id}/signal",
@@ -349,6 +350,76 @@ def test_api_context_signal(monkeypatch, tmp_path):
         json={"kind": "context", "value": {"note": "later"}},
     )
     assert resp.status_code == 404
+
+
+def test_api_context_signal_rejects_large_payload(monkeypatch, tmp_path):
+    client, task, run_id, thread = _start_context_signal_pipeline(monkeypatch, tmp_path)
+
+    resp = client.post(
+        f"/tasks/{run_id}/signal",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        json={"kind": "context", "value": {"note": "a" * 1800, "url": "b" * 1500}},
+    )
+
+    assert resp.status_code == 400
+    assert "too large" in resp.json().get("detail", "")
+    assert not task.contexts
+
+    resp = client.post(
+        f"/tasks/{run_id}/signal",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        json={"kind": "context", "value": {"note": "ok"}},
+    )
+    assert resp.status_code == 202
+
+    task.allow_plan.set()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert task.contexts == [{"note": "ok"}]
+
+
+def test_api_context_signal_rejects_invalid_payload(monkeypatch, tmp_path):
+    client, task, run_id, thread = _start_context_signal_pipeline(monkeypatch, tmp_path)
+
+    resp = client.post(
+        f"/tasks/{run_id}/signal",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        json={"kind": "context", "value": {"note": None}},
+    )
+    assert resp.status_code == 400
+
+    resp = client.post(
+        f"/tasks/{run_id}/signal",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        json={"kind": "context", "value": {"note": "valid"}},
+    )
+    assert resp.status_code == 202
+
+    task.allow_plan.set()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+    assert task.contexts == [{"note": "valid"}]
+
+
+def test_api_context_signal_redacts_audit(monkeypatch, tmp_path):
+    client, task, run_id, thread = _start_context_signal_pipeline(monkeypatch, tmp_path)
+
+    long_note = "x" * 600
+    resp = client.post(
+        f"/tasks/{run_id}/signal",
+        headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+        json={"kind": "context", "value": {"note": long_note}},
+    )
+    assert resp.status_code == 202
+
+    task.allow_plan.set()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+
+    store = StageStore(path=tmp_path / "sig_stages.yml")
+    audit_events = store.get_events(task.__class__.__name__, category="audit")
+    note_outputs = [e.get("output", "") for e in audit_events]
+    assert any(len(out or "") < len(repr({"note": long_note})) for out in note_outputs)
 
 
 def test_parallel_context_signals_route_to_matching_pipeline(monkeypatch):
