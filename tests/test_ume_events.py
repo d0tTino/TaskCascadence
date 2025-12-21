@@ -52,7 +52,7 @@ def test_pipeline_stage_events(monkeypatch, tmp_path):
     data = yaml.safe_load(path.read_text())
     events = data["DemoTask"]
     stages = [e["stage"] for e in events]
-    assert stages == ["intake", "research", "planning", "run", "verification"]
+    assert stages == ["intake", "research", "plan", "run", "verify"]
     for e in events:
         assert e["user_hash"] == _hash_user_id("alice")
 
@@ -179,7 +179,7 @@ def test_emit_stage_update_event_default_client(monkeypatch, tmp_path):
     client = Client()
     monkeypatch.setattr(ume, "_default_client", client)
 
-    ume.emit_stage_update_event("demo", "planning", user_id="bob", group_id="devs")
+    ume.emit_stage_update_event("demo", "plan", user_id="bob", group_id="devs")
 
     assert isinstance(client.events[0], StageUpdate)
     assert client.events[0].user_hash == _hash_user_id("bob")

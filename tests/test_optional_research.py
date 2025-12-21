@@ -35,4 +35,4 @@ def test_pipeline_runs_without_tino_storm(monkeypatch):
     result = pipeline.run(user_id="u1")
 
     assert result == "ok"
-    assert emitted == ["intake", "research", "planning", "run", "verification"]
+    assert emitted == ["intake", "research", "plan", "run", "verify"]

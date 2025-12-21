@@ -334,7 +334,7 @@ class TaskPipeline:
             elif ai_plan is not None and hasattr(ai_plan, "plan"):
                 plan_result = ai_plan.plan(self.task)
         except Exception as exc:
-            self._emit_stage("planning", user_id, group_id)
+            self._emit_stage("plan", user_id, group_id)
             partial = (
                 plan_result
                 if plan_result is not None
@@ -349,7 +349,7 @@ class TaskPipeline:
                 **self._event_kwargs(user_id, group_id),
             )
             raise
-        self._emit_stage("planning", user_id, group_id)
+        self._emit_stage("plan", user_id, group_id)
         emit_audit_log(
             task_name,
             "plan",
@@ -594,7 +594,7 @@ class TaskPipeline:
 
                         verify_result = _await_verify()
         except Exception as exc:
-            self._emit_stage("verification", user_id, group_id)
+            self._emit_stage("verify", user_id, group_id)
             partial = getattr(exc, "partial", None)
             if partial is None and verify_result is not None and verify_result is not exec_result:
                 partial = verify_result
@@ -607,7 +607,7 @@ class TaskPipeline:
                 **self._event_kwargs(user_id, group_id),
             )
             raise
-        self._emit_stage("verification", user_id, group_id)
+        self._emit_stage("verify", user_id, group_id)
         emit_audit_log(
             task_name,
             "verify",

@@ -435,7 +435,7 @@ def test_scheduled_job_runs_pipeline(monkeypatch, tmp_path):
 
     data = yaml.safe_load(path.read_text())
     stages = [e["stage"] for e in data["DemoTask"]]
-    assert stages == ["intake", "research", "planning", "run", "verification"]
+    assert stages == ["intake", "research", "plan", "run", "verify"]
 
 
 def test_scheduler_audit_hash_matches_pipeline(monkeypatch, tmp_path):
