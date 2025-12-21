@@ -77,7 +77,7 @@ def test_pipeline_without_optional(monkeypatch):
     result = pipeline.run(user_id="bob")
 
     assert result == "done"
-    assert emitted == ["intake", "research", "planning", "run", "verification"]
+    assert emitted == ["intake", "research", "plan", "run", "verify"]
 
 
 def test_pipeline_group_id(monkeypatch):
@@ -401,10 +401,10 @@ def test_async_verify(monkeypatch, tmp_path):
     result = pipeline.run(user_id="alice")
 
     assert result == "verified:done"
-    assert stages == ["intake", "research", "planning", "run", "verification"]
+    assert stages == ["intake", "research", "plan", "run", "verify"]
 
     events = StageStore(path=tmp_path / "stages.yml").get_events("AsyncTask")
-    assert [e["stage"] for e in events] == ["intake", "research", "planning", "run", "verification"]
+    assert [e["stage"] for e in events] == ["intake", "research", "plan", "run", "verify"]
 
 
 def test_pipeline_run_async(monkeypatch):
@@ -455,10 +455,10 @@ def test_run_async_parallel_plan(monkeypatch, tmp_path):
     result = asyncio.run(pipeline.run_async(user_id="alice"))
 
     assert sorted(result) == ["a", "b"]
-    assert stages == ["intake", "research", "planning", "run", "verification"]
+    assert stages == ["intake", "research", "plan", "run", "verify"]
 
     events = StageStore(path=tmp_path / "stages.yml").get_events("Parent")
-    assert [e["stage"] for e in events] == ["intake", "research", "planning", "run", "verification"]
+    assert [e["stage"] for e in events] == ["intake", "research", "plan", "run", "verify"]
 
 
 def test_run_list_plan_emits_run_stage(monkeypatch, tmp_path):
@@ -495,10 +495,10 @@ def test_run_list_plan_emits_run_stage(monkeypatch, tmp_path):
     result = pipeline.run(user_id="alice")
 
     assert result == ["a", "b"]
-    assert stages == ["intake", "research", "planning", "run", "verification"]
+    assert stages == ["intake", "research", "plan", "run", "verify"]
 
     events = StageStore(path=tmp_path / "stages.yml").get_events("Parent")
-    assert [e["stage"] for e in events] == ["intake", "research", "planning", "run", "verification"]
+    assert [e["stage"] for e in events] == ["intake", "research", "plan", "run", "verify"]
 
 
 def test_run_error_logs(monkeypatch):

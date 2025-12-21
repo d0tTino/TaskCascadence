@@ -43,7 +43,7 @@ def test_pipeline_research(monkeypatch):
 
     assert result == "ok"
     assert steps == ["research:foo:u1", "plan", "run", "verify:result"]
-    assert emitted == ["intake", "research", "planning", "run", "verification"]
+    assert emitted == ["intake", "research", "plan", "run", "verify"]
 
 
 def test_async_pipeline_research(monkeypatch):
