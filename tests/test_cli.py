@@ -15,7 +15,7 @@ from task_cascadence.scheduler import get_default_scheduler, BaseScheduler, Cron
 from task_cascadence import initialize
 from task_cascadence.temporal import TemporalBackend
 from task_cascadence import ume
-from task_cascadence.pipeline_registry import get_pipeline
+from task_cascadence.pipeline_registry import get_latest_pipeline_for_task
 
 
 def test_cli_main_returns_none():
@@ -610,7 +610,7 @@ def test_cli_run_outputs_run_id_and_supports_signal(monkeypatch, tmp_path):
 
     assert task.research_started.wait(timeout=1)
 
-    pipeline = get_pipeline("cli-context")
+    pipeline = get_latest_pipeline_for_task("cli-context")
     assert pipeline is not None
     run_id = pipeline.current_run_id
     assert run_id is not None
@@ -800,6 +800,5 @@ def test_cli_disable_prevents_run(monkeypatch):
     )
     assert result.exit_code != 0
     assert "disabled" in (result.stderr or result.output)
-
 
 

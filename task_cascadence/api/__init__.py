@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ..scheduler import get_default_scheduler, CronScheduler
 from ..stage_store import StageStore
 from ..cli import _pointer_add, _pointer_list, _pointer_receive
-from ..pipeline_registry import get_pipeline
+from ..pipeline_registry import get_pipeline, get_latest_pipeline_for_task
 from ..plugins import load_plugin
 from ..task_store import TaskStore
 from ..suggestions.engine import get_default_engine
@@ -267,11 +267,11 @@ def pause_task(
     try:
         pipeline = None
         if job_id is not None:
-            pipeline = get_pipeline(name, run_id=job_id)
+            pipeline = get_pipeline(job_id)
             if pipeline is None:
                 raise HTTPException(404, "pipeline not running")
         else:
-            pipeline = get_pipeline(name)
+            pipeline = get_latest_pipeline_for_task(name)
         if pipeline:
             if user_id is None:
                 raise HTTPException(400, "user_id is required")
@@ -297,11 +297,11 @@ def resume_task(
     try:
         pipeline = None
         if job_id is not None:
-            pipeline = get_pipeline(name, run_id=job_id)
+            pipeline = get_pipeline(job_id)
             if pipeline is None:
                 raise HTTPException(404, "pipeline not running")
         else:
-            pipeline = get_pipeline(name)
+            pipeline = get_latest_pipeline_for_task(name)
         if pipeline:
             if user_id is None:
                 raise HTTPException(400, "user_id is required")

@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from task_cascadence.api import app
 from task_cascadence.orchestrator import TaskPipeline
 from task_cascadence.plugins import BaseTask
-from task_cascadence.pipeline_registry import get_pipeline
+from task_cascadence.pipeline_registry import get_latest_pipeline_for_task
 from task_cascadence.scheduler import CronScheduler
 
 
@@ -201,7 +201,7 @@ def test_api_context_signal_delivery(monkeypatch: pytest.MonkeyPatch, tmp_path) 
     thread.start()
 
     assert task.research_started.wait(timeout=1)
-    pipeline = get_pipeline("api-context")
+    pipeline = get_latest_pipeline_for_task("api-context")
     assert pipeline is not None
     run_id = pipeline.current_run_id
     assert run_id is not None
@@ -221,7 +221,7 @@ def test_api_context_signal_delivery(monkeypatch: pytest.MonkeyPatch, tmp_path) 
     assert task.plan_contexts == [[{"note": "hello"}]]
     assert task.run_contexts == [[{"note": "hello"}]]
     assert task.verify_contexts == [[{"note": "hello"}]]
-    assert get_pipeline("api-context") is None
+    assert get_latest_pipeline_for_task("api-context") is None
 
 
 def test_api_context_signal_immediate_delivery(
@@ -237,7 +237,7 @@ def test_api_context_signal_immediate_delivery(
     thread.start()
 
     assert task.research_started.wait(timeout=1)
-    pipeline = get_pipeline("api-context")
+    pipeline = get_latest_pipeline_for_task("api-context")
     assert pipeline is not None
     run_id = pipeline.current_run_id
     assert run_id is not None
@@ -266,7 +266,7 @@ def test_api_context_signal_immediate_delivery(
     assert task.plan_contexts == [[{"note": "instant"}]]
     assert task.run_contexts == [[{"note": "instant"}]]
     assert task.verify_contexts == [[{"note": "instant"}]]
-    assert get_pipeline("api-context") is None
+    assert get_latest_pipeline_for_task("api-context") is None
 
 
 def test_pipeline_acknowledges_idle_context(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -293,7 +293,7 @@ def test_api_context_signal_rejects_unsupported_kind(
 
     assert task.research_started.wait(timeout=1)
 
-    pipeline = get_pipeline("api-context")
+    pipeline = get_latest_pipeline_for_task("api-context")
     assert pipeline is not None
     run_id = pipeline.current_run_id
     assert run_id is not None

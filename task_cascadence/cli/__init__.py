@@ -17,7 +17,7 @@ from ..scheduler import (
     CronScheduler,
     BaseScheduler,
 )
-from ..pipeline_registry import get_pipeline
+from ..pipeline_registry import get_pipeline, get_latest_pipeline_for_task
 from .. import plugins  # noqa: F401
 from ..metrics import start_metrics_server  # noqa: F401
 from ..pointer_store import PointerStore
@@ -240,11 +240,11 @@ def pause_task(
     try:
         pipeline = None
         if job_id is not None:
-            pipeline = get_pipeline(name, run_id=job_id)
+            pipeline = get_pipeline(job_id)
             if pipeline is None:
                 raise ValueError("pipeline not running")
         else:
-            pipeline = get_pipeline(name)
+            pipeline = get_latest_pipeline_for_task(name)
         if pipeline:
             if user_id is None:
                 raise typer.BadParameter("--user-id is required when pausing a running task")
@@ -269,11 +269,11 @@ def resume_task(
     try:
         pipeline = None
         if job_id is not None:
-            pipeline = get_pipeline(name, run_id=job_id)
+            pipeline = get_pipeline(job_id)
             if pipeline is None:
                 raise ValueError("pipeline not running")
         else:
-            pipeline = get_pipeline(name)
+            pipeline = get_latest_pipeline_for_task(name)
         if pipeline:
             if user_id is None:
                 raise typer.BadParameter("--user-id is required when resuming a running task")
@@ -621,4 +621,3 @@ __all__ = [
     "capability_planner_cmd",
     "ai_idea",
 ]
-
