@@ -111,7 +111,7 @@ def test_pipeline_lookup_helpers():
         # Removing the latest should cause the previous run to be returned next
         remove_pipeline("run-2", task_name="demo")
         assert get_latest_pipeline_for_task("demo") is first_pipeline
-        # Fallback by task name should succeed while the first pipeline remains
-        assert attach_pipeline_context("demo", {"payload": 2}) is True
+        assert get_pipeline("demo") is None
+        assert attach_pipeline_context("demo", {"payload": 2}) is False
     finally:
         remove_pipeline("run-1", task_name="demo")

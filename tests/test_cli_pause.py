@@ -4,7 +4,7 @@ from task_cascadence.cli import app
 from task_cascadence.scheduler import CronScheduler
 from task_cascadence.plugins import ExampleTask, CronTask
 from task_cascadence.stage_store import StageStore
-from task_cascadence.pipeline_registry import get_pipeline
+from task_cascadence.pipeline_registry import get_latest_pipeline_for_task
 from task_cascadence.orchestrator import TaskPipeline
 import asyncio
 import inspect
@@ -109,7 +109,7 @@ def test_pause_running_pipeline(monkeypatch, tmp_path):
         ["pause", "slow", "--user-id", "bob", "--group-id", "ops"],
     )
     assert result.exit_code == 0
-    pipeline = get_pipeline("slow")
+    pipeline = get_latest_pipeline_for_task("slow")
     assert pipeline is not None and pipeline._paused is True
     assert thread.is_alive()
     result = runner.invoke(
@@ -179,4 +179,3 @@ def test_pipeline_pause_non_blocking(monkeypatch):
         assert ran["flag"] is True
 
     asyncio.run(main())
-

@@ -64,26 +64,11 @@ def _clean_latest_for_task(task_name: str) -> Optional[TaskPipeline]:
     return None
 
 
-def get_pipeline(identifier: str, *, run_id: str | None = None) -> Optional[TaskPipeline]:
-    """Return the pipeline registered as *identifier*.
-
-    ``identifier`` is treated as a run identifier first. For backward
-    compatibility, when no pipeline exists for the identifier it falls back to
-    the most recent pipeline registered for the task of the same name. A
-    specific *run_id* can be provided to bypass the lookup heuristic.
-    """
+def get_pipeline(run_id: str) -> Optional[TaskPipeline]:
+    """Return the pipeline registered under the exact *run_id*."""
 
     with _registry_lock:
-        if run_id is not None:
-            pipeline = _running_pipelines.get(run_id)
-            if pipeline is not None:
-                return pipeline
-
-        pipeline = _running_pipelines.get(identifier)
-        if pipeline is not None:
-            return pipeline
-
-        return _clean_latest_for_task(identifier)
+        return _running_pipelines.get(run_id)
 
 
 def get_latest_pipeline_for_task(task_name: str) -> Optional[TaskPipeline]:
@@ -101,21 +86,18 @@ def list_pipelines() -> Dict[str, TaskPipeline]:
 
 
 def attach_pipeline_context(
-    run_id_or_task: str,
+    run_id: str,
     context: Any,
     *,
     user_id: str | None = None,
     group_id: str | None = None,
 ) -> bool:
-    """Attach *context* to the running pipeline identified by *run_id_or_task*.
+    """Attach *context* to the running pipeline identified by *run_id*.
 
-    The identifier is treated as a run/job identifier first. For backward
-    compatibility the lookup falls back to the latest pipeline registered for
-    the task of the same name when no pipeline exists for the identifier.
     Returns ``True`` when a pipeline was found and context enqueued.
     """
 
-    pipeline = get_pipeline(run_id_or_task)
+    pipeline = get_pipeline(run_id)
     if pipeline is None:
         return False
     pipeline.attach_context(context, user_id=user_id, group_id=group_id)

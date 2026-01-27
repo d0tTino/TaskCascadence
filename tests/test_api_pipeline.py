@@ -7,7 +7,11 @@ from task_cascadence.scheduler import CronScheduler
 from task_cascadence.plugins import ExampleTask
 from task_cascadence.stage_store import StageStore
 from task_cascadence.ume import _hash_user_id, emit_audit_log, emit_stage_update_event
-from task_cascadence.pipeline_registry import add_pipeline, get_pipeline, remove_pipeline
+from task_cascadence.pipeline_registry import (
+    add_pipeline,
+    get_latest_pipeline_for_task,
+    remove_pipeline,
+)
 from task_cascadence.orchestrator import TaskPipeline
 import threading
 import time
@@ -83,7 +87,7 @@ def test_api_pause_running_pipeline(monkeypatch, tmp_path):
         headers={"X-User-ID": "bob", "X-Group-ID": "builders"},
     )
     assert resp.status_code == 200
-    pipeline = get_pipeline("slow")
+    pipeline = get_latest_pipeline_for_task("slow")
     assert pipeline is not None and pipeline._paused is True
     assert thread.is_alive()
     resp = client.post(
@@ -303,7 +307,7 @@ def _start_context_signal_pipeline(monkeypatch, tmp_path):
     thread.start()
 
     assert task.research_started.wait(timeout=1)
-    pipeline = get_pipeline("contextsignal")
+    pipeline = get_latest_pipeline_for_task("contextsignal")
     assert pipeline is not None
     run_id = pipeline.current_run_id
     assert run_id is not None
@@ -495,9 +499,15 @@ def test_parallel_context_signals_route_to_matching_pipeline(monkeypatch):
             headers={"X-User-ID": "bob", "X-Group-ID": "ops"},
             json={"kind": "context", "value": {"note": "two"}},
         )
+        resp_mismatched = client.post(
+            "/tasks/parallel-context/signal",
+            headers={"X-User-ID": "carol", "X-Group-ID": "ops"},
+            json={"kind": "context", "value": {"note": "wrong"}},
+        )
 
         assert resp_one.status_code == 202
         assert resp_two.status_code == 202
+        assert resp_mismatched.status_code == 404
 
         task_one.allow_plan.set()
         task_two.allow_plan.set()
