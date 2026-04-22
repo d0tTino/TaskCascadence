@@ -34,6 +34,17 @@ class DynamicTask(CronTask):
         return "dyn"
 
 
+class PluginAliasTask(CronTask):
+    name = "plugin_alias"
+
+    def __init__(self):
+        self.ran = 0
+
+    def run(self):
+        self.ran += 1
+        return "alias"
+
+
 class AsyncTask(CronTask):
     name = "async"
 
@@ -321,7 +332,7 @@ def test_schedule_task(monkeypatch, tmp_path):
         headers=REQUIRED_HEADERS,
     )
     assert resp.status_code == 200
-    job = sched.scheduler.get_job("DummyTask")
+    job = sched.scheduler.get_job("dummy")
     assert job is not None
 
 
@@ -431,16 +442,31 @@ def test_register_task_with_schedule(monkeypatch, tmp_path):
         headers=REQUIRED_HEADERS,
     )
     assert resp.status_code == 200
-    job = sched.scheduler.get_job("DynamicTask")
+    job = sched.scheduler.get_job("dynamic")
     assert job is not None
-    task_info = sched._tasks.get("DynamicTask")
+    task_info = sched._tasks.get("dynamic")
     assert task_info is not None
     assert task_info["user_id"] == "alice"
     assert task_info["group_id"] == "team"
 
-    runner = sched._wrap_task(task_info["task"])
+    runner = sched._wrap_task("dynamic", task_info["task"])
     runner()
     assert task_info["task"].ran == 1
+
+
+def test_register_task_with_schedule_uses_plugin_name_as_job_id(monkeypatch, tmp_path):
+    sched, _ = setup_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+    resp = client.post(
+        "/tasks",
+        params={"path": "tests.test_api:PluginAliasTask", "schedule": "*/7 * * * *"},
+        headers=REQUIRED_HEADERS,
+    )
+    assert resp.status_code == 200
+    assert sched.scheduler.get_job("plugin_alias") is not None
+    assert sched.scheduler.get_job("PluginAliasTask") is None
+    assert "plugin_alias" in sched.schedules
+    assert "PluginAliasTask" not in sched.schedules
 
 
 def test_register_task_invalid_path(monkeypatch, tmp_path):
@@ -475,4 +501,3 @@ def test_register_task_missing_group_header(monkeypatch, tmp_path):
         headers=USER_ONLY_HEADERS,
     )
     assert resp.status_code == 400
-
