@@ -9,7 +9,7 @@ from google.protobuf.timestamp_pb2 import Timestamp
 
 from . import models
 
-SCHEMA_VERSION = "2024.09.0"
+SCHEMA_VERSION = "2026.04.0"
 
 
 def _ensure_utc(dt: datetime) -> datetime:
@@ -45,6 +45,7 @@ class BaseSchema:
     """Base dataclass for public schemas that embeds version metadata."""
 
     schema_version: str = field(default=SCHEMA_VERSION, init=False)
+    event_type: str = field(default="UNKNOWN", init=False)
 
     def to_dict(self) -> dict[str, Any]:
         return {k: _convert_value(v) for k, v in asdict(self).items()}
@@ -133,6 +134,7 @@ class StageUpdateSchema(BaseSchema):
     user_hash: str | None = None
     user_id: str | None = None
     group_id: str | None = None
+    event_type: str = field(default="TASK.STAGE.UPDATED", init=False)
 
     @classmethod
     def from_proto(cls, message: models.StageUpdate) -> "StageUpdateSchema":
@@ -166,6 +168,7 @@ class AuditEventSchema(BaseSchema):
     user_hash: str | None = None
     user_id: str | None = None
     group_id: str | None = None
+    event_type: str = field(default="TASK.STAGE.UPDATED", init=False)
 
     @classmethod
     def from_proto(cls, message: models.AuditEvent) -> "AuditEventSchema":

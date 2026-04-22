@@ -40,6 +40,34 @@ _idea_store: IdeaStore | None = None
 _suggestion_store: SuggestionStore | None = None
 
 
+def _canonical_event_type(stage: str, status: str | None = None) -> str:
+    """Map legacy ``stage`` / ``status`` values to canonical event types."""
+
+    stage_norm = stage.strip().lower()
+    status_norm = status.strip().lower() if status is not None else None
+
+    if stage_norm == "context_attached" or status_norm == "received":
+        return "CONTEXT.ATTACHED"
+    if status_norm in {"started", "start"} or stage_norm in {"start", "started"}:
+        return "TASK.STAGE.STARTED"
+    if status_norm in {"success", "finish", "finished", "completed"} or stage_norm in {
+        "finish",
+        "finished",
+        "completed",
+        "resumed",
+    }:
+        return "TASK.STAGE.SUCCESS"
+    if status_norm in {"error", "failure", "failed"} or stage_norm in {
+        "error",
+        "failure",
+        "failed",
+    }:
+        return "TASK.STAGE.ERROR"
+    if status_norm == "skipped" or stage_norm == "skipped":
+        return "TASK.STAGE.SKIPPED"
+    return "TASK.STAGE.UPDATED"
+
+
 def _prepare_for_transport(obj: Any, client: Any) -> Any:
     """Convert *obj* to the appropriate representation for *client*.
 
@@ -48,6 +76,11 @@ def _prepare_for_transport(obj: Any, client: Any) -> Any:
     the version metadata and return a ``dict`` for non-gRPC clients.
     """
 
+    if isinstance(obj, (StageUpdateSchema, AuditEventSchema)):
+        # During transition to canonical event contracts, always send the
+        # versioned public representation so gRPC and NATS receive identical
+        # payload keys (including ``schema_version`` and ``event_type``).
+        return obj.to_dict()
     if isinstance(client, (GrpcClient, AsyncGrpcClient)) and hasattr(obj, "to_proto"):
         return obj.to_proto()
     if isinstance(client, (NatsClient, AsyncNatsClient)) and hasattr(obj, "to_dict"):
@@ -158,6 +191,7 @@ def emit_stage_update_event(
         user_hash=_hash_user_id(user_id) if user_id is not None else None,
         group_id=group_id,
     )
+    update.event_type = _canonical_event_type(stage)
     payload = _prepare_for_transport(update, target)
     if use_asyncio:
         return asyncio.get_running_loop().create_task(
@@ -216,6 +250,7 @@ def emit_audit_log(
         user_hash=_hash_user_id(user_id) if user_id is not None else None,
         group_id=group_id,
     )
+    event.event_type = _canonical_event_type(stage, status)
     payload = _prepare_for_transport(event, target)
     if use_asyncio:
         return asyncio.get_running_loop().create_task(

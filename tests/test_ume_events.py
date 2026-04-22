@@ -6,7 +6,8 @@ from task_cascadence.cli import app
 from task_cascadence.scheduler import BaseScheduler
 from task_cascadence.plugins import ExampleTask
 from task_cascadence.ume import _hash_user_id, emit_task_note, emit_idea_seed
-from task_cascadence.ume.models import AuditEvent, IdeaSeed, StageUpdate, TaskNote
+from task_cascadence.ume.models import IdeaSeed, TaskNote
+from task_cascadence.ume.schema_public import SCHEMA_VERSION
 
 
 class DemoTask:
@@ -150,13 +151,14 @@ def test_emit_stage_update_event(monkeypatch, tmp_path):
 
     ume.emit_stage_update_event("demo", "start", client, user_id="alice", group_id="devs")
 
-    assert isinstance(client.events[0], StageUpdate)
-    assert client.events[0].user_hash == _hash_user_id("alice")
-    assert client.events[0].user_id == "alice"
-    assert client.events[0].group_id == "devs"
-    serialized = client.events[0].SerializeToString()
-    again = StageUpdate.FromString(serialized)
-    assert again == client.events[0]
+    payload = client.events[0]
+    assert isinstance(payload, dict)
+    assert payload["schema_version"] == SCHEMA_VERSION
+    assert payload["event_type"] == "TASK.STAGE.STARTED"
+    assert payload["stage"] == "start"  # compatibility for legacy consumers
+    assert payload["user_hash"] == _hash_user_id("alice")
+    assert payload["user_id"] == "alice"
+    assert payload["group_id"] == "devs"
 
     data = yaml.safe_load((tmp_path / "stages.yml").read_text())
     assert data["demo"][0]["user_hash"] == _hash_user_id("alice")
@@ -181,10 +183,14 @@ def test_emit_stage_update_event_default_client(monkeypatch, tmp_path):
 
     ume.emit_stage_update_event("demo", "plan", user_id="bob", group_id="devs")
 
-    assert isinstance(client.events[0], StageUpdate)
-    assert client.events[0].user_hash == _hash_user_id("bob")
-    assert client.events[0].user_id == "bob"
-    assert client.events[0].group_id == "devs"
+    payload = client.events[0]
+    assert isinstance(payload, dict)
+    assert payload["schema_version"] == SCHEMA_VERSION
+    assert payload["event_type"] == "TASK.STAGE.UPDATED"
+    assert payload["stage"] == "plan"
+    assert payload["user_hash"] == _hash_user_id("bob")
+    assert payload["user_id"] == "bob"
+    assert payload["group_id"] == "devs"
     data = yaml.safe_load((tmp_path / "events.yml").read_text())
     assert data["demo"][0]["user_hash"] == _hash_user_id("bob")
 
@@ -214,12 +220,16 @@ def test_emit_audit_log_emits_event(monkeypatch, tmp_path):
         output="done",
     )
 
-    assert isinstance(client.events[0], AuditEvent)
-    assert client.events[0].user_hash == _hash_user_id("carol")
-    assert client.events[0].user_id == "carol"
-    assert client.events[0].group_id == "devs"
-    assert client.events[0].status == "success"
-    assert client.events[0].output == "done"
+    payload = client.events[0]
+    assert isinstance(payload, dict)
+    assert payload["schema_version"] == SCHEMA_VERSION
+    assert payload["event_type"] == "TASK.STAGE.SUCCESS"
+    assert payload["stage"] == "run"  # compatibility for legacy consumers
+    assert payload["status"] == "success"  # compatibility for legacy consumers
+    assert payload["user_hash"] == _hash_user_id("carol")
+    assert payload["user_id"] == "carol"
+    assert payload["group_id"] == "devs"
+    assert payload["output"] == "done"
 
     data = yaml.safe_load((tmp_path / "audit.yml").read_text())
     key = "demo:audit"
@@ -254,12 +264,15 @@ def test_emit_audit_log_records_failure(monkeypatch, tmp_path):
         output="oops",
     )
 
-    assert isinstance(client.events[0], AuditEvent)
-    assert client.events[0].status == "failure"
-    assert client.events[0].reason == "bad"
-    assert client.events[0].output == "oops"
-    assert client.events[0].user_hash == _hash_user_id("dave")
-    assert client.events[0].group_id == "ops"
+    payload = client.events[0]
+    assert isinstance(payload, dict)
+    assert payload["schema_version"] == SCHEMA_VERSION
+    assert payload["event_type"] == "TASK.STAGE.ERROR"
+    assert payload["status"] == "failure"
+    assert payload["reason"] == "bad"
+    assert payload["output"] == "oops"
+    assert payload["user_hash"] == _hash_user_id("dave")
+    assert payload["group_id"] == "ops"
 
     from task_cascadence.stage_store import StageStore
 
@@ -273,3 +286,34 @@ def test_emit_audit_log_records_failure(monkeypatch, tmp_path):
     assert events[0]["status"] == "failure"
     assert events[0]["reason"] == "bad"
     assert events[0]["output"] == "oops"
+
+
+def test_context_attach_audit_event_contract(monkeypatch, tmp_path):
+    monkeypatch.setenv("CASCADENCE_HASH_SECRET", "s")
+    monkeypatch.setenv("CASCADENCE_STAGES_PATH", str(tmp_path / "audit.yml"))
+
+    class Client:
+        def __init__(self) -> None:
+            self.events = []
+
+        def enqueue(self, obj) -> None:
+            self.events.append(obj)
+
+    import task_cascadence.ume as ume
+    ume._stage_store = None
+    client = Client()
+
+    ume.emit_audit_log(
+        "demo",
+        "context_attached",
+        "received",
+        client,
+        user_id="eve",
+        group_id="ops",
+    )
+
+    payload = client.events[0]
+    assert payload["schema_version"] == SCHEMA_VERSION
+    assert payload["event_type"] == "CONTEXT.ATTACHED"
+    assert payload["stage"] == "context_attached"
+    assert payload["status"] == "received"
