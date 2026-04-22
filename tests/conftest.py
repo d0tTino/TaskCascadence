@@ -29,12 +29,47 @@ class TemporalBackend:  # minimal stub for tests
     def __init__(self) -> None:
         self.server = os.getenv("TEMPORAL_SERVER", "localhost:7233")
 
-    def run_workflow_sync(self, workflow, *args, **kwargs):  # pragma: no cover - patched in tests
-        async def _run():
-            client = await Client.connect(self.server)
-            return await client.execute_workflow(workflow, *args, **kwargs)
+    async def connect(self):
+        return await Client.connect(self.server)
 
-        return asyncio.run(_run())
+    async def run_workflow(self, workflow, *args, **kwargs):
+        client = await self.connect()
+        return await client.execute_workflow(workflow, *args, **kwargs)
+
+    def run_workflow_sync(self, workflow, *args, **kwargs):  # pragma: no cover - patched in tests
+        return asyncio.run(self.run_workflow(workflow, *args, **kwargs))
+
+    async def signal_workflow(self, workflow_id, signal, *signal_args, run_id=None, **signal_kwargs):
+        client = await self.connect()
+        handle = client.get_workflow_handle(workflow_id, run_id=run_id)
+        return await handle.signal(signal, *signal_args, **signal_kwargs)
+
+    def signal_workflow_sync(self, workflow_id, signal, *signal_args, run_id=None, **signal_kwargs):
+        return asyncio.run(
+            self.signal_workflow(
+                workflow_id,
+                signal,
+                *signal_args,
+                run_id=run_id,
+                **signal_kwargs,
+            )
+        )
+
+    async def query_workflow(self, workflow_id, query, *query_args, run_id=None, **query_kwargs):
+        client = await self.connect()
+        handle = client.get_workflow_handle(workflow_id, run_id=run_id)
+        return await handle.query(query, *query_args, **query_kwargs)
+
+    def query_workflow_sync(self, workflow_id, query, *query_args, run_id=None, **query_kwargs):
+        return asyncio.run(
+            self.query_workflow(
+                workflow_id,
+                query,
+                *query_args,
+                run_id=run_id,
+                **query_kwargs,
+            )
+        )
 
     def replay(self, path):  # pragma: no cover - patched in tests
         replayer_cls = sys.modules["task_cascadence.temporal"].Replayer

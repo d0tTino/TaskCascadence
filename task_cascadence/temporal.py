@@ -33,6 +33,70 @@ class TemporalBackend:
         """Synchronously execute ``workflow`` and return its result."""
         return run_coroutine(self.run_workflow(workflow, *args, **kwargs))
 
+    async def signal_workflow(
+        self,
+        workflow_id: str,
+        signal: str,
+        *signal_args: Any,
+        run_id: str | None = None,
+        **signal_kwargs: Any,
+    ) -> Any:
+        """Signal an existing workflow execution."""
+        client = await self.connect()
+        workflow_handle = client.get_workflow_handle(workflow_id, run_id=run_id)
+        return await workflow_handle.signal(signal, *signal_args, **signal_kwargs)
+
+    def signal_workflow_sync(
+        self,
+        workflow_id: str,
+        signal: str,
+        *signal_args: Any,
+        run_id: str | None = None,
+        **signal_kwargs: Any,
+    ) -> Any:
+        """Synchronously signal an existing workflow execution."""
+        return run_coroutine(
+            self.signal_workflow(
+                workflow_id,
+                signal,
+                *signal_args,
+                run_id=run_id,
+                **signal_kwargs,
+            )
+        )
+
+    async def query_workflow(
+        self,
+        workflow_id: str,
+        query: str,
+        *query_args: Any,
+        run_id: str | None = None,
+        **query_kwargs: Any,
+    ) -> Any:
+        """Query an existing workflow execution."""
+        client = await self.connect()
+        workflow_handle = client.get_workflow_handle(workflow_id, run_id=run_id)
+        return await workflow_handle.query(query, *query_args, **query_kwargs)
+
+    def query_workflow_sync(
+        self,
+        workflow_id: str,
+        query: str,
+        *query_args: Any,
+        run_id: str | None = None,
+        **query_kwargs: Any,
+    ) -> Any:
+        """Synchronously query an existing workflow execution."""
+        return run_coroutine(
+            self.query_workflow(
+                workflow_id,
+                query,
+                *query_args,
+                run_id=run_id,
+                **query_kwargs,
+            )
+        )
+
     def replay(self, history_path: str) -> None:
         """Replay a workflow history from ``history_path`` for debugging."""
         replayer = Replayer()  # type: ignore[call-arg]

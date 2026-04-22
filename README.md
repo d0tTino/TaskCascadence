@@ -15,6 +15,36 @@ The :mod:`task_cascadence.temporal` module wraps the ``temporalio`` client.
 Schedulers can use this backend to execute workflows remotely and replay
 workflow histories for debugging purposes.
 
+```python
+from task_cascadence.temporal import TemporalBackend
+
+backend = TemporalBackend("localhost:7233")
+
+# Execute a workflow and wait for completion.
+result = backend.run_workflow_sync(
+    "CalendarWorkflow",
+    {"event": "team-sync"},
+    id="calendar-workflow-1",
+    task_queue="calendar-tasks",
+)
+
+# Signal a running workflow (for example, to attach user/group context).
+backend.signal_workflow_sync(
+    "calendar-workflow-1",
+    "attach_context",
+    {"user_id": "alice", "group_id": "engineering"},
+    run_id="workflow-run-id",
+)
+
+# Query workflow state or context snapshots.
+context = backend.query_workflow_sync(
+    "calendar-workflow-1",
+    "current_context",
+    run_id="workflow-run-id",
+    include_history=True,
+)
+```
+
 ## Task Orchestrator
 
 Tasks can be executed through the :class:`~task_cascadence.orchestrator.TaskPipeline`.
@@ -867,4 +897,3 @@ pytest
 ```
 
 The test suite requires ``protobuf>=6``.
-
