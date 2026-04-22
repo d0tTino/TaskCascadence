@@ -9,7 +9,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..scheduler import get_default_scheduler, CronScheduler
+from ..scheduler import get_default_scheduler, CronScheduler, normalize_task_id
 from ..stage_store import StageStore
 from ..cli import _pointer_add, _pointer_list, _pointer_receive
 from ..pipeline_registry import get_pipeline, get_latest_pipeline_for_task
@@ -140,14 +140,11 @@ def register_task(
         task = load_plugin(path)
         TaskStore().add_path(path)
         sched.register_task(task.name, task, user_id=user_id, group_id=group_id)
+        canonical_task_id = normalize_task_id(task, task_registry=sched._tasks)
         if schedule:
-            if isinstance(sched, CronScheduler):
-                sched.register_task(
-                    task, schedule, user_id=user_id, group_id=group_id
-                )
-            elif hasattr(sched, "schedule_task"):
+            if hasattr(sched, "schedule_task"):
                 sched.schedule_task(
-                    task.name,
+                    canonical_task_id,
                     schedule,
                     user_id=user_id,
                     group_id=group_id,

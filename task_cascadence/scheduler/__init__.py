@@ -51,6 +51,30 @@ def _maybe_hash_group_id(group_id: str) -> str:
     return group_id if _HASH_RE.match(group_id) else _hash_user_id(group_id)
 
 
+def normalize_task_id(
+    name_or_task: str | Any,
+    *,
+    task_registry: Dict[str, Dict[str, Any]] | None = None,
+) -> str:
+    """Return the canonical identifier for ``name_or_task``.
+
+    Priority order:
+    1. Explicit string identifier.
+    2. Existing registration key in ``task_registry`` for the task object.
+    3. Task class name as fallback.
+    """
+
+    if isinstance(name_or_task, str):
+        return name_or_task
+
+    if task_registry:
+        for task_id, info in task_registry.items():
+            if info.get("task") is name_or_task:
+                return task_id
+
+    return name_or_task.__class__.__name__
+
+
 @dataclass(frozen=True)
 class TaskExecutionResult:
     """Wrapper containing metadata for a task execution."""
@@ -580,7 +604,7 @@ class CronScheduler(BaseScheduler):
                 expr, timezone=self.scheduler.timezone
             )
             self.scheduler.add_job(
-                self._wrap_task(task, user_id=user_id, group_id=group_id),
+                self._wrap_task(job_id, task, user_id=user_id, group_id=group_id),
                 trigger=trigger,
                 id=job_id,
                 replace_existing=True,
@@ -648,28 +672,35 @@ class CronScheduler(BaseScheduler):
             self.schedule_from_event(
                 task, event, user_id=user_id, group_id=group_id
             )
-            job_id = task.__class__.__name__
+            with self._schedules_lock:
+                job_id = normalize_task_id(task, task_registry=self._tasks)
             with self._schedules_lock:
                 sched_entry = self.schedules.get(job_id)
                 if isinstance(sched_entry, dict):
                     sched_entry["calendar_event"] = {"node": node, "poll": interval}
                     self._save_schedules()
 
+        with self._schedules_lock:
+            task_id = normalize_task_id(task, task_registry=self._tasks)
         self.scheduler.add_job(
             _poll,
             "interval",
             seconds=interval,
-            id=f"poll:{task.__class__.__name__}:{node}",
+            id=f"poll:{task_id}:{node}",
             replace_existing=True,
         )
         _poll()
 
     def _wrap_task(
-        self, task, user_id: str | None = None, group_id: str | None = None
+        self,
+        task_id: str,
+        task: Any,
+        user_id: str | None = None,
+        group_id: str | None = None,
     ):
         def runner():
             with self._schedules_lock:
-                info = self._tasks.get(task.__class__.__name__)
+                info = self._tasks.get(task_id)
                 paused = bool(info and info.get("paused"))
                 resolved_user = user_id
                 resolved_group = group_id
@@ -681,7 +712,7 @@ class CronScheduler(BaseScheduler):
             if paused:
                 return
             self.run_task(
-                task.__class__.__name__,
+                task_id,
                 user_id=resolved_user,
                 group_id=resolved_group,
             )
@@ -750,7 +781,8 @@ class CronScheduler(BaseScheduler):
             return
 
         task, cron_expression = name_or_task, task_or_expr
-        job_id = task.__class__.__name__
+        with self._schedules_lock:
+            job_id = normalize_task_id(task, task_registry=self._tasks)
         try:
             super().register_task(
                 job_id, task, user_id=user_id, group_id=group_id
@@ -781,7 +813,7 @@ class CronScheduler(BaseScheduler):
                 cron_expression, timezone=self.scheduler.timezone
             )
             self.scheduler.add_job(
-                self._wrap_task(task, user_id=user_id, group_id=group_id),
+                self._wrap_task(job_id, task, user_id=user_id, group_id=group_id),
                 trigger=trigger,
                 id=job_id,
                 replace_existing=True,
@@ -809,6 +841,12 @@ class CronScheduler(BaseScheduler):
         group_id: str | None = None,
     ) -> None:
         """Convenience wrapper for :meth:`register_task`."""
+        if isinstance(task, str):
+            with self._schedules_lock:
+                info = self._tasks.get(task)
+            if not info:
+                raise ValueError(f"Unknown task: {task}")
+            task = info["task"]
         self.register_task(
             name_or_task=task,
             task_or_expr=cron_expression,
@@ -954,7 +992,8 @@ class CronScheduler(BaseScheduler):
             def emit_audit_log(*args: Any, **kwargs: Any) -> None:  # type: ignore[misc]
                 return None
 
-        job_id = task.__class__.__name__
+        with self._schedules_lock:
+            job_id = normalize_task_id(task, task_registry=self._tasks)
         recurrence = event.get("recurrence", {})
         expr = recurrence.get("cron")
         group_hash = _maybe_hash_group_id(group_id) if group_id is not None else None
@@ -1239,6 +1278,3 @@ def create_scheduler(
         from .dag import DagCronScheduler
         return DagCronScheduler(timezone=timezone, tasks=tasks)
     raise ValueError(f"Unknown scheduler backend: {backend}")
-
-
-

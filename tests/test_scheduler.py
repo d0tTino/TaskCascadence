@@ -14,6 +14,17 @@ class DummyTask(CronTask):
         return self.count
 
 
+class PluginNamedTask(CronTask):
+    name = "plugin_task"
+
+    def __init__(self):
+        self.count = 0
+
+    def run(self):
+        self.count += 1
+        return self.count
+
+
 def test_timezone_awareness(tmp_path):
     storage = tmp_path / "sched.yml"
     sched = CronScheduler(timezone="US/Pacific", storage_path=storage)
@@ -199,6 +210,20 @@ def test_schedule_task_user_id(tmp_path):
     assert data["DummyTask"]["user_hash"] == _hash_user_id("bob")
 
 
+def test_register_task_preserves_registered_name_when_scheduling(tmp_path):
+    storage = tmp_path / "sched.yml"
+    sched = CronScheduler(timezone="UTC", storage_path=storage)
+    task = PluginNamedTask()
+    sched.register_task(name_or_task="registered_plugin", task_or_expr=task)
+
+    sched.register_task(name_or_task=task, task_or_expr="*/9 * * * *")
+
+    assert sched.scheduler.get_job("registered_plugin") is not None
+    assert sched.scheduler.get_job("PluginNamedTask") is None
+    assert "registered_plugin" in sched.schedules
+    assert "PluginNamedTask" not in sched.schedules
+
+
 def test_base_scheduler_has_no_schedule_task():
     bs = BaseScheduler()
     assert not hasattr(bs, "schedule_task")
@@ -277,7 +302,7 @@ def test_wrap_task_user_id(monkeypatch):
     sched = CronScheduler(timezone="UTC", storage_path="dummy.yml")
     task = DummyTask()
     sched.register_task("DummyTask", task)
-    wrapped = sched._wrap_task(task, user_id="alice")
+    wrapped = sched._wrap_task("DummyTask", task, user_id="alice")
     wrapped()
 
     assert emitted is not None
@@ -537,4 +562,3 @@ def test_cronyx_schedule_task_hash(monkeypatch):
     sched.schedule_task("demo", "* * * * *", user_id="bob")
 
     assert captured["json"]["user_id"] == _hash_user_id("bob")
-
