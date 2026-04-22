@@ -5,6 +5,7 @@ import task_cascadence.temporal as temporal
 import inspect
 from unittest.mock import AsyncMock, Mock
 import asyncio
+import pytest
 
 
 class DummyTask(CronTask):
@@ -92,3 +93,121 @@ def test_backend_server_from_env(monkeypatch):
     monkeypatch.setenv("TEMPORAL_SERVER", "remote:4444")
     backend = TemporalBackend()
     assert backend.server == "remote:4444"
+
+
+def test_signal_workflow_uses_handle(monkeypatch):
+    backend = TemporalBackend()
+    handle = Mock()
+    handle.signal = AsyncMock(return_value="ack")
+
+    client = Mock()
+    client.get_workflow_handle = Mock(return_value=handle)
+    connect_mock = AsyncMock(return_value=client)
+    monkeypatch.setattr(backend, "connect", connect_mock)
+
+    result = asyncio.run(
+        backend.signal_workflow(
+            "workflow-123",
+            "attach_context",
+            {"user_id": "alice"},
+            run_id="run-456",
+            metadata={"source": "api"},
+        )
+    )
+
+    assert result == "ack"
+    client.get_workflow_handle.assert_called_once_with("workflow-123", run_id="run-456")
+    handle.signal.assert_awaited_once_with(
+        "attach_context",
+        {"user_id": "alice"},
+        metadata={"source": "api"},
+    )
+
+
+def test_query_workflow_uses_handle(monkeypatch):
+    backend = TemporalBackend()
+    handle = Mock()
+    handle.query = AsyncMock(return_value={"status": "ready"})
+
+    client = Mock()
+    client.get_workflow_handle = Mock(return_value=handle)
+    connect_mock = AsyncMock(return_value=client)
+    monkeypatch.setattr(backend, "connect", connect_mock)
+
+    result = asyncio.run(
+        backend.query_workflow(
+            "workflow-abc",
+            "fetch_context",
+            "scope-a",
+            run_id="run-def",
+            include_history=True,
+        )
+    )
+
+    assert result == {"status": "ready"}
+    client.get_workflow_handle.assert_called_once_with("workflow-abc", run_id="run-def")
+    handle.query.assert_awaited_once_with("fetch_context", "scope-a", include_history=True)
+
+
+def test_signal_workflow_sync_uses_run_coroutine(monkeypatch):
+    backend = TemporalBackend()
+    monkeypatch.setattr(backend, "signal_workflow", AsyncMock(return_value="synced"))
+
+    result = backend.signal_workflow_sync(
+        "workflow-1",
+        "attach_context",
+        {"group_id": "eng"},
+        run_id="run-1",
+    )
+
+    assert result == "synced"
+    backend.signal_workflow.assert_awaited_once_with(  # type: ignore[attr-defined]
+        "workflow-1",
+        "attach_context",
+        {"group_id": "eng"},
+        run_id="run-1",
+    )
+
+
+def test_query_workflow_sync_uses_run_coroutine(monkeypatch):
+    backend = TemporalBackend()
+    monkeypatch.setattr(backend, "query_workflow", AsyncMock(return_value={"state": "ok"}))
+
+    result = backend.query_workflow_sync(
+        "workflow-2",
+        "current_context",
+        run_id="run-2",
+        with_details=True,
+    )
+
+    assert result == {"state": "ok"}
+    backend.query_workflow.assert_awaited_once_with(  # type: ignore[attr-defined]
+        "workflow-2",
+        "current_context",
+        run_id="run-2",
+        with_details=True,
+    )
+
+
+def test_signal_workflow_propagates_error(monkeypatch):
+    backend = TemporalBackend()
+    handle = Mock()
+    handle.signal = AsyncMock(side_effect=RuntimeError("signal failed"))
+    client = Mock()
+    client.get_workflow_handle = Mock(return_value=handle)
+    monkeypatch.setattr(backend, "connect", AsyncMock(return_value=client))
+
+    with pytest.raises(RuntimeError, match="signal failed"):
+        asyncio.run(backend.signal_workflow("workflow-err", "attach_context"))
+
+
+def test_query_workflow_propagates_error(monkeypatch):
+    backend = TemporalBackend()
+    handle = Mock()
+    handle.query = AsyncMock(side_effect=RuntimeError("query failed"))
+    client = Mock()
+    client.get_workflow_handle = Mock(return_value=handle)
+    monkeypatch.setattr(backend, "connect", AsyncMock(return_value=client))
+
+    with pytest.raises(RuntimeError, match="query failed"):
+        asyncio.run(backend.query_workflow("workflow-err", "current_context"))
