@@ -242,6 +242,21 @@ def test_api_pipeline_audit(monkeypatch, tmp_path, auth_headers):
     assert resp.status_code == 400
 
 
+def test_pipeline_endpoints_openapi_headers_are_not_duplicated():
+    client = TestClient(app)
+    schema = client.get("/openapi.json").json()
+
+    status_parameters = schema["paths"]["/pipeline/{name}"]["get"]["parameters"]
+    status_headers = [param["name"] for param in status_parameters if param["in"] == "header"]
+    assert status_headers.count("x-user-id") == 1
+    assert status_headers.count("x-group-id") == 1
+
+    audit_parameters = schema["paths"]["/pipeline/{name}/audit"]["get"]["parameters"]
+    audit_headers = [param["name"] for param in audit_parameters if param["in"] == "header"]
+    assert audit_headers.count("x-user-id") == 1
+    assert audit_headers.count("x-group-id") == 1
+
+
 class ContextSignalTask(ExampleTask):
     name = "contextsignal"
 

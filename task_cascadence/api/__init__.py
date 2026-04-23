@@ -352,8 +352,6 @@ def pipeline_status(
     name: str,
     user_id: str = Depends(get_user_id),
     group_id: str = Depends(get_group_id),
-    _user_id: str = Depends(get_user_id),
-    _group_id: str = Depends(get_group_id),
 ):
     """Return stored pipeline stage events for ``name``."""
     store = StageStore()
@@ -371,8 +369,6 @@ def pipeline_audit(
     group_filter: str | None = Query(default=None, alias="group_id"),
     user_id: str = Depends(get_user_id),
     group_id: str = Depends(get_group_id),
-    _user_id: str = Depends(get_user_id),
-    _caller_group_id: str = Depends(get_group_id),
 ):
     """Return stored audit events for ``name`` filtered by the optional criteria."""
 
