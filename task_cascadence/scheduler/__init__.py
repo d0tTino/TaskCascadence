@@ -267,7 +267,17 @@ class BaseScheduler:
         if hasattr(task, "run"):
             from datetime import datetime
 
-            from ..ume import emit_task_run
+            try:
+                from ..ume import _hash_user_id, emit_task_run
+            except ImportError:  # pragma: no cover - compatibility with minimal UME stubs
+                import hashlib
+
+                from ..config import load_config
+                from ..ume import emit_task_run
+
+                def _hash_user_id(user_id: str) -> str:
+                    secret = load_config().get("hash_secret", "")
+                    return hashlib.sha256((secret + user_id).encode()).hexdigest()
             from ..ume.models import TaskRun, TaskSpec
             from ..orchestrator import TaskPipeline
             from ..pipeline_registry import add_pipeline, remove_pipeline
@@ -287,7 +297,13 @@ class BaseScheduler:
                     ):
                         pipeline = TaskPipeline(task)
                         pipeline.current_run_id = run_id
-                        add_pipeline(name, run_id, pipeline)
+                        add_pipeline(
+                            name,
+                            run_id,
+                            pipeline,
+                            owner_user_hash=_hash_user_id(uid),
+                            owner_group_id=group_id,
+                        )
                         try:
                             result = pipeline.run(user_id=uid, group_id=group_id)
                             if inspect.isawaitable(result):

@@ -8,6 +8,7 @@ from task_cascadence.pipeline_registry import (
     attach_pipeline_context,
     get_pipeline,
     get_latest_pipeline_for_task,
+    get_pipeline_scope,
 )
 from task_cascadence.orchestrator import TaskPipeline
 from task_cascadence.plugins import ExampleTask
@@ -107,6 +108,7 @@ def test_pipeline_lookup_helpers():
 
     try:
         assert get_pipeline("run-1") is first_pipeline
+        assert get_pipeline_scope("run-1") == {"user_hash": None, "group_id": None}
         assert get_latest_pipeline_for_task("demo") is second_pipeline
         # Removing the latest should cause the previous run to be returned next
         remove_pipeline("run-2", task_name="demo")
@@ -115,3 +117,27 @@ def test_pipeline_lookup_helpers():
         assert attach_pipeline_context("demo", {"payload": 2}) is False
     finally:
         remove_pipeline("run-1", task_name="demo")
+
+
+def test_pipeline_scope_tracks_owner_metadata():
+    class DummyTask:
+        def run(self):
+            return "done"
+
+    pipeline = TaskPipeline(DummyTask())
+    add_pipeline(
+        "scoped",
+        "run-scoped",
+        pipeline,
+        owner_user_hash="abc123",
+        owner_group_id="team",
+    )
+    try:
+        assert get_pipeline_scope("run-scoped") == {
+            "user_hash": "abc123",
+            "group_id": "team",
+        }
+    finally:
+        remove_pipeline("run-scoped", task_name="scoped")
+
+    assert get_pipeline_scope("run-scoped") is None
