@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from threading import Lock
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TypedDict, cast
 
 from .orchestrator import TaskPipeline
 
@@ -13,16 +13,42 @@ _running_pipelines: Dict[str, TaskPipeline] = {}
 _pipeline_tasks: Dict[str, str] = {}
 # Mapping of task name to a list of associated run identifiers (oldest -> newest)
 _task_run_index: Dict[str, list[str]] = {}
+
+
+class PipelineScope(TypedDict):
+    """Owner scope metadata for a registered pipeline run."""
+
+    user_hash: str | None
+    group_id: str | None
+
+
+# Running pipeline owner metadata keyed by run/job identifier.
+_pipeline_scopes: Dict[str, PipelineScope] = {}
 # Lock protecting access to the running pipeline registry
 _registry_lock = Lock()
 
 
-def add_pipeline(task_name: str, run_id: str, pipeline: TaskPipeline) -> None:
-    """Register *pipeline* for *task_name* under the unique *run_id*."""
+def add_pipeline(
+    task_name: str,
+    run_id: str,
+    pipeline: TaskPipeline,
+    *,
+    owner_user_hash: str | None = None,
+    owner_group_id: str | None = None,
+) -> None:
+    """Register *pipeline* for *task_name* under the unique *run_id*.
+
+    ``owner_user_hash`` and ``owner_group_id`` record the caller scope that
+    created the run so later run-scoped operations can enforce ownership.
+    """
 
     with _registry_lock:
         _running_pipelines[run_id] = pipeline
         _pipeline_tasks[run_id] = task_name
+        _pipeline_scopes[run_id] = {
+            "user_hash": owner_user_hash,
+            "group_id": owner_group_id,
+        }
         _task_run_index.setdefault(task_name, []).append(run_id)
 
 
@@ -31,6 +57,7 @@ def remove_pipeline(run_id: str, task_name: str | None = None) -> None:
 
     with _registry_lock:
         _running_pipelines.pop(run_id, None)
+        _pipeline_scopes.pop(run_id, None)
         resolved_task = task_name or _pipeline_tasks.pop(run_id, None)
         if resolved_task is None:
             return
@@ -71,6 +98,14 @@ def get_pipeline(run_id: str) -> Optional[TaskPipeline]:
         return _running_pipelines.get(run_id)
 
 
+def get_pipeline_scope(run_id: str) -> PipelineScope | None:
+    """Return owner scope metadata for the running pipeline *run_id*."""
+
+    with _registry_lock:
+        scope = _pipeline_scopes.get(run_id)
+        return None if scope is None else cast(PipelineScope, dict(scope))
+
+
 def get_latest_pipeline_for_task(task_name: str) -> Optional[TaskPipeline]:
     """Return the most recently registered pipeline for *task_name* if running."""
 
@@ -108,6 +143,7 @@ __all__ = [
     "add_pipeline",
     "remove_pipeline",
     "get_pipeline",
+    "get_pipeline_scope",
     "get_latest_pipeline_for_task",
     "list_pipelines",
     "attach_pipeline_context",

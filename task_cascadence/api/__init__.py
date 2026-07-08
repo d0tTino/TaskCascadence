@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 import json
 import re
-from typing import Any, Dict, Literal
+from typing import Any, Dict
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
@@ -12,7 +12,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from ..scheduler import get_default_scheduler, CronScheduler, normalize_task_id
 from ..stage_store import StageStore
 from ..cli import _pointer_add, _pointer_list, _pointer_receive
-from ..pipeline_registry import get_pipeline, get_latest_pipeline_for_task
+from ..pipeline_registry import (
+    get_pipeline,
+    get_latest_pipeline_for_task,
+    get_pipeline_scope,
+)
 from ..plugins import load_plugin
 from ..task_store import TaskStore
 from ..suggestions.engine import get_default_engine
@@ -82,7 +86,7 @@ class SignalContextValue(BaseModel):
 class SignalPayload(BaseModel):
     """Schema for signals sent to a running pipeline."""
 
-    kind: Literal["context"]
+    kind: str
     value: SignalContextValue
 
 
@@ -324,6 +328,19 @@ def signal_task(
     pipeline = get_pipeline(job_id)
     if pipeline is None:
         raise HTTPException(404, "pipeline not running")
+
+    scope = get_pipeline_scope(job_id)
+    caller_user_hash = _hash_user_id(user_id)
+    if scope is None:
+        raise HTTPException(403, "cannot access pipeline scope")
+
+    owner_user_hash = scope.get("user_hash")
+    owner_group_id = scope.get("group_id")
+    if (
+        (owner_user_hash is not None and owner_user_hash != caller_user_hash)
+        or (owner_group_id is not None and owner_group_id != group_id)
+    ):
+        raise HTTPException(403, "cannot access pipeline scope")
 
     if payload.kind != "context":
         raise HTTPException(400, "unsupported signal kind")

@@ -269,6 +269,101 @@ def test_api_context_signal_immediate_delivery(
     assert get_latest_pipeline_for_task("api-context") is None
 
 
+def test_api_context_signal_rejects_cross_user_scope_accepted_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    sched, task = _setup_api_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+
+    thread = threading.Thread(
+        target=lambda: sched.run_task("api-context", user_id="alice", group_id="team"),
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        assert task.research_started.wait(timeout=1)
+        pipeline = get_latest_pipeline_for_task("api-context")
+        assert pipeline is not None
+        run_id = pipeline.current_run_id
+        assert run_id is not None
+
+        resp = client.post(
+            f"/tasks/{run_id}/signal",
+            headers={"X-User-ID": "mallory", "X-Group-ID": "team"},
+            json={"kind": "context", "value": {"note": "blocked"}},
+        )
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "cannot access pipeline scope"
+
+        allowed = client.post(
+            f"/tasks/{run_id}/signal",
+            headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+            json={"kind": "context", "value": {"note": "allowed"}},
+        )
+        assert allowed.status_code == 202
+        assert allowed.json() == {"status": "accepted", "delivered": False}
+    finally:
+        task.allow_plan.set()
+        thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert task.plan_contexts == [[{"note": "allowed"}]]
+
+
+def test_api_context_signal_rejects_cross_group_scope_delivered_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    sched, task = _setup_api_scheduler(monkeypatch, tmp_path)
+    client = TestClient(app)
+
+    thread = threading.Thread(
+        target=lambda: sched.run_task("api-context", user_id="alice", group_id="team"),
+        daemon=True,
+    )
+    thread.start()
+
+    try:
+        assert task.research_started.wait(timeout=1)
+        pipeline = get_latest_pipeline_for_task("api-context")
+        assert pipeline is not None
+        run_id = pipeline.current_run_id
+        assert run_id is not None
+
+        pipeline.pause(user_id="alice", group_id="team")
+        task.allow_plan.set()
+
+        for _ in range(20):
+            pending = getattr(pipeline, "_pending_context_delivery", None)
+            if pending and pending[0] == "plan":
+                break
+            time.sleep(0.05)
+
+        blocked = client.post(
+            f"/tasks/{run_id}/signal",
+            headers={"X-User-ID": "alice", "X-Group-ID": "other-team"},
+            json={"kind": "context", "value": {"note": "blocked"}},
+        )
+        assert blocked.status_code == 403
+        assert blocked.json()["detail"] == "cannot access pipeline scope"
+
+        allowed = client.post(
+            f"/tasks/{run_id}/signal",
+            headers={"X-User-ID": "alice", "X-Group-ID": "team"},
+            json={"kind": "context", "value": {"note": "allowed-now"}},
+        )
+        assert allowed.status_code == 200
+        assert allowed.json() == {"status": "delivered", "delivered": True}
+    finally:
+        pipeline = get_latest_pipeline_for_task("api-context")
+        if pipeline is not None:
+            pipeline.resume(user_id="alice", group_id="team")
+        thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert task.plan_contexts == [[{"note": "allowed-now"}]]
+
+
 def test_pipeline_acknowledges_idle_context(monkeypatch: pytest.MonkeyPatch) -> None:
     _silence_pipeline_events(monkeypatch)
     task = SyncContextTask()
@@ -301,7 +396,7 @@ def test_api_context_signal_rejects_unsupported_kind(
     resp = client.post(
         f"/tasks/{run_id}/signal",
         headers={"X-User-ID": "alice", "X-Group-ID": "team"},
-        json={"kind": "unknown", "value": {}},
+        json={"kind": "unknown", "value": {"note": "ignored"}},
     )
     assert resp.status_code == 400
     assert resp.json()["detail"] == "unsupported signal kind"
