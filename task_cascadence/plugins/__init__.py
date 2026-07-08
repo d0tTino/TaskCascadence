@@ -117,7 +117,15 @@ class GitHubWebhookTask(WebhookTask):
 
     events: list[str] = []
 
-    def handle_event(self, source: str, event_type: str, payload: dict) -> None:
+    def handle_event(
+        self,
+        source: str,
+        event_type: str,
+        payload: dict,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         """Record issue actions from GitHub events."""
 
         if source == "github" and event_type == "issues":
@@ -132,7 +140,15 @@ class CalComWebhookTask(WebhookTask):
 
     events: list[str] = []
 
-    def handle_event(self, source: str, event_type: str, payload: dict) -> None:
+    def handle_event(
+        self,
+        source: str,
+        event_type: str,
+        payload: dict,
+        *,
+        user_id: str | None = None,
+        group_id: str | None = None,
+    ) -> None:
         """Record booking events from Cal.com."""
 
         if source == "calcom" and event_type == "booking":
