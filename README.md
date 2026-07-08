@@ -298,7 +298,30 @@ scrape_configs:
 ```
 
 ``task webhook`` launches a FastAPI application that dispatches incoming
-events to any registered :class:`WebhookTask` implementations.
+events to any registered :class:`WebhookTask` implementations. Webhook ingress
+requires every request to resolve to a user and group scope before tasks run:
+
+* Development or trusted internal senders can include both ``X-User-ID`` and
+  ``X-Group-ID`` headers on each request. Supplying only one header is rejected.
+* Provider senders that cannot add custom identity headers should be mapped to a
+  scoped identity with ``CASCADENCE_WEBHOOK_SCOPES``. The value is JSON keyed by
+  provider name. For GitHub, configure the same webhook secret in GitHub and
+  Cascadence so ``X-Hub-Signature-256`` can be verified. Other providers,
+  including Cal.com, can send the configured secret in ``X-Webhook-Secret``.
+
+Example provider mapping:
+
+```bash
+export CASCADENCE_WEBHOOK_SCOPES='{
+  "github": {"secret": "github-webhook-secret", "user_id": "github-bot", "group_id": "engineering"},
+  "calcom": {"secret": "calcom-webhook-secret", "user_id": "calcom-bot", "group_id": "calendar"}
+}'
+```
+
+Unscoped requests receive ``400`` responses, and requests with invalid provider
+signatures or secrets receive ``401`` responses. Resolved scope is threaded into
+webhook task handlers as ``user_id`` and ``group_id`` keyword arguments, and
+stage/audit events persist hashed user context for webhook-triggered actions.
 
 Two built-in webhook tasks show how payloads from different services can be
 handled:
